@@ -1,0 +1,54 @@
+# Local planning documents, demo UI, screenshots, and validation evidence
+/docs/
+
+# Pre-development feasibility probes (keep future product scripts/tests trackable)
+/probes/
+/scripts/preflight_*.py
+/tests/test_preflight*.py
+
+# Editor and operating-system files
+.idea/
+.DS_Store
+._*
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+.venv/
+venv/
+
+# Python caches and build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Frontend dependencies, caches, and generated bundles
+node_modules/
+.vite/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+dist/
+build/
+
+# Package-manager debug output (keep source fixtures and application logs trackable)
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Generated test and coverage reports
+.coverage
+.coverage.*
+htmlcov/
+coverage/
+playwright-report/
+test-results/
