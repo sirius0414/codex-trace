@@ -653,14 +653,21 @@ class ObservationTests(unittest.TestCase):
         self.assertIsNone(next(g for g in self.service.tasks[A].projection["groups"] if g["threadId"] == B)["readIssue"])
 
     def test_child_operations_remain_unloaded_until_group_requested_and_page_independently(self):
-        self.history.rows[A].append(spawn())
+        self.history.rows[A] = [item(index) for index in range(450)] + [spawn()]
         self.service.refresh_history(A, force=True)
+        parent = self.read()
+        self.assertIsNotNone(parent["coverage"]["nextCursor"])
         self.raw.put(B, [])
         self.history.rows[B] = [item(index) for index in range(450)]
         self.service._load(B)
         self.service._refresh_ancestors(B)
-        changes = self.changes()
-        self.assertTrue(any(g["threadId"] == B for g in changes["groups"]))
+        changes = self.changes(after=parent["revision"])
+        unloaded = next(g for g in changes["groups"] if g["threadId"] == B)
+        self.assertEqual(unloaded["loadedEventCount"], 0)
+        self.assertEqual(unloaded["loadedToolCallCount"], 0)
+        self.assertEqual(unloaded["status"]["value"], "completed")
+        self.assertIsNone(unloaded["readIssue"])
+        self.assertTrue(self.service.tasks[B].projection["events"])
         self.assertFalse(any(e["threadId"] == B for e in changes["upsertEvents"]))
         request = {"binding": self.binding, "cursor": None, "anchorEventId": None, "groupId": "main:" + B}
         child = self.service.read_trajectory(request)
@@ -668,10 +675,47 @@ class ObservationTests(unittest.TestCase):
         self.assertEqual(len(child["events"]), 200)
         self.assertEqual({e["threadId"] for e in child["events"]}, {B})
         group = next(g for g in child["groups"] if g["threadId"] == B)
+        self.assertEqual(group["loadedEventCount"], 200)
+        self.assertEqual(group["loadedToolCallCount"], 200)
         self.assertTrue(group["hasEarlier"])
         prior = self.service.read_trajectory({**request, "cursor": group["nextCursor"]})
         self.assertFalse({e["eventId"] for e in prior["events"]} & {e["eventId"] for e in child["events"]})
-        self.assertEqual(self.service.views[self.binding["viewSessionId"]].page_cursor, self.initial["coverage"]["nextCursor"])
+        prior_group = next(g for g in prior["groups"] if g["threadId"] == B)
+        self.assertEqual(prior_group["loadedEventCount"], 400)
+        self.assertEqual(prior_group["loadedToolCallCount"], 400)
+        self.assertEqual(prior["coverage"]["nextCursor"], parent["coverage"]["nextCursor"])
+        self.assertEqual(self.service.views[self.binding["viewSessionId"]].page_cursor, parent["coverage"]["nextCursor"])
+        earlier_parent = self.read(cursor=parent["coverage"]["nextCursor"])
+        self.assertEqual({e["threadId"] for e in earlier_parent["events"]}, {A})
+        self.assertFalse({e["eventId"] for e in earlier_parent["events"]} & {e["eventId"] for e in parent["events"]})
+
+    def test_explicit_child_read_does_not_depend_on_saving_expansion_preferences(self):
+        self.history.rows[A].append(spawn())
+        self.service.refresh_history(A, force=True)
+        self.history.rows[B] = []
+        self.raw.put(B, [raw_item(1, identifier=B), raw_item(2, identifier=B)])
+        self.service._load(B)
+        self.service._refresh_ancestors(B)
+        group_id = "main:" + B
+        state = {**default_view(), "follow": "paused", "expandedGroupIds": [group_id],
+                 "agentScope": {"kind": "selected", "groupIds": [group_id]}}
+        with mock.patch.object(self.service.store, "save_view", create=True,
+                               side_effect=OSError("synthetic preference unavailable")) as save:
+            with self.assertRaises(OSError):
+                self.service.save_view_state({"binding": self.binding,
+                                              "expectedPreferenceRevision": 0, "state": state})
+            self.assertNotIn(group_id, self.service.views[self.binding["viewSessionId"]].requested_groups)
+            result = self.service.read_trajectory({"binding": self.binding, "cursor": None,
+                                                   "anchorEventId": None, "groupId": group_id})
+            save.assert_called_once()
+        validate("ThreadSnapshot", result)
+        self.assertEqual(len(result["events"]), 2)
+        self.assertEqual({e["threadId"] for e in result["events"]}, {B})
+        group = next(g for g in result["groups"] if g["groupId"] == group_id)
+        self.assertEqual(group["loadedEventCount"], 2)
+        self.assertEqual(group["loadedToolCallCount"], 2)
+        self.assertIsNone(group["readIssue"])
+        self.assertIn(group_id, self.service.views[self.binding["viewSessionId"]].requested_groups)
 
     def test_partial_lineage_loss_preserves_previous_rows_while_other_source_advances(self):
         inherited = raw_item(10)

@@ -7,6 +7,7 @@ import { defaultView, eventLocation, mergeDetail, mergeSnapshot, partsForTab, re
 import { ChangeReader, mergeChanges, recordChangeTiming, type ChangeTiming } from './state/changes';
 import { readDetailWindow } from './state/detail';
 import { ExportCoordinator } from './state/export';
+import { GroupReader } from './state/groups';
 import TraceUI from './components/TraceUI';
 import type { DetailData } from './ui-types';
 import './style.css';
@@ -47,6 +48,7 @@ function TrajectoryApp() {
   const selectionIntent = useRef(0);
   const saveOperations = useRef(new Map<PreferenceGate, Promise<void>>());
   const changes = useRef<ChangeReader | null>(null);
+  const groupReads = useRef<GroupReader | null>(null);
   const confirmedRevision = useRef<number | null>(null);
   const removedEvents = useRef(new Map<string, number>());
   const selectionAbort = useRef(new AbortController());
@@ -74,6 +76,7 @@ function TrajectoryApp() {
   }
   function stopReads() {
     exports.current?.bind(null);
+    groupReads.current?.cancel();
     changes.current?.pause(); confirmedRevision.current = null;
     selectionAbort.current.abort(); selectionAbort.current = new AbortController();
     invalidateDetails();
@@ -150,7 +153,8 @@ function TrajectoryApp() {
     try {
       const initial = cursor ? { snapshot: await adapter.call<ThreadSnapshot>('read_trajectory', { binding: token.binding, cursor,
         anchorEventId: null, ...(groupId ? { groupId } : {}) }, { signal }), missing: false }
-        : await readAnchorPage(readLocated, { ...eventLocation(currentView.current, currentSnapshot.current), ...(groupId ? { groupId } : {}) });
+        : groupId ? { snapshot: await readLocated({ anchorEventId: null, groupId }), missing: false }
+          : await readAnchorPage(readLocated, eventLocation(currentView.current, currentSnapshot.current));
       const result = initial.snapshot; missingAnchor = initial.missing;
       if (signal.aborted || !gate.current.accepts(token, result.binding)) return;
       if (cursor && currentSnapshot.current && result.generation !== currentSnapshot.current.generation) {
@@ -351,7 +355,7 @@ function TrajectoryApp() {
     changes.current = reader;
     const visibility = () => {
       const visible = document.visibilityState !== 'hidden';
-      reader.setVisible(visible); exports.current?.setVisible(visible);
+      reader.setVisible(visible); groupReads.current?.setVisible(visible); exports.current?.setVisible(visible);
     };
     visibility(); document.addEventListener('visibilitychange', visibility);
     const adapter = new TrajectoryClient((open: OpenResult) => {
@@ -369,6 +373,27 @@ function TrajectoryApp() {
       });
     }, context => { document.documentElement.dataset.theme = context.theme === 'dark' ? 'dark' : 'light'; }, showError);
     client.current = adapter;
+    const groups = new GroupReader({
+      capture: () => {
+        const state = currentSnapshot.current, token = gate.current.capture(), signal = selectionAbort.current.signal;
+        if (!state || !token.binding || confirmedRevision.current === null) return null;
+        return { snapshot: state, view: currentView.current,
+          isCurrent: () => mounted.current && !signal.aborted && gate.current.accepts(token)
+            && currentSnapshot.current?.generation === state.generation };
+      },
+      read: async (request, signal) => {
+        // 直接读取会使后端增量游标失效；先完成有限的子任务队列，再继续增量分页。
+        const token = gate.current.capture(); reader.pause();
+        try { return await adapter.call<ThreadSnapshot>('read_trajectory', { ...request }, { signal }); }
+        finally {
+          if (mounted.current && confirmedRevision.current !== null && gate.current.accepts(token, request.binding)) reader.start();
+        }
+      },
+      commit: applySnapshot,
+      failed: showError,
+      rebuild: () => changes.current?.retry(),
+    });
+    groupReads.current = groups; groups.setVisible(document.visibilityState !== 'hidden');
     const exporter = new ExportCoordinator({
       call: (request, signal) => adapter.call<DownloadResult>('download_records', { ...request }, { signal }),
       onChange: feedback => { if (mounted.current) { setExportMessage(feedback.message); setExporting(feedback.busy); } },
@@ -381,6 +406,7 @@ function TrajectoryApp() {
     return () => {
       mounted.current = false; gate.current.invalidate(); client.current = null;
       exporter.dispose(); exports.current = null;
+      groups.dispose(); groupReads.current = null;
       reader.dispose(); changes.current = null; selectionAbort.current.abort();
       for (const entry of partRequests.current.values()) entry.controller.abort();
       document.removeEventListener('visibilitychange', visibility);
@@ -392,6 +418,7 @@ function TrajectoryApp() {
 
   const exportBinding = JSON.stringify(snapshot?.binding ?? null);
   useEffect(() => { exports.current?.bind(currentSnapshot.current?.binding ?? null); }, [exportBinding]);
+  useEffect(() => { groupReads.current?.update(); }, [snapshot, view.agentScope, view.expandedGroupIds]);
 
   useLayoutEffect(() => {
     const timing = pendingTiming.current;
@@ -443,7 +470,8 @@ function TrajectoryApp() {
     }}
     onMoreDetail={(part: ContentPart) => { void loadPart(part, true); }}
     onExport={() => { void exports.current?.run(); }}
-    onRetry={() => { preferences.current.blocked = false; preferences.current.pending = null; void readSnapshot(gate.current.capture(), null, true); void listThreads(); }}/ >;
+    onRetry={() => { preferences.current.blocked = false; preferences.current.pending = null;
+      void readSnapshot(gate.current.capture(), null, true).then(() => groupReads.current?.retry()); void listThreads(); }}/ >;
 }
 
 createRoot(document.getElementById('root')!).render(<TrajectoryApp/>);
