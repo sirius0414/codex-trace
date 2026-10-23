@@ -1,0 +1,13 @@
+{
+  "viewSessionId": "view-1",
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "code": "staleEpoch",
+  "retryable": false,
+  "message": "The selected task changed before this response arrived"
+}

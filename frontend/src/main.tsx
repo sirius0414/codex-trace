@@ -1,0 +1,449 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import type { ChangeBatch, ContentPart, DownloadResult, EventDetail, ListThreadsResult, OpenResult, QueryResult, ReadViewStateResult,
+  SaveViewStateResult, ThreadSnapshot, ThreadSummary, ViewState } from '../../contracts/types';
+import { TrajectoryClient } from './bridge/client';
+import { defaultView, eventLocation, mergeDetail, mergeSnapshot, partsForTab, readAnchorPage, readSelectionPage, restoredView, searchKeys, searchVisibility, selectedView, PreferenceGate, SessionGate, type EventLocation, type SearchMatches } from './state/session';
+import { ChangeReader, mergeChanges, recordChangeTiming, type ChangeTiming } from './state/changes';
+import { readDetailWindow } from './state/detail';
+import { ExportCoordinator } from './state/export';
+import TraceUI from './components/TraceUI';
+import type { DetailData } from './ui-types';
+import './style.css';
+
+type Token = ReturnType<SessionGate['capture']>;
+
+function TrajectoryApp() {
+  const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
+  const [view, setView] = useState<ViewState>(defaultView);
+  const [detail, setDetail] = useState<DetailData | null>(null);
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [threadsMore, setThreadsMore] = useState(false);
+  const [threadScope, setThreadScope] = useState<'user' | 'all'>('user');
+  const threadScopeRef = useRef<'user' | 'all'>('user');
+  const [searchResult, setSearchResult] = useState<SearchMatches | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [exportMessage, setExportMessage] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const exports = useRef<ExportCoordinator | null>(null);
+  const client = useRef<TrajectoryClient | null>(null);
+  const gate = useRef(new SessionGate());
+  const preferences = useRef(new PreferenceGate());
+  const currentView = useRef(view);
+  const currentSnapshot = useRef(snapshot);
+  const currentDetail = useRef(detail);
+  const detailRequests = useRef(new Set<string>());
+  const detailSerial = useRef(0);
+  const detailVersions = useRef(new Map<string, number>());
+  const threadSerial = useRef(0);
+  const threadCursor = useRef<string | null>(null);
+  const threadQuery = useRef('');
+  const querySerial = useRef(0);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const listTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mounted = useRef(true);
+  const selectionIntent = useRef(0);
+  const saveOperations = useRef(new Map<PreferenceGate, Promise<void>>());
+  const changes = useRef<ChangeReader | null>(null);
+  const confirmedRevision = useRef<number | null>(null);
+  const removedEvents = useRef(new Map<string, number>());
+  const selectionAbort = useRef(new AbortController());
+  const partRequests = useRef(new Map<ContentPart, { revision: number; controller: AbortController }>());
+  const transportError = useRef('');
+  const pendingTiming = useRef<ChangeTiming | null>(null);
+
+  function showError(value: unknown, token?: Token) {
+    if (mounted.current && (!token || gate.current.accepts(token))) setError(value instanceof Error ? value.message : '本地读取未完成，请重试。');
+  }
+  function applyView(next: ViewState) { currentView.current = next; setView(next); }
+  function applySnapshot(next: ThreadSnapshot) {
+    const current = currentSnapshot.current;
+    if (current && next.generation > current.generation) {
+      removedEvents.current.clear(); confirmedRevision.current = next.revision;
+      invalidateDetails();
+    }
+    const merged = mergeSnapshot(current, next, removedEvents.current);
+    currentSnapshot.current = merged; setSnapshot(merged);
+  }
+  function invalidateDetails() {
+    detailSerial.current += 1;
+    for (const entry of partRequests.current.values()) entry.controller.abort();
+    partRequests.current.clear(); detailRequests.current.clear(); detailVersions.current.clear(); setDetailLoading(false);
+  }
+  function stopReads() {
+    exports.current?.bind(null);
+    changes.current?.pause(); confirmedRevision.current = null;
+    selectionAbort.current.abort(); selectionAbort.current = new AbortController();
+    invalidateDetails();
+  }
+  function resetSelection() {
+    preferences.current = new PreferenceGate();
+    currentSnapshot.current = null; setSnapshot(null);
+    currentDetail.current = null; setDetail(null);
+    applyView(defaultView()); setSearchResult(null); setError(''); setExportMessage('');
+    invalidateDetails(); removedEvents.current.clear(); transportError.current = ''; pendingTiming.current = null;
+  }
+
+  async function flushPreferences(token: Token, owner = preferences.current): Promise<void> {
+    const existing = saveOperations.current.get(owner);
+    if (existing) { await existing; return flushPreferences(token, owner); }
+    if (!gate.current.accepts(token) || owner !== preferences.current || !client.current) return;
+    const adapter = client.current;
+    const pending = owner.take();
+    if (!pending) return;
+    let succeeded = false;
+    const operation = (async () => {
+    try {
+      const result = await adapter.call<SaveViewStateResult>('save_view_state', { binding: token.binding, ...pending });
+      if (!gate.current.accepts(token, result.binding) || owner !== preferences.current) return;
+      owner.finish(result);
+      succeeded = result.saved;
+      if (!result.saved) setError('另一窗口已更新阅读状态；已保留本窗口当前视图，点击重试可重新读取。');
+    } catch (failure) {
+      owner.saving = false;
+      // Keep latest pending state for the next deliberate edit/retry; no blind CAS loop.
+      owner.pending ??= pending.state;
+      showError(failure, token);
+    }
+    })();
+    saveOperations.current.set(owner, operation);
+    await operation;
+    saveOperations.current.delete(owner);
+    // A transport failure retains pending state without an unbounded retry loop.
+    if (succeeded && owner.pending) await flushPreferences(token, owner);
+  }
+  function patchView(patch: Partial<ViewState>) {
+    const next = { ...currentView.current, ...patch };
+    applyView(next); preferences.current.edit(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const token = gate.current.capture();
+    saveTimer.current = setTimeout(() => { void flushPreferences(token); }, 400);
+  }
+  function selectEvent(eventId: string | null) {
+    const wasSelected = currentView.current.selectedEventId === eventId;
+    patchView(selectedView(currentView.current, currentSnapshot.current, eventId));
+    // Reclicking the same row keeps its loaded details and scroll position.
+    if (wasSelected) return;
+    invalidateDetails();
+    currentDetail.current = null; setDetail(null); setDetailLoading(false);
+  }
+
+  async function readSnapshot(token: Token, cursor: string | null = null, restore = false, groupId: string | null = null) {
+    if (!token.binding || !client.current) return;
+    const adapter = client.current;
+    const signal = selectionAbort.current.signal;
+    const previousConfirmed = confirmedRevision.current;
+    if (restore) { changes.current?.pause(); confirmedRevision.current = null; }
+    setLoading(true);
+    const owner = preferences.current;
+    const edited = owner.editVersion;
+    let first: ThreadSnapshot | null = null;
+    let initialRevision: number | null = null;
+    let missingAnchor = false, missingSelection = false;
+    const readLocated = async (location: EventLocation) => {
+      const result = await adapter.call<ThreadSnapshot>('read_trajectory', { binding: token.binding, cursor: null, ...location }, { signal });
+      if (signal.aborted || !gate.current.accepts(token, result.binding)) throw new DOMException('Cancelled', 'AbortError');
+      return result;
+    };
+    try {
+      const initial = cursor ? { snapshot: await adapter.call<ThreadSnapshot>('read_trajectory', { binding: token.binding, cursor,
+        anchorEventId: null, ...(groupId ? { groupId } : {}) }, { signal }), missing: false }
+        : await readAnchorPage(readLocated, { ...eventLocation(currentView.current, currentSnapshot.current), ...(groupId ? { groupId } : {}) });
+      const result = initial.snapshot; missingAnchor = initial.missing;
+      if (signal.aborted || !gate.current.accepts(token, result.binding)) return;
+      if (cursor && currentSnapshot.current && result.generation !== currentSnapshot.current.generation) {
+        // Paging cannot acknowledge a new generation from just an older slice.
+        // Let the serialized change reader rebuild around the reading anchor.
+        changes.current?.retry(); return;
+      }
+      first = result;
+      initialRevision = result.revision;
+      if (restore) {
+        // Bind the task first, then restore preferences before mounting rows: a
+        // default tail-scroll must not overwrite the saved reading anchor.
+        const saved = await adapter.call<ReadViewStateResult>('read_view_state', { binding: token.binding }, { signal });
+        if (signal.aborted || !gate.current.accepts(token, saved.binding) || owner !== preferences.current) return;
+        const accepted = owner.restored(saved.preferenceRevision);
+        if (accepted && owner.editVersion === edited && !owner.pending) applyView(restoredView(saved.state, saved.preferenceRevision, result));
+        const anchorId = currentView.current.anchor?.eventId ?? currentView.current.selectedEventId;
+        if (anchorId && !result.events.some(event => event.eventId === anchorId)) {
+          const located = await readAnchorPage(readLocated, eventLocation(currentView.current, currentSnapshot.current ?? result, anchorId));
+          const anchored = located.snapshot; missingAnchor ||= located.missing;
+          if (signal.aborted || !gate.current.accepts(token, anchored.binding)) return;
+          if (anchored.generation > result.generation) initialRevision = anchored.revision;
+          first = mergeSnapshot(result, anchored);
+        }
+        const selected = currentView.current.selectedEventId;
+        if (selected && !first.events.some(event => event.eventId === selected)) {
+          if (selected === anchorId && missingAnchor) missingSelection = true;
+          else {
+            const selectedPage = await readSelectionPage(readLocated, eventLocation(currentView.current, currentSnapshot.current ?? first, selected), first);
+            if (selectedPage.snapshot.generation > first.generation) initialRevision = selectedPage.snapshot.revision;
+            first = selectedPage.snapshot; missingSelection = selectedPage.missing;
+          }
+        }
+      }
+      applySnapshot(first); setError(missingSelection ? '未找到所选记录；已保留选择和阅读状态，可选择其他记录。'
+        : missingAnchor ? '未找到原阅读锚点；已显示最近记录并保留筛选和跟随状态。' : '');
+      if (restore && owner.pending) void flushPreferences(token, owner);
+    } catch (failure) {
+      if (!signal.aborted && first && gate.current.accepts(token)) {
+        // Preference failure must not hide successfully read task records.
+        if (!owner.loaded && owner.editVersion === edited) applyView(restoredView(currentView.current, 0, first));
+        applySnapshot(first);
+      }
+      if (!signal.aborted) showError(failure, token);
+    }
+    finally {
+      if (!signal.aborted && gate.current.accepts(token)) {
+        setLoading(false);
+        if (first && confirmedRevision.current === null) {
+          confirmedRevision.current = initialRevision ?? first.revision; changes.current?.start();
+        } else if (restore && !first && previousConfirmed !== null && currentSnapshot.current) {
+          confirmedRevision.current = previousConfirmed; changes.current?.start();
+        }
+      }
+    }
+  }
+
+  async function selectTask(threadId: string) {
+    const intent = ++selectionIntent.current;
+    stopReads();
+    const old = gate.current.capture();
+    await flushPreferences(old);
+    if (intent !== selectionIntent.current || !gate.current.accepts(old) && old.binding) return;
+    const token = gate.current.select(threadId);
+    resetSelection(); void readSnapshot(token, null, true);
+  }
+  async function listThreads(append = false) {
+    const open = gate.current.open;
+    if (!open || !client.current) return;
+    const activation = gate.current.activation, serial = ++threadSerial.current;
+    const cursor = append ? threadCursor.current : null;
+    if (append && !cursor) return;
+    try {
+      const result = await client.current.call<ListThreadsResult>('list_threads', { viewSessionId: open.viewSessionId,
+        query: threadQuery.current, sourceScope: threadScopeRef.current, cursor });
+      if (!gate.current.acceptsOpen(activation, result.viewSessionId) || serial !== threadSerial.current) return;
+      setThreads(previous => append ? [...new Map([...previous, ...result.threads].map(row => [row.threadId, row])).values()] : result.threads);
+      threadCursor.current = result.nextCursor; setThreadsMore(!!result.nextCursor);
+    } catch (failure) { if (gate.current.acceptsOpen(activation, open.viewSessionId)) showError(failure); }
+  }
+  function changeThreadScope(scope: 'user' | 'all') {
+    threadScopeRef.current = scope; setThreadScope(scope); threadCursor.current = null; ++threadSerial.current;
+    setThreads([]); setThreadsMore(false); void listThreads();
+  }
+  function searchTasks(query: string) {
+    threadQuery.current = query; threadCursor.current = null; ++threadSerial.current;
+    if (listTimer.current) clearTimeout(listTimer.current);
+    listTimer.current = setTimeout(() => { void listThreads(); }, 200);
+  }
+
+  async function loadPart(part: ContentPart, append = false) {
+    const token = gate.current.capture(), state = currentSnapshot.current, selected = currentView.current.selectedEventId;
+    if (!token.binding || !state || !selected || !client.current) return;
+    const event = state.events.find(row => row.eventId === selected);
+    if (!event) {
+      setError('所选记录不在当前加载范围中；可加载较早记录。'); return;
+    }
+    const previous = currentDetail.current?.eventId === selected ? currentDetail.current.parts[part] : undefined;
+    const versionKey = `${selected}:${part}`;
+    // A cursor names a frozen version. Refresh the same visible window before
+    // requesting more bytes from a version that has changed underneath it.
+    if (append && detailVersions.current.get(versionKey) !== event.eventRevision) append = false;
+    const cursor = append ? previous?.nextCursor : null;
+    if (append && !cursor || !append && previous && detailVersions.current.get(versionKey) === event.eventRevision) return;
+    const serial = detailSerial.current, requestKey = `${serial}:${state.generation}:${event.eventRevision}:${selected}:${part}:${cursor ?? ''}`;
+    if (detailRequests.current.has(requestKey)) return;
+    const pending = partRequests.current.get(part);
+    if (pending && pending.revision !== event.eventRevision) pending.controller.abort();
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, selectionAbort.current.signal]);
+    partRequests.current.set(part, { revision: event.eventRevision, controller });
+    detailRequests.current.add(requestKey); setDetailLoading(true);
+    try {
+      const adapter = client.current;
+      const read = (chunkCursor: string | null) => adapter.call<EventDetail>('read_event', { binding: token.binding,
+        generation: state.generation, eventId: selected, part, chunkCursor }, { signal });
+      const response = append ? await read(cursor ?? null) : await readDetailWindow(read, previous ? new TextEncoder().encode(previous.text).length : 0);
+      if (signal.aborted || !gate.current.accepts(token, response.binding) || serial !== detailSerial.current || currentView.current.selectedEventId !== response.eventId
+        || response.generation !== currentSnapshot.current?.generation) return;
+      const currentEvent = currentSnapshot.current.events.find(row => row.eventId === selected);
+      if (currentEvent && response.eventRevision < currentEvent.eventRevision) return;
+      const next = mergeDetail(currentDetail.current, response, append);
+      detailVersions.current.set(versionKey, response.eventRevision);
+      currentDetail.current = next; setDetail(next);
+    } catch (failure) { if (!signal.aborted && serial === detailSerial.current) showError(failure, token); }
+    finally {
+      detailRequests.current.delete(requestKey);
+      if (partRequests.current.get(part)?.controller === controller) partRequests.current.delete(part);
+      if (serial === detailSerial.current) setDetailLoading(detailRequests.current.size > 0);
+    }
+  }
+
+  useEffect(() => {
+    mounted.current = true;
+    const reader = new ChangeReader({
+      capture: () => {
+        const state = currentSnapshot.current, token = gate.current.capture(), signal = selectionAbort.current.signal;
+        if (!state || confirmedRevision.current === null || !token.binding) return null;
+        return { snapshot: state, afterRevision: confirmedRevision.current,
+          isCurrent: () => mounted.current && !signal.aborted && gate.current.accepts(token) && currentSnapshot.current?.generation === state.generation };
+      },
+      read: (request, signal) => adapter.call<ChangeBatch>('read_changes', { ...request }, { signal }),
+      received: timing => recordChangeTiming('received', timing),
+      commit: (batch, timing) => {
+        const state = currentSnapshot.current;
+        if (!state) return;
+        const next = mergeChanges(state, batch);
+        for (const id of batch.removeEventIds) removedEvents.current.set(id, batch.revision);
+        for (const event of batch.upsertEvents) removedEvents.current.delete(event.eventId);
+        confirmedRevision.current = batch.revision;
+        currentSnapshot.current = next; pendingTiming.current = timing; setSnapshot(next);
+        recordChangeTiming('committed', timing);
+        const recoveredError = transportError.current;
+        setError(previous => previous === recoveredError ? '' : previous); transportError.current = '';
+        if (currentView.current.selectedEventId && batch.removeEventIds.includes(currentView.current.selectedEventId)) {
+          invalidateDetails(); setError('所选记录已从当前来源移除；保留阅读位置，可选择其他记录。');
+        }
+      },
+      reset: async (_batch, signal) => {
+        const token = gate.current.capture(), before = currentSnapshot.current;
+        if (!token.binding || !before) return;
+        const location = eventLocation(currentView.current, before), anchor = location.anchorEventId;
+        const readLocated = async (target: EventLocation) => {
+          const result = await adapter.call<ThreadSnapshot>('read_trajectory', { binding: token.binding, cursor: null, ...target }, { signal });
+          if (signal.aborted || !gate.current.accepts(token, result.binding)) throw new DOMException('Cancelled', 'AbortError');
+          return result;
+        };
+        const located = await readAnchorPage(readLocated, location);
+        let rebuilt = located.snapshot;
+        if (signal.aborted || !gate.current.accepts(token, rebuilt.binding)) return;
+        let acknowledged = rebuilt.revision;
+        const selected = currentView.current.selectedEventId;
+        if (selected && selected !== anchor && !rebuilt.events.some(event => event.eventId === selected)) {
+          const selectedPage = await readSelectionPage(readLocated, eventLocation(currentView.current, before, selected), rebuilt);
+          if (selectedPage.snapshot.generation > rebuilt.generation) acknowledged = selectedPage.snapshot.revision;
+          rebuilt = selectedPage.snapshot;
+        }
+        invalidateDetails(); removedEvents.current.clear(); confirmedRevision.current = acknowledged;
+        currentSnapshot.current = rebuilt; setSnapshot(rebuilt);
+        const missing = selected && !rebuilt.events.some(event => event.eventId === selected);
+        const missingAnchor = located.missing || anchor && !rebuilt.events.some(event => event.eventId === anchor);
+        setError(missing ? '重建后未找到所选记录；保留选择和阅读状态，可选择其他记录。'
+          : missingAnchor ? '重建后未找到原阅读锚点；已保留筛选、详情选择和跟随状态。' : '');
+      },
+      failed: failure => {
+        const message = failure instanceof Error ? failure.message : '增量读取中断，已保留当前内容并等待重试。';
+        const identityRequired = failure && typeof failure === 'object' && 'code' in failure && failure.code === 'identityRequired';
+        transportError.current = identityRequired ? '观察会话已失效；请从当前聊天的 New Tab 重新打开“执行轨迹”。' : message;
+        setError(transportError.current);
+        const state = currentSnapshot.current;
+        if (state) {
+          const next = { ...state, freshness: { ...state.freshness, state: 'stale' as const } };
+          currentSnapshot.current = next; setSnapshot(next);
+        }
+        if (identityRequired) reader.pause();
+      },
+    });
+    changes.current = reader;
+    const visibility = () => {
+      const visible = document.visibilityState !== 'hidden';
+      reader.setVisible(visible); exports.current?.setVisible(visible);
+    };
+    visibility(); document.addEventListener('visibilitychange', visibility);
+    const adapter = new TrajectoryClient((open: OpenResult) => {
+      if (gate.current.isDuplicateOpen(open)) return;
+      const intent = ++selectionIntent.current;
+      stopReads();
+      const old = gate.current.capture();
+      void flushPreferences(old).then(() => {
+        if (!mounted.current || intent !== selectionIntent.current) return;
+        const token = gate.current.begin(open);
+        resetSelection(); setThreads([]); threadCursor.current = null; setThreadsMore(false);
+        if (open.identity.state === 'verified') void readSnapshot(token, null, true);
+        else { setLoading(false); setError(open.identity.explanation); }
+        void listThreads();
+      });
+    }, context => { document.documentElement.dataset.theme = context.theme === 'dark' ? 'dark' : 'light'; }, showError);
+    client.current = adapter;
+    const exporter = new ExportCoordinator({
+      call: (request, signal) => adapter.call<DownloadResult>('download_records', { ...request }, { signal }),
+      onChange: feedback => { if (mounted.current) { setExportMessage(feedback.message); setExporting(feedback.busy); } },
+    });
+    exports.current = exporter; exporter.setVisible(document.visibilityState !== 'hidden');
+    void adapter.connect().then(context => {
+      document.documentElement.dataset.theme = context.theme === 'dark' ? 'dark' : 'light';
+      if (!gate.current.open) { setLoading(false); setError('宿主已连接，等待执行轨迹入口提供观察会话。'); }
+    }).catch(showError);
+    return () => {
+      mounted.current = false; gate.current.invalidate(); client.current = null;
+      exporter.dispose(); exports.current = null;
+      reader.dispose(); changes.current = null; selectionAbort.current.abort();
+      for (const entry of partRequests.current.values()) entry.controller.abort();
+      document.removeEventListener('visibilitychange', visibility);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (listTimer.current) clearTimeout(listTimer.current);
+      void adapter.close();
+    };
+  }, []);
+
+  const exportBinding = JSON.stringify(snapshot?.binding ?? null);
+  useEffect(() => { exports.current?.bind(currentSnapshot.current?.binding ?? null); }, [exportBinding]);
+
+  useLayoutEffect(() => {
+    const timing = pendingTiming.current;
+    if (timing && snapshot?.generation === timing.generation && snapshot.revision >= timing.revision) {
+      recordChangeTiming('dom', timing); pendingTiming.current = null;
+    }
+  }, [snapshot]);
+
+  const search = searchKeys(view, snapshot);
+  const searchDisplay = searchVisibility(view.filters.text, search, searchResult);
+  useEffect(() => {
+    const state = currentSnapshot.current, token = gate.current.capture();
+    if (!state || !token.binding) return;
+    const serial = ++querySerial.current;
+    // Structured filters are immediate and local. Applying a previous server
+    // ID set during paging would briefly hide new rows and destroy the anchor.
+    if (!currentView.current.filters.text) { setSearchResult(null); return; }
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, selectionAbort.current.signal]);
+    const timer = setTimeout(() => {
+      void client.current?.call<QueryResult>('query_loaded_events', { binding: token.binding,
+        loadedSetId: state.coverage.loadedSetId, scopeRevision: state.coverage.scopeRevision,
+        filters: currentView.current.filters, agentScope: currentView.current.agentScope }, { signal }).then(result => {
+        if (signal.aborted || !gate.current.accepts(token, result.binding) || serial !== querySerial.current) return;
+        const latest = currentSnapshot.current;
+        if (!latest || result.generation !== latest.generation || result.revision !== latest.revision || result.loadedSetId !== latest.coverage.loadedSetId
+          || result.scopeRevision !== latest.coverage.scopeRevision) return;
+        setSearchResult({ ...search, ids: new Set(result.eventIds) });
+      }).catch(failure => { if (!signal.aborted && serial === querySerial.current) showError(failure, token); });
+    }, 180);
+    return () => { clearTimeout(timer); controller.abort(); ++querySerial.current; };
+  }, [search.requestKey]);
+
+  useEffect(() => {
+    const state = currentSnapshot.current, selected = currentView.current.selectedEventId;
+    if (!state || !selected) return;
+    const event = state.events.find(row => row.eventId === selected);
+    if (!event) return;
+    for (const part of partsForTab(currentView.current.detailTab, event.content.map(value => value.part))) void loadPart(part);
+  }, [view.selectedEventId, view.detailTab, snapshot?.revision, snapshot?.generation, snapshot?.binding.viewSessionId, snapshot?.binding.selectionEpoch]);
+
+  return <TraceUI threadScope={threadScope} onThreadScope={changeThreadScope} snapshot={snapshot} view={view} detail={detail} threads={threads} threadsMore={threadsMore}
+    matchedIds={searchDisplay.matchedIds} searching={searchDisplay.searching} loading={loading} detailLoading={detailLoading} error={error} exportMessage={exportMessage} exporting={exporting}
+    onTask={id => { void selectTask(id); }} onTaskSearch={searchTasks} onMoreThreads={() => { void listThreads(true); }}
+    onView={patchView} onSelect={selectEvent} onLoadEarlier={groupId => {
+      const current = currentSnapshot.current;
+      const cursor = groupId ? current?.groups.find(group => group.groupId === groupId)?.nextCursor : current?.coverage.nextCursor;
+      if (cursor) void readSnapshot(gate.current.capture(), cursor, false, groupId ?? null);
+    }}
+    onMoreDetail={(part: ContentPart) => { void loadPart(part, true); }}
+    onExport={() => { void exports.current?.run(); }}
+    onRetry={() => { preferences.current.blocked = false; preferences.current.pending = null; void readSnapshot(gate.current.capture(), null, true); void listThreads(); }}/ >;
+}
+
+createRoot(document.getElementById('root')!).render(<TrajectoryApp/>);

@@ -1,0 +1,3 @@
+# M0 uses the stable v1 MCP Python SDK. Runtime never installs dependencies.
+mcp==1.30.0
+jsonschema==4.25.1

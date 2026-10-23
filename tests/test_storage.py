@@ -1,0 +1,185 @@
+"""All persistence tests use isolated synthetic plugin directories."""
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+import copy
+import json
+import os
+from pathlib import Path
+import sqlite3
+import stat
+import tempfile
+import unittest
+from uuid import UUID
+
+from backend.codex_display.storage import DerivedStore, StorageError
+
+
+STATE = json.loads((Path(__file__).parent / "fixtures/contracts/view-state.json").read_text())
+
+
+class StorageTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.base = Path(self.temporary.name).resolve()
+        self.root = self.base / "plugin" / "index"
+        self.store = DerivedStore(self.root)
+        self.addCleanup(self.store.close)
+
+    def reopen(self):
+        self.store.close()
+        self.store = DerivedStore(self.root)
+        self.addCleanup(self.store.close)
+        return self.store
+
+    def test_private_permissions_and_stable_identity_after_restart(self):
+        identifier = self.store.source_instance_id
+        UUID(identifier)
+        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(self.store.path.stat().st_mode), 0o600)
+        self.assertEqual(self.reopen().source_instance_id, identifier)
+        self.assertEqual(self.store._connection.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+
+    def test_separate_instances_share_identity_and_cross_process_cas(self):
+        with DerivedStore(self.root) as other:
+            self.assertEqual(other.source_instance_id, self.store.source_instance_id)
+            results = list(ThreadPoolExecutor(2).map(lambda store: store.save_view("A", 0, STATE), (self.store, other)))
+            self.assertEqual(sorted(result["saved"] for result in results), [False, True])
+            self.assertEqual(self.store.load_view("A")["preferenceRevision"], 1)
+
+    def test_projection_requires_exact_thread_generation_parser_version(self):
+        self.store.save_projection("A", 3, "parser-1", {"events": [{"id": "synthetic"}]})
+        self.assertEqual(self.store.load_projection("A", 3, "parser-1")["events"][0]["id"], "synthetic")
+        for key in (("B", 3, "parser-1"), ("A", 4, "parser-1"), ("A", 3, "parser-2")):
+            self.assertIsNone(self.store.load_projection(*key))
+        self.assertIsNotNone(self.reopen().load_projection("A", 3, "parser-1"))
+
+    def test_view_state_conflict_returns_current_state_and_task_isolation(self):
+        self.assertEqual(self.store.load_view("A"), {"preferenceRevision": 0, "state": None})
+        first = self.store.save_view("A", 0, STATE)
+        self.assertEqual(first, {"saved": True, "preferenceRevision": 1, "state": STATE})
+        other = {**STATE, "follow": "following", "detailTab": "raw"}
+        self.assertEqual(self.store.save_view("A", 0, other), {**first, "saved": False})
+        self.assertEqual(self.store.save_view("A", 1, other)["preferenceRevision"], 2)
+        self.assertEqual(self.store.load_view("B"), {"preferenceRevision": 0, "state": None})
+        self.assertEqual(self.reopen().load_view("A")["state"], other)
+
+    def test_view_rejects_body_paths_unknown_fields_and_nonfinite_values(self):
+        values = [{**STATE, "body": "synthetic"}, {**STATE, "sourcePath": "/synthetic"},
+                  {**STATE, "anchor": {"eventId": "x", "offsetPx": float("nan")}},
+                  {**STATE, "filters": {**STATE["filters"], "secret": "synthetic"}},
+                  {**STATE, "detailTab": "invalid"}]
+        for value in values:
+            with self.subTest(value=value):
+                with self.assertRaises(StorageError):
+                    self.store.save_view("A", 0, value)
+        self.assertEqual(self.store.load_view("A")["preferenceRevision"], 0)
+
+    def test_returned_payloads_do_not_alias_caller_mutations(self):
+        state = copy.deepcopy(STATE)
+        returned = self.store.save_view("A", 0, state)
+        state["filters"]["text"] = "changed"
+        returned["state"]["filters"]["text"] = "also changed"
+        self.assertEqual(self.store.load_view("A")["state"], STATE)
+
+    def test_durable_receipts_insert_and_update_are_compare_and_swap(self):
+        self.assertIsNone(self.store.get_receipt("request"))
+        pending = {"status": "pending", "task": "A", "exportId": "synthetic"}
+        result = self.store.put_receipt("request", pending)
+        self.assertEqual(result, {"saved": True, "revision": 1, "value": pending})
+        duplicate = self.store.put_receipt("request", {"status": "different"})
+        self.assertEqual(duplicate, {**result, "saved": False})
+        self.assertEqual(self.reopen().get_receipt("request"), {"revision": 1, "value": pending})
+        verified = {**pending, "status": "verified"}
+        self.assertEqual(self.store.put_receipt("request", verified, expected_revision=1)["revision"], 2)
+        self.assertEqual(self.store.get_receipt("request")["value"], verified)
+
+    def test_concurrent_receipt_insert_keeps_one_durable_value(self):
+        with ThreadPoolExecutor(8) as executor:
+            results = list(executor.map(lambda i: self.store.put_receipt("same", {"attempt": i}), range(32)))
+        self.assertEqual(sum(result["saved"] for result in results), 1)
+        self.assertTrue(all(result["value"] == results[0]["value"] for result in results))
+
+    def test_symlink_directory_or_database_and_hardlinks_are_rejected(self):
+        outside = self.base / "outside"
+        outside.mkdir()
+        link = self.base / "ancestor-link"
+        link.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(StorageError):
+            DerivedStore(link / "index")
+        self.assertFalse((outside / "index").exists())
+        for mode in ("symlink", "hardlink"):
+            root = self.base / mode
+            root.mkdir()
+            target = outside / (mode + ".sqlite3")
+            target.write_bytes(b"synthetic")
+            if mode == "symlink":
+                (root / "derived.sqlite3").symlink_to(target)
+            else:
+                os.link(target, root / "derived.sqlite3")
+            with self.assertRaises(StorageError):
+                DerivedStore(root)
+            self.assertEqual(target.read_bytes(), b"synthetic")
+
+    def test_sidecar_symlink_is_rejected_before_sqlite_can_open_it(self):
+        self.store.close()
+        target = self.base / "untouched"
+        target.write_bytes(b"synthetic")
+        (self.root / "derived.sqlite3-journal").symlink_to(target)
+        with self.assertRaises(StorageError):
+            DerivedStore(self.root)
+        self.assertEqual(target.read_bytes(), b"synthetic")
+
+    def test_directory_replacement_or_database_replacement_stops_writes(self):
+        self.root.rename(self.root.with_name("old"))
+        self.root.mkdir()
+        with self.assertRaises(StorageError):
+            self.store.put_receipt("x", {"value": "synthetic"})
+        self.assertFalse((self.root / "derived.sqlite3").exists())
+
+    def test_unsupported_database_version_does_not_clear_existing_data(self):
+        self.store.put_receipt("x", {"synthetic": True})
+        path = self.store.path
+        self.store.close()
+        with sqlite3.connect(path) as connection:
+            connection.execute("PRAGMA user_version=999")
+        with self.assertRaisesRegex(StorageError, "unsupported-storage-version"):
+            DerivedStore(self.root)
+        with sqlite3.connect(path) as connection:
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM receipts").fetchone()[0], 1)
+
+    def test_invalid_keys_revisions_and_nonfinite_json_are_rejected(self):
+        for revision in (-1, True, 2**53):
+            with self.assertRaises(StorageError):
+                self.store.put_receipt("x", {}, expected_revision=revision)
+        for key in ("", "bad\0key", None):
+            with self.assertRaises(StorageError):
+                self.store.get_receipt(key)
+        with self.assertRaises(StorageError):
+            self.store.save_projection("A", 0, "p", {"value": float("inf")})
+
+    def test_close_is_idempotent_and_future_operations_fail(self):
+        self.store.close()
+        self.store.close()
+        with self.assertRaisesRegex(StorageError, "storage-closed"):
+            self.store.load_view("A")
+
+    def test_sqlite_error_does_not_expose_message_and_transaction_rolls_back(self):
+        self.store._connection.execute("CREATE TRIGGER synthetic_failure BEFORE INSERT ON receipts BEGIN SELECT RAISE(ABORT, 'synthetic secret'); END")
+        with self.assertRaisesRegex(StorageError, "storage-transaction-failed") as caught:
+            self.store.put_receipt("failure", {"synthetic": True})
+        self.assertNotIn("secret", str(caught.exception))
+        self.assertIsNone(self.store.get_receipt("failure"))
+        self.store._connection.execute("DROP TRIGGER synthetic_failure")
+        self.assertTrue(self.store.put_receipt("failure", {"synthetic": True})["saved"])
+
+    def test_corrupt_json_cannot_leak_persisted_payload_in_error(self):
+        self.store._connection.execute("INSERT INTO receipts VALUES(?,?,?)", ("corrupt", 1, "synthetic secret"))
+        with self.assertRaisesRegex(StorageError, "invalid-stored-json") as caught:
+            self.store.get_receipt("corrupt")
+        self.assertNotIn("secret", str(caught.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

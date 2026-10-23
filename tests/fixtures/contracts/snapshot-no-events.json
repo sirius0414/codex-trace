@@ -1,0 +1,125 @@
+{
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "title": "Only unknown raw records",
+  "generation": 0,
+  "revision": 1,
+  "status": {
+    "value": "unknown",
+    "evidence": [],
+    "lastKnown": null,
+    "explanation": "Task terminal state is not recorded"
+  },
+  "rootGroupId": "main",
+  "turns": [],
+  "events": [],
+  "groups": [
+    {
+      "groupId": "main",
+      "kind": "main",
+      "threadId": "thread-a",
+      "name": "Synthetic main",
+      "parentGroupId": null,
+      "creationEventId": null,
+      "relationshipId": null,
+      "status": {
+        "value": "unknown",
+        "evidence": [],
+        "lastKnown": null,
+        "explanation": "Task terminal state is not recorded"
+      },
+      "loadedEventCount": 0,
+      "loadedToolCallCount": 0,
+      "usage": [],
+      "readIssue": null
+    }
+  ],
+  "relationships": [],
+  "mainUsage": [],
+  "statistics": {
+    "toolCalls": {
+      "value": 0,
+      "scope": "loaded",
+      "explanation": "Synthetic loaded range"
+    },
+    "modelRequests": {
+      "value": null,
+      "scope": "notRecorded",
+      "explanation": "Synthetic loaded range"
+    },
+    "executionWallClockMs": null,
+    "displayedRangeMs": null,
+    "operationCumulativeMs": null,
+    "inputUnionMs": null,
+    "modelUnionMs": null,
+    "toolUnionMs": null,
+    "explanation": "Parallel operation time is not task wall time"
+  },
+  "coverage": {
+    "loadedSetId": "loaded-a-1",
+    "scopeRevision": 1,
+    "loadedEventCount": 0,
+    "hasEarlier": false,
+    "nextCursor": null,
+    "indexState": "complete",
+    "sourceCompleteness": "partial",
+    "sources": [
+      {
+        "sourceId": "source-a",
+        "threadId": "thread-a",
+        "generation": 0,
+        "format": "jsonl",
+        "state": "readable",
+        "readableRange": {
+          "start": 0,
+          "end": 2000
+        },
+        "consumedThrough": 2000,
+        "inheritedRange": null,
+        "reason": null
+      }
+    ],
+    "searchTextCoverage": "fullLoadedContent",
+    "explanation": "No supported event types; raw bytes remain downloadable"
+  },
+  "capabilities": {
+    "historyPaging": true,
+    "persistedItems": true,
+    "persistedToolFragments": true,
+    "usageRecords": true,
+    "readOnlyLiveEvents": false,
+    "validatedStructures": [
+      "synthetic-fixture-only"
+    ],
+    "verifiedAt": 1792627200000
+  },
+  "freshness": {
+    "state": "current",
+    "sources": [
+      {
+        "sourceId": "source-a",
+        "state": "current",
+        "lastObservedAt": 1792627205000,
+        "lastSuccessfulReadAt": 1792627205000,
+        "lastProgressAt": 1792627204000,
+        "reason": null
+      }
+    ],
+    "lastSuccessfulReadAt": 1792627205000,
+    "lastProgressAt": 1792627204000,
+    "outputGranularity": "savedFragments",
+    "limitation": "Only saved output is available"
+  },
+  "updatedAt": 1792627205000,
+  "timelineOrigin": {
+    "timestampMs": null,
+    "basis": "notRecorded",
+    "precision": "notRecorded",
+    "explanation": "合成来源未记录任务创建时间；不从子任务或已加载记录推断。"
+  }
+}

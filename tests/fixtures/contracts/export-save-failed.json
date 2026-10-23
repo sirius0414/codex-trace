@@ -1,0 +1,72 @@
+{
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "exportId": "export-a",
+  "status": "ready",
+  "filename": "codex-display-thread-a-synthetic.zip",
+  "totalBytes": 1024,
+  "expiresAt": 1792627210000,
+  "manifest": {
+    "schemaVersion": "1.0.0",
+    "rootThreadId": "thread-a",
+    "enumerationCutoff": 1792627200000,
+    "collectionStartedAt": 1792627200001,
+    "collectionEndedAt": 1792627200004,
+    "atomicSnapshot": false,
+    "relationships": [],
+    "sources": [
+      {
+        "sourceId": "unknown-source",
+        "threadId": "thread-a",
+        "segmentId": "unknown-segment",
+        "generation": 0,
+        "entryName": "records/thread-a/unknown-segment.bin",
+        "collectedFrom": 1792627200001,
+        "collectedThrough": 1792627200003,
+        "frozenUpperBound": 101,
+        "copiedRange": {
+          "start": 0,
+          "end": 101
+        },
+        "sha256": "028f12f88bcbb9c23a4ceaacc2175a7f07ce96fab0bf2de549238b8276b89360",
+        "logicalInheritedRange": null,
+        "trailingPartialLine": true,
+        "state": "copied",
+        "reason": null
+      },
+      {
+        "sourceId": "unreadable-source",
+        "threadId": "thread-a",
+        "segmentId": "missing-segment",
+        "generation": 0,
+        "entryName": null,
+        "collectedFrom": 1792627200003,
+        "collectedThrough": 1792627200004,
+        "frozenUpperBound": null,
+        "copiedRange": null,
+        "sha256": null,
+        "logicalInheritedRange": null,
+        "trailingPartialLine": false,
+        "state": "unreadable",
+        "reason": "Synthetic inaccessible source"
+      }
+    ],
+    "enumerationComplete": false,
+    "unresolvedRanges": [
+      "Synthetic unavailable inherited segment"
+    ]
+  },
+  "chunk": null,
+  "explanation": "Synthetic contract metadata only; no ZIP is created by this fixture.",
+  "createRequestId": "create-synthetic-a",
+  "save": {
+    "status": "failed",
+    "requestId": "commit-synthetic-a",
+    "code": "permissionDenied"
+  }
+}

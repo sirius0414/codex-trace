@@ -1,0 +1,23 @@
+{
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "exportId": null,
+  "status": "unknown",
+  "filename": null,
+  "totalBytes": null,
+  "expiresAt": null,
+  "manifest": null,
+  "chunk": null,
+  "explanation": "Synthetic contract metadata only; no ZIP is created by this fixture.",
+  "createRequestId": null,
+  "save": {
+    "status": "unknown",
+    "requestId": "commit-synthetic-a",
+    "reason": "requestNotRecorded"
+  }
+}

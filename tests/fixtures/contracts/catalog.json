@@ -1,0 +1,75 @@
+{
+  "syntheticOnly": true,
+  "fixtures": [
+    {
+      "file": "snapshot-running.json",
+      "definition": "ThreadSnapshot"
+    },
+    {
+      "file": "snapshot-no-events.json",
+      "definition": "ThreadSnapshot"
+    },
+    {
+      "file": "change-fragment.json",
+      "definition": "ChangeBatch"
+    },
+    {
+      "file": "change-complete.json",
+      "definition": "ChangeBatch"
+    },
+    {
+      "file": "view-state.json",
+      "definition": "ViewState"
+    },
+    {
+      "file": "event-detail-fragment.json",
+      "definition": "EventDetail"
+    },
+    {
+      "file": "query-no-match.json",
+      "definition": "QueryResult"
+    },
+    {
+      "file": "open-no-identity.json",
+      "definition": "OpenResult"
+    },
+    {
+      "file": "list-threads.json",
+      "definition": "ListThreadsResult"
+    },
+    {
+      "file": "view-state-saved.json",
+      "definition": "SaveViewStateResult"
+    },
+    {
+      "file": "error-stale-epoch.json",
+      "definition": "ErrorResult"
+    },
+    {
+      "file": "export-manifest-partial.json",
+      "definition": "ExportManifest"
+    },
+    {
+      "file": "export-ready.json",
+      "definition": "DownloadResult"
+    },
+    {
+      "file": "export-save-pending.json",
+      "definition": "DownloadResult"
+    },
+    {
+      "file": "export-save-verified.json",
+      "definition": "DownloadResult"
+    },
+    {
+      "file": "export-save-failed.json",
+      "definition": "DownloadResult"
+    },
+    {
+      "file": "export-save-unknown.json",
+      "definition": "DownloadResult"
+    }
+  ],
+  "requestFile": "requests.json",
+  "scenarioFile": "scenarios.json"
+}

@@ -1,0 +1,13 @@
+{
+  "viewSessionId": "view-1",
+  "threads": [
+    {
+      "threadId": "thread-a",
+      "title": "Synthetic task A",
+      "source": "user",
+      "updatedAt": 1792627200000,
+      "parentThreadId": null
+    }
+  ],
+  "nextCursor": null
+}

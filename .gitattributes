@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Preserve exact bytes in synthetic raw-record fixtures.
+/tests/fixtures/contracts/unknown-and-partial.bin binary

@@ -1,0 +1,3648 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:codex-display:contracts:1.0.0",
+  "title": "Codex Display local payload contracts",
+  "description": "Payload schemas only. All source content is untrusted text and remains local. Nullable measurements represent unrecorded values; numeric zero is recorded zero. MCP transport envelope is validated separately.",
+  "$ref": "#/$defs/ThreadSnapshot",
+  "$defs": {
+    "ExecutionStatus": {
+      "type": "string",
+      "enum": [
+        "running",
+        "completed",
+        "failed",
+        "stopped",
+        "unknown"
+      ]
+    },
+    "UpdateStatus": {
+      "type": "string",
+      "enum": [
+        "connecting",
+        "current",
+        "stale",
+        "unavailable"
+      ]
+    },
+    "OutputCompleteness": {
+      "type": "string",
+      "enum": [
+        "notRecorded",
+        "fragment",
+        "complete",
+        "unknown"
+      ]
+    },
+    "EventKind": {
+      "type": "string",
+      "enum": [
+        "userMessage",
+        "assistantMessage",
+        "reasoningSummary",
+        "systemContext",
+        "developerContext",
+        "environment",
+        "toolCall",
+        "toolResult",
+        "compaction",
+        "collaboration"
+      ]
+    },
+    "Scope": {
+      "type": "string",
+      "enum": [
+        "thread",
+        "turn",
+        "event",
+        "group"
+      ]
+    },
+    "Binding": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "sourceInstanceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "viewSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "selectionEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "sourceInstanceId",
+        "viewSessionId",
+        "selectionEpoch",
+        "threadId"
+      ],
+      "additionalProperties": false
+    },
+    "SourceRef": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "api"
+            },
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "turnId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "itemId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "rawType": {
+              "type": "string"
+            },
+            "producerVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "association": {
+              "type": "string",
+              "enum": [
+                "exactItemId",
+                "exactCallId",
+                "explicitMetadata"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "threadId",
+            "turnId",
+            "itemId",
+            "rawType",
+            "producerVersion",
+            "association"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "raw"
+            },
+            "threadId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "segmentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "byteStart": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "byteEnd": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "rawType": {
+              "type": "string"
+            },
+            "producerVersion": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "association": {
+              "type": "string",
+              "enum": [
+                "exactItemId",
+                "exactCallId",
+                "explicitMetadata",
+                "physicalRecord"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "threadId",
+            "segmentId",
+            "generation",
+            "byteStart",
+            "byteEnd",
+            "rawType",
+            "producerVersion",
+            "association"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "StatusEvidence": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "scopeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "status": {
+          "$ref": "#/$defs/ExecutionStatus"
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "verifiedHost",
+            "persistedLifecycle",
+            "verifiedCompleteCoverage",
+            "unconfirmed"
+          ]
+        },
+        "observedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "scopeId",
+        "status",
+        "basis",
+        "observedAt",
+        "source",
+        "explanation"
+      ],
+      "additionalProperties": false
+    },
+    "ExecutionState": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/ExecutionStatus"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StatusEvidence"
+          }
+        },
+        "lastKnown": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "evidence",
+        "lastKnown",
+        "explanation"
+      ],
+      "additionalProperties": false
+    },
+    "Timing": {
+      "type": "object",
+      "properties": {
+        "startMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "durationMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "precision": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "startOnly",
+            "durationOnly",
+            "orderOnly"
+          ]
+        },
+        "originalUnit": {
+          "type": "string",
+          "enum": [
+            "seconds",
+            "milliseconds",
+            "notRecorded"
+          ]
+        },
+        "basis": {
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "startMs",
+        "endMs",
+        "durationMs",
+        "precision",
+        "originalUnit",
+        "basis",
+        "source"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "exact"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "startMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "startOnly"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "startMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "endMs": {
+                "type": "null"
+              },
+              "durationMs": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "durationOnly"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "startMs": {
+                "type": "null"
+              },
+              "endMs": {
+                "type": "null"
+              },
+              "durationMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "precision": {
+                "const": "orderOnly"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "startMs": {
+                "type": "null"
+              },
+              "endMs": {
+                "type": "null"
+              },
+              "durationMs": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ContentPart": {
+      "type": "string",
+      "enum": [
+        "summary",
+        "input",
+        "output",
+        "error",
+        "raw",
+        "source"
+      ]
+    },
+    "ContentRef": {
+      "type": "object",
+      "properties": {
+        "part": {
+          "$ref": "#/$defs/ContentPart"
+        },
+        "loaded": {
+          "type": "boolean"
+        },
+        "sourceTruncated": {
+          "type": "boolean"
+        },
+        "chunked": {
+          "type": "boolean"
+        },
+        "readableBytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chunkCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completeness": {
+          "$ref": "#/$defs/OutputCompleteness"
+        }
+      },
+      "required": [
+        "part",
+        "loaded",
+        "sourceTruncated",
+        "chunked",
+        "readableBytes",
+        "chunkCursor",
+        "completeness"
+      ],
+      "additionalProperties": false
+    },
+    "EventOrder": {
+      "type": "object",
+      "properties": {
+        "section": {
+          "type": "string",
+          "enum": [
+            "context",
+            "timeline"
+          ]
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "officialOrder",
+            "logicalSourcePosition",
+            "positionNotRecorded"
+          ]
+        }
+      },
+      "required": [
+        "section",
+        "ordinal",
+        "basis"
+      ],
+      "additionalProperties": false
+    },
+    "TraceEvent": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "groupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "parentEventId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/EventKind"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "user",
+                "assistant",
+                "system",
+                "developer",
+                "tool"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "preview": {
+          "type": "string",
+          "maxLength": 2000,
+          "pattern": "^[^\\r\\n]*$"
+        },
+        "order": {
+          "$ref": "#/$defs/EventOrder"
+        },
+        "status": {
+          "$ref": "#/$defs/ExecutionState"
+        },
+        "timing": {
+          "$ref": "#/$defs/Timing"
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContentRef"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "eventRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "callKey": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modelRequestKey": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "eventId",
+        "threadId",
+        "turnId",
+        "groupId",
+        "parentEventId",
+        "kind",
+        "role",
+        "toolName",
+        "preview",
+        "order",
+        "status",
+        "timing",
+        "content",
+        "sources",
+        "eventRevision",
+        "callKey",
+        "modelRequestKey"
+      ],
+      "additionalProperties": false
+    },
+    "Turn": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "turnId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "$ref": "#/$defs/ExecutionState"
+        }
+      },
+      "required": [
+        "threadId",
+        "turnId",
+        "order",
+        "status"
+      ],
+      "additionalProperties": false
+    },
+    "UsageMetric": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "availability": {
+              "const": "recorded"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "availability",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "availability": {
+              "type": "string",
+              "enum": [
+                "notRecorded",
+                "notComparable"
+              ]
+            },
+            "value": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "availability",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "UsageSnapshot": {
+      "type": "object",
+      "properties": {
+        "usageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "sourceIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "ownerThreadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "request",
+            "turn",
+            "thread"
+          ]
+        },
+        "scopeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "epoch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "recordedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "cumulative",
+            "perRequest",
+            "observation"
+          ]
+        },
+        "requestKey": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input": {
+          "$ref": "#/$defs/UsageMetric"
+        },
+        "output": {
+          "$ref": "#/$defs/UsageMetric"
+        },
+        "cachedInput": {
+          "$ref": "#/$defs/UsageMetric"
+        },
+        "cacheSemantics": {
+          "type": "string",
+          "enum": [
+            "includedInInput",
+            "separate",
+            "notRecorded"
+          ]
+        },
+        "attribution": {
+          "type": "string",
+          "enum": [
+            "selfOnly",
+            "includesChildren",
+            "includesInherited",
+            "unseparated"
+          ]
+        },
+        "coverage": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/SourceRef"
+        }
+      },
+      "required": [
+        "usageId",
+        "sourceIdentity",
+        "ownerThreadId",
+        "scope",
+        "scopeId",
+        "epoch",
+        "order",
+        "recordedAt",
+        "mode",
+        "requestKey",
+        "input",
+        "output",
+        "cachedInput",
+        "cacheSemantics",
+        "attribution",
+        "coverage",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "Relationship": {
+      "type": "object",
+      "properties": {
+        "relationshipId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "spawned-by",
+            "forked-from",
+            "communicates-with"
+          ]
+        },
+        "fromThreadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "toThreadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "creationEventId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "confirmed",
+            "conflict",
+            "cycle",
+            "ambiguous"
+          ]
+        }
+      },
+      "required": [
+        "relationshipId",
+        "type",
+        "fromThreadId",
+        "toThreadId",
+        "creationEventId",
+        "turnId",
+        "evidence",
+        "resolution"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "resolution": {
+                "const": "confirmed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Group": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "main",
+            "subtask",
+            "agent"
+          ]
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "name": {
+          "type": "string"
+        },
+        "parentGroupId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "creationEventId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relationshipId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/ExecutionState"
+        },
+        "loadedEventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "loadedToolCallCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "usage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageSnapshot"
+          }
+        },
+        "readIssue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hasEarlier": {
+          "type": "boolean"
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "groupId",
+        "kind",
+        "threadId",
+        "name",
+        "parentGroupId",
+        "creationEventId",
+        "relationshipId",
+        "status",
+        "loadedEventCount",
+        "loadedToolCallCount",
+        "usage",
+        "readIssue"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "main"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "parentGroupId": {
+                "type": "null"
+              },
+              "creationEventId": {
+                "type": "null"
+              },
+              "relationshipId": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "parentGroupId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "relationshipId": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ByteRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "LogicalRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endExclusive": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "start",
+        "endExclusive"
+      ],
+      "additionalProperties": false
+    },
+    "SourceCoverage": {
+      "type": "object",
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "jsonl",
+            "compressed",
+            "unknown"
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "readable",
+            "partial",
+            "unreadable",
+            "unsupported",
+            "missing"
+          ]
+        },
+        "readableRange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ByteRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "consumedThrough": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inheritedRange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogicalRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sourceId",
+        "threadId",
+        "generation",
+        "format",
+        "state",
+        "readableRange",
+        "consumedThrough",
+        "inheritedRange",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "loadedSetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "scopeRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "loadedEventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "hasEarlier": {
+          "type": "boolean"
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "indexState": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "partial",
+            "complete",
+            "failed"
+          ]
+        },
+        "sourceCompleteness": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceCoverage"
+          }
+        },
+        "searchTextCoverage": {
+          "type": "string",
+          "enum": [
+            "fullLoadedContent",
+            "partialLoadedContent"
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "loadedSetId",
+        "scopeRevision",
+        "loadedEventCount",
+        "hasEarlier",
+        "nextCursor",
+        "indexState",
+        "sourceCompleteness",
+        "sources",
+        "searchTextCoverage",
+        "explanation"
+      ],
+      "additionalProperties": false
+    },
+    "SourceFreshness": {
+      "type": "object",
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "state": {
+          "$ref": "#/$defs/UpdateStatus"
+        },
+        "lastObservedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastSuccessfulReadAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastProgressAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sourceId",
+        "state",
+        "lastObservedAt",
+        "lastSuccessfulReadAt",
+        "lastProgressAt",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "Freshness": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/UpdateStatus"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceFreshness"
+          }
+        },
+        "lastSuccessfulReadAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lastProgressAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputGranularity": {
+          "type": "string",
+          "enum": [
+            "savedFragments",
+            "completedResults",
+            "unavailable"
+          ]
+        },
+        "limitation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "sources",
+        "lastSuccessfulReadAt",
+        "lastProgressAt",
+        "outputGranularity",
+        "limitation"
+      ],
+      "additionalProperties": false
+    },
+    "Capabilities": {
+      "type": "object",
+      "properties": {
+        "historyPaging": {
+          "type": "boolean"
+        },
+        "persistedItems": {
+          "type": "boolean"
+        },
+        "persistedToolFragments": {
+          "type": "boolean"
+        },
+        "usageRecords": {
+          "type": "boolean"
+        },
+        "readOnlyLiveEvents": {
+          "type": "boolean"
+        },
+        "validatedStructures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "verifiedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "historyPaging",
+        "persistedItems",
+        "persistedToolFragments",
+        "usageRecords",
+        "readOnlyLiveEvents",
+        "validatedStructures",
+        "verifiedAt"
+      ],
+      "additionalProperties": false
+    },
+    "Count": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "loaded",
+            "readable",
+            "notRecorded"
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "scope",
+        "explanation"
+      ],
+      "additionalProperties": false
+    },
+    "Statistics": {
+      "type": "object",
+      "properties": {
+        "toolCalls": {
+          "$ref": "#/$defs/Count"
+        },
+        "modelRequests": {
+          "$ref": "#/$defs/Count"
+        },
+        "executionWallClockMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "displayedRangeMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operationCumulativeMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputUnionMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "modelUnionMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolUnionMs": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "toolCalls",
+        "modelRequests",
+        "executionWallClockMs",
+        "displayedRangeMs",
+        "operationCumulativeMs",
+        "inputUnionMs",
+        "modelUnionMs",
+        "toolUnionMs",
+        "explanation"
+      ],
+      "additionalProperties": false
+    },
+    "TimelineOrigin": {
+      "description": "A stable root-thread creation reference, independent of loaded pages and child scope. It is not the beginning or elapsed duration of a particular execution.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "timestampMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "multipleOf": 1000
+            },
+            "basis": { "const": "threadCreatedAt" },
+            "precision": { "const": "second" },
+            "explanation": { "type": "string", "minLength": 1 }
+          },
+          "required": ["timestampMs", "basis", "precision", "explanation"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "timestampMs": { "type": "null" },
+            "basis": { "const": "notRecorded" },
+            "precision": { "const": "notRecorded" },
+            "explanation": { "type": "string", "minLength": 1 }
+          },
+          "required": ["timestampMs", "basis", "precision", "explanation"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ThreadSnapshot": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "title": {
+          "type": "string"
+        },
+        "timelineOrigin": {
+          "$ref": "#/$defs/TimelineOrigin"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "$ref": "#/$defs/ExecutionState"
+        },
+        "rootGroupId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "turns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Turn"
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TraceEvent"
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Group"
+          }
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Relationship"
+          }
+        },
+        "mainUsage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageSnapshot"
+          }
+        },
+        "statistics": {
+          "$ref": "#/$defs/Statistics"
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/Capabilities"
+        },
+        "freshness": {
+          "$ref": "#/$defs/Freshness"
+        },
+        "updatedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "binding",
+        "title",
+        "timelineOrigin",
+        "generation",
+        "revision",
+        "status",
+        "rootGroupId",
+        "turns",
+        "events",
+        "groups",
+        "relationships",
+        "mainUsage",
+        "statistics",
+        "coverage",
+        "capabilities",
+        "freshness",
+        "updatedAt"
+      ],
+      "additionalProperties": false
+    },
+    "ChangeBatch": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "timelineOrigin": {
+          "$ref": "#/$defs/TimelineOrigin"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "baseRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "resetRequired": {
+          "type": "boolean"
+        },
+        "resetReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "generationChanged",
+                "expiredCursor",
+                "serviceRestarted",
+                "sourceRebuilt"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "continuationCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upsertEvents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TraceEvent"
+          }
+        },
+        "removeEventIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "turns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Turn"
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Group"
+          }
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Relationship"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/ExecutionState"
+        },
+        "mainUsage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageSnapshot"
+          }
+        },
+        "statistics": {
+          "$ref": "#/$defs/Statistics"
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "freshness": {
+          "$ref": "#/$defs/Freshness"
+        }
+      },
+      "required": [
+        "binding",
+        "generation",
+        "baseRevision",
+        "timelineOrigin",
+        "revision",
+        "resetRequired",
+        "resetReason",
+        "continuationCursor",
+        "upsertEvents",
+        "removeEventIds",
+        "turns",
+        "groups",
+        "relationships",
+        "status",
+        "mainUsage",
+        "statistics",
+        "coverage",
+        "freshness"
+      ],
+      "additionalProperties": false
+    },
+    "ContentChunk": {
+      "type": "object",
+      "properties": {
+        "part": {
+          "$ref": "#/$defs/ContentPart"
+        },
+        "text": {
+          "type": "string"
+        },
+        "byteOffset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "readableBytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceTruncated": {
+          "type": "boolean"
+        },
+        "completeness": {
+          "$ref": "#/$defs/OutputCompleteness"
+        }
+      },
+      "required": [
+        "part",
+        "text",
+        "byteOffset",
+        "readableBytes",
+        "nextCursor",
+        "sourceTruncated",
+        "completeness"
+      ],
+      "additionalProperties": false
+    },
+    "EventDetail": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "eventRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "availability": {
+          "type": "string",
+          "enum": [
+            "available",
+            "noLongerAvailable",
+            "unreadable"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "chunks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContentChunk"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          }
+        },
+        "rawAssociation": {
+          "type": "string",
+          "enum": [
+            "recorded",
+            "notRecorded"
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding",
+        "generation",
+        "revision",
+        "eventId",
+        "eventRevision",
+        "availability",
+        "summary",
+        "chunks",
+        "sources",
+        "rawAssociation",
+        "explanation"
+      ],
+      "additionalProperties": false
+    },
+    "TimeRange": {
+      "type": "object",
+      "properties": {
+        "startMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "endMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "startMs",
+        "endMs"
+      ],
+      "additionalProperties": false
+    },
+    "Filters": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "kinds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EventKind"
+          }
+        },
+        "toolName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failedOnly": {
+          "type": "boolean"
+        },
+        "timeRange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "text",
+        "kinds",
+        "toolName",
+        "failedOnly",
+        "timeRange"
+      ],
+      "additionalProperties": false
+    },
+    "AgentScope": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "all",
+            "main",
+            "group"
+          ]
+        },
+        "groupId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "groupId"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "group"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "groupId": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "groupId": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ViewState": {
+      "type": "object",
+      "properties": {
+        "filters": {
+          "$ref": "#/$defs/Filters"
+        },
+        "agentScope": {
+          "$ref": "#/$defs/AgentScope"
+        },
+        "overviewMode": {
+          "type": "string",
+          "enum": [
+            "duration",
+            "turns",
+            "calls"
+          ]
+        },
+        "selectedEventId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detailTab": {
+          "type": "string",
+          "enum": [
+            "summary",
+            "preview",
+            "raw",
+            "source"
+          ]
+        },
+        "expandedTurnIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "expandedGroupIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "follow": {
+          "type": "string",
+          "enum": [
+            "following",
+            "paused"
+          ]
+        },
+        "anchor": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "eventId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "offsetPx": {
+                  "type": "number"
+                },
+                "groupId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "eventId",
+                "offsetPx"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "filters",
+        "agentScope",
+        "overviewMode",
+        "selectedEventId",
+        "detailTab",
+        "expandedTurnIds",
+        "expandedGroupIds",
+        "follow",
+        "anchor"
+      ],
+      "additionalProperties": false
+    },
+    "ThreadSummary": {
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "title": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "subtask",
+            "internal",
+            "unknown"
+          ]
+        },
+        "updatedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parentThreadId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "threadId",
+        "title",
+        "source",
+        "updatedAt",
+        "parentThreadId"
+      ],
+      "additionalProperties": false
+    },
+    "QueryResult": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "loadedSetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "scopeRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "eventIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "untimedExcludedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "searchTextCoverage": {
+          "type": "string",
+          "enum": [
+            "fullLoadedContent",
+            "partialLoadedContent"
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "binding",
+        "generation",
+        "revision",
+        "loadedSetId",
+        "scopeRevision",
+        "eventIds",
+        "untimedExcludedCount",
+        "searchTextCoverage",
+        "explanation"
+      ],
+      "additionalProperties": false
+    },
+    "ExportSource": {
+      "type": "object",
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "segmentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "entryName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^records/[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*\\.(jsonl|bin)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collectedFrom": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "collectedThrough": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "frozenUpperBound": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "copiedRange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ByteRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logicalInheritedRange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LogicalRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trailingPartialLine": {
+          "type": "boolean"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "copied",
+            "partial",
+            "unreadable",
+            "unsafeInheritedRange"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sourceId",
+        "threadId",
+        "segmentId",
+        "generation",
+        "entryName",
+        "collectedFrom",
+        "collectedThrough",
+        "frozenUpperBound",
+        "copiedRange",
+        "sha256",
+        "logicalInheritedRange",
+        "trailingPartialLine",
+        "state",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "ExportManifest": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "rootThreadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "enumerationCutoff": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "collectionStartedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "collectionEndedAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "atomicSnapshot": {
+          "const": false
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Relationship"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExportSource"
+          }
+        },
+        "enumerationComplete": {
+          "type": "boolean"
+        },
+        "unresolvedRanges": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "rootThreadId",
+        "enumerationCutoff",
+        "collectionStartedAt",
+        "collectionEndedAt",
+        "atomicSnapshot",
+        "relationships",
+        "sources",
+        "enumerationComplete",
+        "unresolvedRanges"
+      ],
+      "additionalProperties": false
+    },
+    "ExportChunk": {
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "base64": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "maxLength": 1398104
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1048576
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "offset",
+        "base64",
+        "byteLength",
+        "sha256",
+        "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "ExportRequestId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$",
+      "description": "Client-generated idempotency key. Permanently binds one create or commit operation to its source instance, task and (for commit) export. Reuse cannot create another file.",
+      "not": {
+        "pattern": "[^A-Za-z0-9_-]"
+      }
+    },
+    "ExportFilename": {
+      "type": "string",
+      "pattern": "^codex-display-[A-Za-z0-9][A-Za-z0-9._-]*\\.zip$",
+      "maxLength": 255,
+      "not": {
+        "pattern": "[/\\\\\\u0000-\\u001f]"
+      }
+    },
+    "LocalExportPath": {
+      "type": "string",
+      "pattern": "^/(?:[^/\\\\\\u0000-\\u001f]+/)*Downloads/Codex Display/codex-display-[A-Za-z0-9][A-Za-z0-9._-]*\\.zip$",
+      "maxLength": 4096,
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "(^|/)\\.{1,2}(/|$)"
+          },
+          {
+            "pattern": "[\\u0000-\\u001f]"
+          }
+        ]
+      },
+      "description": "Output only: canonical absolute path of the verified ZIP beneath the current OS user home Downloads/Codex Display directory. The service enforces exact home containment and rejects symlink escapes; the schema cannot determine the user home."
+    },
+    "LocalSaveOutcome": {
+      "description": "Only verified confirms a saved ZIP. pending/unknown and transport timeout never mean unsaved. failed is a definitive failed commit with no final file published by this request; uncertain outcomes use unknown. Receipt survives temporary export release.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "notRequested"
+            },
+            "requestId": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "status",
+            "requestId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "pending"
+            },
+            "requestId": {
+              "$ref": "#/$defs/ExportRequestId"
+            }
+          },
+          "required": [
+            "status",
+            "requestId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "verified"
+            },
+            "requestId": {
+              "$ref": "#/$defs/ExportRequestId"
+            },
+            "filename": {
+              "$ref": "#/$defs/ExportFilename"
+            },
+            "path": {
+              "$ref": "#/$defs/LocalExportPath"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "minLength": 64,
+              "maxLength": 64
+            },
+            "verifiedAt": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "status",
+            "requestId",
+            "filename",
+            "path",
+            "bytes",
+            "sha256",
+            "verifiedAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "failed"
+            },
+            "requestId": {
+              "$ref": "#/$defs/ExportRequestId"
+            },
+            "code": {
+              "enum": [
+                "destinationUnavailable",
+                "permissionDenied",
+                "resourceLimit",
+                "writeFailed"
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "requestId",
+            "code"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "unknown"
+            },
+            "requestId": {
+              "$ref": "#/$defs/ExportRequestId"
+            },
+            "reason": {
+              "enum": [
+                "requestNotRecorded",
+                "verificationUnavailable"
+              ]
+            }
+          },
+          "required": [
+            "status",
+            "requestId",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "DownloadResult": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "exportId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "collecting",
+            "ready",
+            "failed",
+            "released",
+            "unknown"
+          ]
+        },
+        "filename": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportFilename"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "totalBytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportManifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chunk": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportChunk"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "createRequestId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExportRequestId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "save": {
+          "$ref": "#/$defs/LocalSaveOutcome"
+        }
+      },
+      "required": [
+        "binding",
+        "exportId",
+        "status",
+        "filename",
+        "totalBytes",
+        "expiresAt",
+        "manifest",
+        "chunk",
+        "explanation",
+        "createRequestId",
+        "save"
+      ],
+      "additionalProperties": false,
+      "description": "Snapshot lifecycle and local-save receipt are independent. ready means the frozen ZIP is available, not that it was saved. result can recover by commit requestId when the caller did not receive a response. A missing operation record is unknown, never proof that no file exists.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "unknown"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "exportId": {
+                "type": "null"
+              },
+              "createRequestId": {
+                "type": "null"
+              },
+              "filename": {
+                "type": "null"
+              },
+              "totalBytes": {
+                "type": "null"
+              },
+              "expiresAt": {
+                "type": "null"
+              },
+              "manifest": {
+                "type": "null"
+              },
+              "chunk": {
+                "type": "null"
+              },
+              "save": {
+                "properties": {
+                  "status": {
+                    "const": "unknown"
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "exportId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "createRequestId": {
+                "$ref": "#/$defs/ExportRequestId"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "save": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "verified",
+                      "failed"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "ready",
+                  "released"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OpenRequest": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "OpenResult": {
+      "type": "object",
+      "properties": {
+        "viewSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "sourceInstanceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "identity": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "verified"
+                },
+                "threadId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "selectionEpoch": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "state",
+                "threadId",
+                "selectionEpoch"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "selectionRequired"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "missing",
+                    "conflict",
+                    "invalid",
+                    "unverified"
+                  ]
+                },
+                "explanation": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "state",
+                "reason",
+                "explanation"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "uiResourceUri": {
+          "const": "ui://codex-display/trajectory-v1.html"
+        }
+      },
+      "required": [
+        "viewSessionId",
+        "sourceInstanceId",
+        "identity",
+        "uiResourceUri"
+      ],
+      "additionalProperties": false
+    },
+    "ListThreadsRequest": {
+      "type": "object",
+      "properties": {
+        "viewSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "query": {
+          "type": "string"
+        },
+        "sourceScope": {
+          "type": "string",
+          "enum": [
+            "user",
+            "all"
+          ]
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "viewSessionId",
+        "query",
+        "sourceScope",
+        "cursor"
+      ],
+      "additionalProperties": false
+    },
+    "ListThreadsResult": {
+      "type": "object",
+      "properties": {
+        "viewSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "threads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ThreadSummary"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "viewSessionId",
+        "threads",
+        "nextCursor"
+      ],
+      "additionalProperties": false
+    },
+    "ReadTrajectoryRequest": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "anchorEventId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "groupId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "binding",
+        "cursor",
+        "anchorEventId"
+      ],
+      "additionalProperties": false
+    },
+    "ReadChangesRequest": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "afterRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "continuationCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "binding",
+        "generation",
+        "afterRevision",
+        "continuationCursor"
+      ],
+      "additionalProperties": false
+    },
+    "ReadEventRequest": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "part": {
+          "$ref": "#/$defs/ContentPart"
+        },
+        "chunkCursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8192
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "binding",
+        "generation",
+        "eventId",
+        "part",
+        "chunkCursor"
+      ],
+      "additionalProperties": false
+    },
+    "QueryLoadedEventsRequest": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "loadedSetId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "scopeRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "filters": {
+          "$ref": "#/$defs/Filters"
+        },
+        "agentScope": {
+          "$ref": "#/$defs/AgentScope"
+        }
+      },
+      "required": [
+        "binding",
+        "loadedSetId",
+        "scopeRevision",
+        "filters",
+        "agentScope"
+      ],
+      "additionalProperties": false
+    },
+    "SaveViewStateRequest": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "expectedPreferenceRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "$ref": "#/$defs/ViewState"
+        }
+      },
+      "required": [
+        "binding",
+        "expectedPreferenceRevision",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "SaveViewStateResult": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "saved": {
+          "type": "boolean"
+        },
+        "preferenceRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "state": {
+          "$ref": "#/$defs/ViewState"
+        }
+      },
+      "required": [
+        "binding",
+        "saved",
+        "preferenceRevision",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "DownloadRequest": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "create"
+            },
+            "binding": {
+              "$ref": "#/$defs/Binding"
+            },
+            "requestId": {
+              "$ref": "#/$defs/ExportRequestId"
+            }
+          },
+          "required": [
+            "action",
+            "binding",
+            "requestId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "status",
+                "release"
+              ]
+            },
+            "binding": {
+              "$ref": "#/$defs/Binding"
+            },
+            "exportId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          },
+          "required": [
+            "action",
+            "binding",
+            "exportId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "read"
+            },
+            "binding": {
+              "$ref": "#/$defs/Binding"
+            },
+            "exportId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "cursor": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 8192
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "binding",
+            "exportId",
+            "cursor"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "commit"
+            },
+            "binding": {
+              "$ref": "#/$defs/Binding"
+            },
+            "exportId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "requestId": {
+              "$ref": "#/$defs/ExportRequestId"
+            }
+          },
+          "required": [
+            "action",
+            "binding",
+            "exportId",
+            "requestId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "const": "result"
+            },
+            "binding": {
+              "$ref": "#/$defs/Binding"
+            },
+            "requestId": {
+              "$ref": "#/$defs/ExportRequestId"
+            }
+          },
+          "required": [
+            "action",
+            "binding",
+            "requestId"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Single export interface. create and commit require different idempotency keys; result queries a commit key after timeout without making a new save. Destination and filename are server-owned; no arbitrary client path, filename, overwrite flag or UI filter is accepted."
+    },
+    "ErrorResult": {
+      "type": "object",
+      "properties": {
+        "viewSessionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "binding": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Binding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "identityRequired",
+            "identityMismatch",
+            "staleEpoch",
+            "invalidCursor",
+            "resetRequired",
+            "unreadable",
+            "unsupported",
+            "notFound",
+            "revisionConflict",
+            "resourceLimit",
+            "exportExpired",
+            "internalError",
+            "idempotencyConflict",
+            "exportNotReady"
+          ]
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "viewSessionId",
+        "binding",
+        "code",
+        "retryable",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "ReadViewStateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        }
+      },
+      "required": [
+        "binding"
+      ]
+    },
+    "ReadViewStateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "preferenceRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "state": {
+          "$ref": "#/$defs/ViewState"
+        }
+      },
+      "required": [
+        "binding",
+        "preferenceRevision",
+        "state"
+      ]
+    }
+  }
+}

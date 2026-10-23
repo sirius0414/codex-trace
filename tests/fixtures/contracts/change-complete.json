@@ -1,0 +1,368 @@
+{
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "generation": 0,
+  "baseRevision": 2,
+  "revision": 3,
+  "resetRequired": false,
+  "resetReason": null,
+  "continuationCursor": null,
+  "upsertEvents": [
+    {
+      "eventId": "call-1",
+      "threadId": "thread-a",
+      "turnId": "turn-1",
+      "groupId": "main",
+      "parentEventId": null,
+      "kind": "toolCall",
+      "role": "tool",
+      "toolName": "exec_command",
+      "preview": "synthetic toolCall",
+      "order": {
+        "section": "timeline",
+        "ordinal": 1,
+        "basis": "logicalSourcePosition"
+      },
+      "status": {
+        "value": "completed",
+        "evidence": [
+          {
+            "scope": "event",
+            "scopeId": "call-1",
+            "status": "completed",
+            "basis": "persistedLifecycle",
+            "observedAt": 1792627200000,
+            "source": {
+              "kind": "raw",
+              "threadId": "thread-a",
+              "segmentId": "segment-1",
+              "generation": 0,
+              "byteStart": 0,
+              "byteEnd": 200,
+              "rawType": "response_item",
+              "producerVersion": "synthetic-1",
+              "association": "physicalRecord"
+            },
+            "explanation": "Synthetic scope-specific lifecycle evidence"
+          }
+        ],
+        "lastKnown": null,
+        "explanation": "Synthetic verified evidence"
+      },
+      "timing": {
+        "startMs": 1792627201000,
+        "endMs": null,
+        "durationMs": null,
+        "precision": "startOnly",
+        "originalUnit": "milliseconds",
+        "basis": "Synthetic recorded start only",
+        "source": {
+          "kind": "raw",
+          "threadId": "thread-a",
+          "segmentId": "segment-1",
+          "generation": 0,
+          "byteStart": 0,
+          "byteEnd": 200,
+          "rawType": "response_item",
+          "producerVersion": "synthetic-1",
+          "association": "physicalRecord"
+        }
+      },
+      "content": [
+        {
+          "part": "output",
+          "loaded": false,
+          "sourceTruncated": false,
+          "chunked": true,
+          "readableBytes": 40,
+          "chunkCursor": null,
+          "completeness": "complete"
+        }
+      ],
+      "sources": [
+        {
+          "kind": "raw",
+          "threadId": "thread-a",
+          "segmentId": "segment-1",
+          "generation": 0,
+          "byteStart": 0,
+          "byteEnd": 200,
+          "rawType": "response_item",
+          "producerVersion": "synthetic-1",
+          "association": "physicalRecord"
+        }
+      ],
+      "eventRevision": 3,
+      "callKey": "call-1",
+      "modelRequestKey": null
+    }
+  ],
+  "removeEventIds": [],
+  "turns": [
+    {
+      "threadId": "thread-a",
+      "turnId": "turn-1",
+      "order": 0,
+      "status": {
+        "value": "running",
+        "evidence": [
+          {
+            "scope": "turn",
+            "scopeId": "turn-1",
+            "status": "running",
+            "basis": "persistedLifecycle",
+            "observedAt": 1792627200000,
+            "source": {
+              "kind": "raw",
+              "threadId": "thread-a",
+              "segmentId": "segment-1",
+              "generation": 0,
+              "byteStart": 0,
+              "byteEnd": 200,
+              "rawType": "response_item",
+              "producerVersion": "synthetic-1",
+              "association": "physicalRecord"
+            },
+            "explanation": "Synthetic scope-specific lifecycle evidence"
+          }
+        ],
+        "lastKnown": null,
+        "explanation": "Synthetic verified evidence"
+      }
+    },
+    {
+      "threadId": "thread-child",
+      "turnId": "child-turn-1",
+      "order": 0,
+      "status": {
+        "value": "unknown",
+        "evidence": [],
+        "lastKnown": null,
+        "explanation": "Task terminal state is not recorded"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "groupId": "main",
+      "kind": "main",
+      "threadId": "thread-a",
+      "name": "Synthetic main",
+      "parentGroupId": null,
+      "creationEventId": null,
+      "relationshipId": null,
+      "status": {
+        "value": "unknown",
+        "evidence": [],
+        "lastKnown": null,
+        "explanation": "Task terminal state is not recorded"
+      },
+      "loadedEventCount": 4,
+      "loadedToolCallCount": 1,
+      "usage": [
+        {
+          "usageId": "usage-1",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 1,
+          "recordedAt": 1792627200001,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "recorded",
+            "value": 100
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        }
+      ],
+      "readIssue": null
+    },
+    {
+      "groupId": "child",
+      "kind": "agent",
+      "threadId": "thread-child",
+      "name": "Synthetic child",
+      "parentGroupId": "main",
+      "creationEventId": "spawn-1",
+      "relationshipId": "rel-spawn",
+      "status": {
+        "value": "unknown",
+        "evidence": [],
+        "lastKnown": null,
+        "explanation": "Task terminal state is not recorded"
+      },
+      "loadedEventCount": 1,
+      "loadedToolCallCount": 1,
+      "usage": [],
+      "readIssue": "Child source is partially unreadable; task execution failure is not inferred"
+    }
+  ],
+  "relationships": [
+    {
+      "relationshipId": "rel-spawn",
+      "type": "spawned-by",
+      "fromThreadId": "thread-child",
+      "toThreadId": "thread-a",
+      "creationEventId": "spawn-1",
+      "turnId": "turn-1",
+      "evidence": [
+        {
+          "kind": "raw",
+          "threadId": "thread-a",
+          "segmentId": "segment-1",
+          "generation": 0,
+          "byteStart": 0,
+          "byteEnd": 200,
+          "rawType": "response_item",
+          "producerVersion": "synthetic-1",
+          "association": "physicalRecord"
+        }
+      ],
+      "resolution": "confirmed"
+    }
+  ],
+  "status": {
+    "value": "unknown",
+    "evidence": [],
+    "lastKnown": null,
+    "explanation": "Task terminal state is not recorded"
+  },
+  "mainUsage": [
+    {
+      "usageId": "usage-3",
+      "sourceIdentity": "raw-token-count",
+      "ownerThreadId": "thread-a",
+      "scope": "thread",
+      "scopeId": "thread-a",
+      "epoch": "usage-epoch-1",
+      "order": 3,
+      "recordedAt": 1792627200003,
+      "mode": "cumulative",
+      "requestKey": null,
+      "input": {
+        "availability": "recorded",
+        "value": 150
+      },
+      "output": {
+        "availability": "recorded",
+        "value": 0
+      },
+      "cachedInput": {
+        "availability": "notRecorded",
+        "value": null
+      },
+      "cacheSemantics": "includedInInput",
+      "attribution": "selfOnly",
+      "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+      "source": {
+        "kind": "raw",
+        "threadId": "thread-a",
+        "segmentId": "segment-1",
+        "generation": 0,
+        "byteStart": 0,
+        "byteEnd": 200,
+        "rawType": "response_item",
+        "producerVersion": "synthetic-1",
+        "association": "physicalRecord"
+      }
+    }
+  ],
+  "statistics": {
+    "toolCalls": {
+      "value": 2,
+      "scope": "loaded",
+      "explanation": "Synthetic loaded range"
+    },
+    "modelRequests": {
+      "value": null,
+      "scope": "notRecorded",
+      "explanation": "Synthetic loaded range"
+    },
+    "executionWallClockMs": null,
+    "displayedRangeMs": 4000,
+    "operationCumulativeMs": null,
+    "inputUnionMs": null,
+    "modelUnionMs": null,
+    "toolUnionMs": null,
+    "explanation": "Parallel operation time is not task wall time"
+  },
+  "coverage": {
+    "loadedSetId": "loaded-a-1",
+    "scopeRevision": 1,
+    "loadedEventCount": 5,
+    "hasEarlier": true,
+    "nextCursor": "opaque-earlier-page",
+    "indexState": "partial",
+    "sourceCompleteness": "partial",
+    "sources": [
+      {
+        "sourceId": "source-a",
+        "threadId": "thread-a",
+        "generation": 0,
+        "format": "jsonl",
+        "state": "readable",
+        "readableRange": {
+          "start": 0,
+          "end": 2000
+        },
+        "consumedThrough": 2000,
+        "inheritedRange": null,
+        "reason": null
+      }
+    ],
+    "searchTextCoverage": "partialLoadedContent",
+    "explanation": "Older pages are not yet indexed"
+  },
+  "freshness": {
+    "state": "current",
+    "sources": [
+      {
+        "sourceId": "source-a",
+        "state": "current",
+        "lastObservedAt": 1792627205000,
+        "lastSuccessfulReadAt": 1792627205000,
+        "lastProgressAt": 1792627204000,
+        "reason": null
+      }
+    ],
+    "lastSuccessfulReadAt": 1792627205000,
+    "lastProgressAt": 1792627204000,
+    "outputGranularity": "savedFragments",
+    "limitation": "Only saved output is available"
+  },
+  "timelineOrigin": {
+    "timestampMs": 1700000000000,
+    "basis": "threadCreatedAt",
+    "precision": "second",
+    "explanation": "合成 thread/read.createdAt 秒精度创建基准；不表示本次执行耗时。"
+  }
+}

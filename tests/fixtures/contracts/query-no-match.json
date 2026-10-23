@@ -1,0 +1,17 @@
+{
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "generation": 0,
+  "revision": 2,
+  "loadedSetId": "loaded-a-1",
+  "scopeRevision": 1,
+  "eventIds": [],
+  "untimedExcludedCount": 1,
+  "searchTextCoverage": "partialLoadedContent",
+  "explanation": "No matches in searchable loaded content; selected detail stays selected"
+}

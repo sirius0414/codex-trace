@@ -1,0 +1,36 @@
+{
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "saved": true,
+  "preferenceRevision": 1,
+  "state": {
+    "filters": {
+      "text": "<script>not executed</script>",
+      "kinds": [],
+      "toolName": null,
+      "failedOnly": false,
+      "timeRange": null
+    },
+    "agentScope": {
+      "kind": "all",
+      "groupId": null
+    },
+    "overviewMode": "duration",
+    "selectedEventId": "call-1",
+    "detailTab": "preview",
+    "expandedTurnIds": [
+      "turn-1"
+    ],
+    "expandedGroupIds": [],
+    "follow": "paused",
+    "anchor": {
+      "eventId": "call-1",
+      "offsetPx": -3.5
+    }
+  }
+}

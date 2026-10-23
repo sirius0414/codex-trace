@@ -1,0 +1,14 @@
+{
+  "name": "codex-display",
+  "version": "0.1.0",
+  "description": "Local, read-only Codex execution trajectory viewer with verified local ZIP export.",
+  "author": {
+    "name": "Codex Display contributors"
+  },
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "执行轨迹",
+    "shortDescription": "只读查看本地 Codex 已保存的执行轨迹。"
+  }
+}

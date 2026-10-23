@@ -1,0 +1,41 @@
+{
+  "binding": {
+    "schemaVersion": "1.0.0",
+    "sourceInstanceId": "synthetic-local",
+    "viewSessionId": "view-1",
+    "selectionEpoch": 1,
+    "threadId": "thread-a"
+  },
+  "generation": 0,
+  "revision": 2,
+  "eventId": "call-1",
+  "eventRevision": 2,
+  "availability": "available",
+  "summary": "Saved tool output fragment",
+  "chunks": [
+    {
+      "part": "output",
+      "text": "<script>window.shouldNeverRun = true</script>\n\u001b[31mterminal escape\u001b[0m\n![external](https://invalid.example/pixel.png)",
+      "byteOffset": 0,
+      "readableBytes": null,
+      "nextCursor": "opaque-next-content",
+      "sourceTruncated": false,
+      "completeness": "fragment"
+    }
+  ],
+  "sources": [
+    {
+      "kind": "raw",
+      "threadId": "thread-a",
+      "segmentId": "segment-1",
+      "generation": 0,
+      "byteStart": 0,
+      "byteEnd": 200,
+      "rawType": "response_item",
+      "producerVersion": "synthetic-1",
+      "association": "physicalRecord"
+    }
+  ],
+  "rawAssociation": "recorded",
+  "explanation": "Render as text; this is not a complete tool result"
+}

@@ -1,0 +1,371 @@
+{
+  "syntheticOnly": true,
+  "usageSequences": [
+    {
+      "name": "cumulative snapshots replace rather than sum",
+      "snapshots": [
+        {
+          "usageId": "usage-1",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 1,
+          "recordedAt": 1792627200001,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "recorded",
+            "value": 100
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        },
+        {
+          "usageId": "usage-2",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 2,
+          "recordedAt": 1792627200002,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "recorded",
+            "value": 150
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        },
+        {
+          "usageId": "usage-3",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 3,
+          "recordedAt": 1792627200003,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "recorded",
+            "value": 150
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        }
+      ],
+      "expectedInput": 150
+    },
+    {
+      "name": "decline needs domain investigation, never a fabricated epoch",
+      "snapshots": [
+        {
+          "usageId": "usage-1",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 1,
+          "recordedAt": 1792627200001,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "recorded",
+            "value": 150
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        },
+        {
+          "usageId": "usage-2",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 2,
+          "recordedAt": 1792627200002,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "recorded",
+            "value": 120
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        }
+      ],
+      "expectedInput": 120,
+      "requiresRangeQualification": true
+    },
+    {
+      "name": "missing metric is not a stale prior number",
+      "snapshots": [
+        {
+          "usageId": "usage-1",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 1,
+          "recordedAt": 1792627200001,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "recorded",
+            "value": 100
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        },
+        {
+          "usageId": "usage-2",
+          "sourceIdentity": "raw-token-count",
+          "ownerThreadId": "thread-a",
+          "scope": "thread",
+          "scopeId": "thread-a",
+          "epoch": "usage-epoch-1",
+          "order": 2,
+          "recordedAt": 1792627200002,
+          "mode": "cumulative",
+          "requestKey": null,
+          "input": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "output": {
+            "availability": "recorded",
+            "value": 0
+          },
+          "cachedInput": {
+            "availability": "notRecorded",
+            "value": null
+          },
+          "cacheSemantics": "includedInInput",
+          "attribution": "selfOnly",
+          "coverage": "Synthetic main-thread snapshot; cache is not recorded",
+          "source": {
+            "kind": "raw",
+            "threadId": "thread-a",
+            "segmentId": "segment-1",
+            "generation": 0,
+            "byteStart": 0,
+            "byteEnd": 200,
+            "rawType": "response_item",
+            "producerVersion": "synthetic-1",
+            "association": "physicalRecord"
+          }
+        }
+      ],
+      "expectedInput": null
+    }
+  ],
+  "outputSequence": {
+    "files": [
+      "snapshot-running.json",
+      "change-fragment.json",
+      "change-complete.json"
+    ],
+    "eventId": "call-1",
+    "expectedFinalRowCount": 1,
+    "expectedRootStatus": "unknown"
+  },
+  "delayedResponse": {
+    "currentBinding": {
+      "schemaVersion": "1.0.0",
+      "sourceInstanceId": "synthetic-local",
+      "viewSessionId": "view-1",
+      "selectionEpoch": 2,
+      "threadId": "thread-b"
+    },
+    "incomingBinding": {
+      "schemaVersion": "1.0.0",
+      "sourceInstanceId": "synthetic-local",
+      "viewSessionId": "view-1",
+      "selectionEpoch": 1,
+      "threadId": "thread-a"
+    },
+    "accept": false
+  },
+  "relationships": {
+    "spawn": {
+      "relationshipId": "rel-spawn",
+      "type": "spawned-by",
+      "fromThreadId": "thread-child",
+      "toThreadId": "thread-a",
+      "creationEventId": "spawn-1",
+      "turnId": "turn-1",
+      "evidence": [
+        {
+          "kind": "raw",
+          "threadId": "thread-a",
+          "segmentId": "segment-1",
+          "generation": 0,
+          "byteStart": 0,
+          "byteEnd": 200,
+          "rawType": "response_item",
+          "producerVersion": "synthetic-1",
+          "association": "physicalRecord"
+        }
+      ],
+      "resolution": "confirmed"
+    },
+    "communication": {
+      "relationshipId": "rel-message",
+      "type": "communicates-with",
+      "fromThreadId": "thread-child",
+      "toThreadId": "thread-a",
+      "creationEventId": null,
+      "turnId": "turn-1",
+      "evidence": [
+        {
+          "kind": "raw",
+          "threadId": "thread-a",
+          "segmentId": "segment-1",
+          "generation": 0,
+          "byteStart": 0,
+          "byteEnd": 200,
+          "rawType": "response_item",
+          "producerVersion": "synthetic-1",
+          "association": "physicalRecord"
+        }
+      ],
+      "resolution": "confirmed"
+    },
+    "communicationCreatesChild": false
+  },
+  "unknownBytes": {
+    "file": "unknown-and-partial.bin",
+    "expectedUIEventCount": 0,
+    "sha256": "028f12f88bcbb9c23a4ceaacc2175a7f07ce96fab0bf2de549238b8276b89360",
+    "byteLength": 101,
+    "endsInPartialUtf8": true
+  }
+}
