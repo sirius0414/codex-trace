@@ -19,6 +19,7 @@ export default function TraceUI(props: TraceUIProps) {
   const previousThread = useRef(snapshot?.binding.threadId);
   const visible = useMemo(() => snapshot ? visibleEvents(snapshot, view, props.matchedIds) : [], [snapshot, view.filters, view.agentScope, props.matchedIds]);
   const usage = latestUsage(snapshot?.mainUsage ?? []);
+  // 结束状态只取来源证据；读取中断、没有新增和暂停跟随都不能推断任务已结束。
   const done = snapshot?.status.value === 'completed' || snapshot?.status.value === 'stopped' || snapshot?.status.value === 'failed';
   const filter = (patch: Partial<typeof view.filters>) => onView({ follow: 'paused', filters: { ...view.filters, ...patch } });
   useEffect(() => {
@@ -30,6 +31,7 @@ export default function TraceUI(props: TraceUIProps) {
   useLayoutEffect(() => {
     const ledger = root.current?.querySelector<HTMLElement>('.cx-ledger');
     if (!ledger || !narrow || !view.selectedEventId) return;
+    // 窄屏详情覆盖列表时，底层列表退出键盘与读屏导航；关闭后恢复原有属性。
     const wasInert = ledger.inert, wasHidden = ledger.getAttribute('aria-hidden');
     ledger.inert = true;
     ledger.setAttribute('aria-hidden', 'true');
@@ -44,6 +46,7 @@ export default function TraceUI(props: TraceUIProps) {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      // 先关闭最上层弹层，再关闭详情；关闭后把焦点交回触发控件或原记录。
       if (popover) { setPopover(null); root.current?.querySelector<HTMLButtonElement>(popover === 'usage' ? '.cx-usage-trigger' : popover === 'reading' ? '.cx-read-status' : '.cx-task')?.focus(); }
       else if (view.selectedEventId) { props.onSelect(null); requestAnimationFrame(() => {
         const selected = root.current?.querySelector<HTMLButtonElement>(`.cx-scroll [data-event-id="${CSS.escape(view.selectedEventId!)}"]`);

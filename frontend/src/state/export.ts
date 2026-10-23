@@ -5,6 +5,7 @@ const STORAGE_KEY = 'codex-display.export-intents.v1';
 const KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
 const FILENAME = /^codex-display-[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/;
 const HASH = /^[0-9a-f]{64}$/;
+// create/commit 分别使用稳定请求 ID；Unknown 仍是待核对状态，只有终态允许新建意图。
 const phases = ['creating', 'collecting', 'ready', 'committing', 'pending', 'createUnknown', 'saveUnknown', 'verified', 'failed', 'released'] as const;
 export type ExportPhase = typeof phases[number];
 export type ExportIntent = { sourceInstanceId: string; threadId: string; createRequestId: string; commitRequestId: string; exportId: string | null; phase: ExportPhase };
@@ -33,7 +34,7 @@ export class ExportResponseError extends Error {
 }
 function requireValid(condition: unknown): asserts condition { if (!condition) throw new ExportResponseError(); }
 
-/** A local save receipt must agree with the frozen artifact and observation. */
+/** 回执须与观察绑定、原请求及冻结产物一致；字段自称 verified 仍不足以直接显示成功。 */
 export function validateExportResult(value: unknown, binding: Binding, intent: ExportIntent, known?: KnownExport): DownloadResult {
   requireValid(value && typeof value === 'object' && !Array.isArray(value));
   const result = value as DownloadResult;
@@ -72,6 +73,7 @@ export function validateExportResult(value: unknown, binding: Binding, intent: E
   if (save.status === 'failed') requireValid(['destinationUnavailable', 'permissionDenied', 'resourceLimit', 'writeFailed'].includes(save.code));
   if (result.status === 'ready') requireValid(result.filename !== null && result.totalBytes !== null);
   if (save.status === 'verified') {
+    // 此处核对响应内部的一致性；实际目录约束、落盘与读回校验由服务端执行。
     requireValid(save.filename === result.filename && save.bytes === result.totalBytes && integer(save.bytes) && integer(save.verifiedAt)
       && typeof save.sha256 === 'string' && HASH.test(save.sha256) && typeof save.path === 'string' && save.path.length <= 4096
       && save.path.startsWith('/') && save.path.endsWith(`/Downloads/Codex Display/${save.filename}`)
@@ -80,6 +82,7 @@ export function validateExportResult(value: unknown, binding: Binding, intent: E
   return result;
 }
 
+/** 保存成功与来源完整性分别报告，ZIP 已校验不代表所有原始来源都已读到。 */
 export function exportScopeMessage(manifest: ExportManifest | null) {
   if (!manifest) return '来源范围以 ZIP 清单为准，当前未取得清单，不能确认来源完整性。';
   const copied = manifest.sources.filter(source => source.state === 'copied').length;
@@ -90,7 +93,9 @@ export function exportScopeMessage(manifest: ExportManifest | null) {
   return `主任务及已确认子任务；${interval}。${incomplete ? `来源范围不完整（完整复制 ${copied}/${manifest.sources.length} 个来源），未读取范围见清单。` : `${copied} 个来源已复制。`}各来源截止位置见清单，并非跨文件同一时刻快照。`;
 }
 
-/** Only IDs and phase survive a page reload: never paths, manifests or bytes. */
+/** 导出状态机：采集就绪后提交保存，未确认时沿用原请求核对，verified 后才显示成功。
+ * 页面恢复只存 ID 和阶段；路径、清单与正文不写入 sessionStorage。
+ */
 export class ExportCoordinator {
   private options: Options;
   private intents = new Map<string, ExportIntent>();
@@ -146,6 +151,7 @@ export class ExportCoordinator {
   bind(binding: Binding | null) {
     if (sameBinding(this.binding, binding) || !this.binding && !binding) return;
     const previous = this.binding, previousIntent = previous ? this.intents.get(operationKey(previous)) : undefined;
+    // 界面代次终止旧反馈，但恢复键按来源和任务保留，重选同一任务仍可核对原保存。
     this.generation++; this.controller?.abort(); this.controller = null; this.running = null;
     this.binding = binding ? { ...binding } : null;
     if (previous && previousIntent?.exportId) this.release(previous, previousIntent);
@@ -167,6 +173,7 @@ export class ExportCoordinator {
     if (binding && intent?.exportId) this.release(binding, intent);
   }
   private rpc(request: DownloadRequest, signal: AbortSignal, beforeDispatch?: () => void) {
+    // release 与后续 commit 共用串行通道，派发前检查可识别排队期间已释放的快照。
     const pending = this.queue.then(() => { signal.throwIfAborted(); beforeDispatch?.(); return this.options.call(request, signal); });
     this.queue = pending.catch(() => undefined);
     return pending;
@@ -176,11 +183,11 @@ export class ExportCoordinator {
     const controller = new AbortController();
     void this.rpc({ action: 'release', binding, exportId: intent.exportId }, controller.signal).then(value => {
       const result = validateExportResult(value, binding, intent, this.known.get(intent.createRequestId));
-      // Releasing an accepted commit cannot cancel or forget its outcome.
+      // release 只释放临时材料，不能取消已接受的保存，也不能丢弃尚待核对的回执。
       if (result.status === 'released' && !savedPhase(intent.phase) && result.save.status === 'notRequested') {
         intent.phase = 'released'; this.persist();
       }
-    }).catch(() => { /* Temporary resources also have a service-owned expiry. */ });
+    }).catch(() => { /* 释放失败不改变保存结论；临时资源另有服务端过期回收。 */ });
   }
   private sleep(delay: number, signal: AbortSignal) {
     return new Promise<void>((resolve, reject) => {
@@ -205,8 +212,7 @@ export class ExportCoordinator {
     let intent = this.intents.get(key);
     if (!intent || terminalPhase(intent.phase)) {
       if (!intent && this.intents.size >= 128) {
-        // Completed intents no longer need a recovery key in this tab. Keep
-        // every unfinished/uncertain operation even when that blocks a new one.
+        // 只淘汰终态意图；未完成/未确认的恢复键必须保留，即使因此无法新建导出。
         for (const [previousKey, previous] of this.intents) {
           if (!terminalPhase(previous.phase)) continue;
           this.intents.delete(previousKey); this.known.delete(previous.createRequestId);
@@ -227,8 +233,7 @@ export class ExportCoordinator {
     const generation = this.generation;
     const recoverCommit = intent.phase === 'saveUnknown' && !!intent.exportId;
     const pending = this.perform(binding, intent, generation, controller.signal, recoverCommit).catch(() => {
-      // Cancellation owns no new UI state. An unexpected local failure still
-      // releases the busy indicator without inventing a terminal save result.
+      // 取消后的旧流程不再写界面；本地异常只解除忙碌态，不推断保存已失败。
       if (!controller.signal.aborted && !this.disposed && this.generation === generation && sameBinding(this.binding, binding)) {
         intent.phase = savedPhase(intent.phase) ? 'saveUnknown' : 'createUnknown'; this.persist();
         this.feedback(false, '导出结果未确认；再次点击“导出记录”将核对同一次请求。');
@@ -242,6 +247,8 @@ export class ExportCoordinator {
     const valid = () => !signal.aborted && !this.disposed && this.generation === generation && sameBinding(this.binding, binding);
     const started = this.now(); let paused = 0, count = 0, failures = 0;
     while (valid()) {
+      // 每轮派发前等待页面可见；仅 waitVisible 的等待扣除预算，在途请求仍可完成。
+      // 页面恢复后仍沿用同一组请求 ID。
       const pausedAt = this.now(); await this.waitVisible(signal); paused += this.now() - pausedAt;
       if (!valid()) return;
       if (count >= (this.options.pollLimit ?? 60) || this.now() - started - paused >= (this.options.activeTimeLimitMs ?? 120000)) {
@@ -261,14 +268,13 @@ export class ExportCoordinator {
       count++;
       try {
         const response = await this.rpc(request, signal, request.action === 'commit' ? () => {
-          // A queued release can finish while this request waits for the RPC
-          // lane. Record acceptance intent only when it is actually dispatched.
+          // 在实际派发前才记录 committing；排队时前一条 release 可能已释放该快照。
           if (intent.phase === 'released') throw Object.assign(new Error('export-released'), { code: 'exportExpired' });
           intent.phase = 'committing'; this.persist();
         } : undefined);
         if (!valid()) return;
         const result = validateExportResult(response, binding, intent, known);
-        // A commit-key lookup cannot authorize a fresh save after uncertainty.
+        // result 只查询已接受的提交，不能把未确认结论转换成一次新的保存授权。
         if (request.action === 'result') requireValid(result.save.status !== 'notRequested');
         if (result.exportId) intent.exportId = result.exportId;
         if (result.status !== 'unknown') this.known.set(intent.createRequestId, { filename: result.filename ?? known?.filename ?? null,
@@ -301,8 +307,7 @@ export class ExportCoordinator {
       } catch (failure) {
         if (!valid()) return;
         const code = failure && typeof failure === 'object' && 'code' in failure ? failure.code : null;
-        // The service only emits exportExpired before accepting this commit
-        // key. Accepted operations return their persisted save outcome.
+        // 服务只在接受 commit 键之前返回 exportExpired；已接受的保存返回持久化结论。
         if (code === 'exportExpired') {
           intent.phase = 'released'; this.persist();
           this.feedback(false, '上次未提交的导出快照已释放；再次点击可采集新的快照。'); return;

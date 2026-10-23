@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build, verify and reinstall Codex Display using an existing local runtime."""
+"""使用已有运行环境准备、验证并安装本地插件更新。
+
+prepare 只生成独立产物和内容指纹；install 才修改市场注册及插件缓存。
+二者以 update-plan.json 衔接，安装前重新核对目标 CODEX_HOME 和产物内容。
+"""
 from __future__ import annotations
 
 import argparse
@@ -46,6 +50,7 @@ def write_json(path: Path, value) -> None:
 
 
 def fingerprints(directory: Path) -> dict[str, str]:
+    """按相对路径核对包内容，忽略运行产生的字节码并拒绝符号链接。"""
     result = {}
     for path in sorted(directory.rglob("*")):
         if path.is_symlink():
@@ -58,6 +63,7 @@ def fingerprints(directory: Path) -> dict[str, str]:
 
 
 def runtime_paths(python_arg: str | None, codex_arg: str | None) -> tuple[Path, Path]:
+    """显式参数优先，其次复用安装回执，最后检查约定路径中的已有环境。"""
     installed = codex_home() / "plugins/cache" / MARKET / PLUGIN
     records = []
     for path in sorted(installed.glob("*/runtime.json"), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -88,6 +94,7 @@ def runtime_paths(python_arg: str | None, codex_arg: str | None) -> tuple[Path, 
 
 
 def prepare(python: Path, codex: Path) -> Path:
+    """生成可供审阅的包、验证报告和安装计划，不改当前安装。"""
     verify_runtime(python, locked_versions(ROOT / "requirements.lock"))
     npm = executable("npm")
     output_parent = ROOT / "build"
@@ -109,6 +116,7 @@ def prepare(python: Path, codex: Path) -> Path:
     print("[3/5] 生成本地市场", flush=True)
     run([str(python), str(ROOT / "scripts/prepare_marketplace.py"), "--package", str(package),
          "--output", str(output / "marketplace"), "--codex", str(codex)])
+    # 将包、市场目录和目标配置一起冻结；分开执行安装时不能悄悄换用另一份产物。
     write_json(output / "update-plan.json", {"schemaVersion": 1, "codexHome": str(codex_home()),
         "python": str(python), "codex": str(codex), "files": fingerprints(package),
         "catalogSha256": hashlib.sha256((output / "marketplace/.agents/plugins/marketplace.json").read_bytes()).hexdigest()})
@@ -116,6 +124,7 @@ def prepare(python: Path, codex: Path) -> Path:
 
 
 def install(output: Path) -> dict:
+    """仅安装内容仍与计划一致的已验证产物；失败时尝试恢复市场注册。"""
     output = output.resolve()
     plan = json.loads((output / "update-plan.json").read_text())
     if plan.get("schemaVersion") != 1 or Path(plan["codexHome"]).resolve() != codex_home().resolve():
@@ -144,6 +153,7 @@ def install(output: Path) -> dict:
     print("[4/5] 注册新市场并安装插件", flush=True)
     try:
         if replacing:
+            # CLI 不允许同名市场直接覆盖；先记录旧地址，出错后才能恢复注册。
             if old_root:
                 run([str(codex), "plugin", "marketplace", "remove", MARKET])
                 removed = True
@@ -155,6 +165,7 @@ def install(output: Path) -> dict:
         if installed.get("pluginId") != SELECTOR or installed.get("version") != manifest["version"] or cache != expected_cache:
             raise ValueError("安装回执与目标插件不一致。")
         print("[5/5] 核对缓存文件与 MCP 启动配置", flush=True)
+        # CLI 返回成功尚不足以确认更新：缓存字节和实际 MCP 启动配置都必须匹配。
         if fingerprints(cache) != expected:
             raise ValueError("安装缓存与本次构建不一致。")
         server = cli_json(codex, "mcp", "get", PLUGIN, "--json")
@@ -171,6 +182,7 @@ def install(output: Path) -> dict:
         write_json(output / "installed.json", report)
         return report
     except (Exception, KeyboardInterrupt):
+        # 市场注册可以补偿，但缓存可能已被 CLI 改写，报告不能声称完整回滚。
         restored, rollback_error = False, None
         if replacing and (removed or added):
             try:

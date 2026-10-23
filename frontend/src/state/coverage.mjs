@@ -1,4 +1,4 @@
-/** Group paging belongs to the loaded scope, independently of event revisions. */
+/** 分组分页属于已加载范围；仅覆写范围字段，避免新游标覆盖其他版本的分组状态/用量。 */
 export function mergeGroupCoverage(baseGroups, scopeGroups) {
   const byId = new Map(scopeGroups.map(group => [group.groupId, group]));
   return baseGroups.map(group => {

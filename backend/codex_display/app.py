@@ -1,4 +1,7 @@
-"""Production app-only MCP interface; task payloads are UI-private metadata."""
+"""正式 MCP 入口：请求与响应均校验契约，任务数据仅放在 UI 私有的 _meta。
+
+content 只返回固定提示，禁止把任务正文、路径或原始异常放入模型可见字段。
+"""
 from __future__ import annotations
 
 import asyncio
@@ -33,12 +36,13 @@ _creation_lock = threading.Lock()
 
 
 class LazyHistory:
-    """Reconnect only our observation process after a failed read."""
+    """延迟启动只读历史进程；读取故障后只重连本插件持有的观察进程。"""
     def __init__(self, executable):
         self.executable, self.adapter = executable, None
         self.lock = threading.RLock()
 
     def __getattr__(self, method):
+        # 代理只暴露读取白名单，不能借动态属性访问启动、停止或审批等任务操作。
         if method not in ("read", "read_history", "list_threads", "list_turns", "list_items"):
             raise AttributeError(method)
         def call(*args, **kwargs):
@@ -60,6 +64,7 @@ class LazyHistory:
 
 
 def get_service():
+    """首次请求时建立共享服务；路径配置来自运行环境，不接受前端路径参数。"""
     global _service
     with _creation_lock:
         if _service is None:
@@ -74,12 +79,14 @@ def get_service():
 
 
 def tool_schema(name):
+    """复用契约定义，两个宿主入口共享同一 open 请求形状。"""
     definition = TOOLS["open_codex_display" if name in OPEN else name]["input"]
     return {"$defs": CONTRACT["$defs"], **CONTRACT["$defs"][definition]}
 
 
 @server.list_tools()
 async def list_tools():
+    """仅向 app 暴露工具；本地偏好和导出会写插件文件，故不标为纯只读。"""
     result = []
     for name in [*OPEN, *(name for name in TOOLS if name not in OPEN)]:
         metadata = {"ui": {"visibility": ["app"]}, "openai/visibility": "private"}
@@ -97,10 +104,12 @@ async def list_tools():
 
 @server.call_tool(validate_input=False)
 async def call_tool(name, arguments):
+    """把同步读取移出事件循环，并在私有结果信封内处理输入、输出和错误。"""
     resource_meta = {"ui": {"resourceUri": OPEN[name][1]}} if name in OPEN else {}
     try:
         if name not in OPEN and name not in TOOLS:
             raise ServiceError("notFound", "接口不存在。")
+        # 禁用 SDK 默认校验后自行校验，确保错误不会回显请求内容或本地路径。
         Draft202012Validator(tool_schema(name), format_checker=FormatChecker()).validate(arguments)
         service = await asyncio.to_thread(get_service)
         if name in OPEN:
@@ -111,9 +120,11 @@ async def call_tool(name, arguments):
             data = await asyncio.to_thread(getattr(service, name), arguments)
         definition = TOOLS["open_codex_display" if name in OPEN else name]["output"]
         Draft202012Validator({**CONTRACT, "$ref": f"#/$defs/{definition}"}).validate(data)
+        # 可见性声明之外仍约束结果信封：数据不得复制到 content/structuredContent。
         return CallToolResult(content=[TextContent(type="text", text="Local observation result is available in the app.")],
                               _meta={**resource_meta, "codex-display/result": data})
     except Exception as error:
+        # 仅 ServiceError 的受控文案可以给 UI；任意底层异常统一为固定提示。
         code = error.code if isinstance(error, ServiceError) else "internalError"
         message = str(error) if isinstance(error, ServiceError) else "本地读取未完成，请重试；已有记录会保留。"
         data = {"viewSessionId": None, "binding": None, "code": code,
@@ -129,6 +140,7 @@ async def list_resources():
 
 @server.read_resource()
 async def read_resource(uri):
+    """只提供随包离线界面，CSP 不允许连接远程 API 或加载远程资源。"""
     if str(uri) not in (URI, PANEL_URI):
         raise ValueError("unknown-resource")
     path = Path(os.environ.get("CODEX_DISPLAY_UI_PATH", str(ROOT / "ui/trajectory-v1.html")))

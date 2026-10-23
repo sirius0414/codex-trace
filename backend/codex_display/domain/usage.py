@@ -1,15 +1,18 @@
-"""Usage snapshots are replaced by source order, never summed across snapshots."""
+"""按来源顺序替换用量快照；累计值、单次请求和不同 epoch 不混合求和。"""
 from .evidence import identity, timestamp, source_ref
 
 
 def metric(value):
+    """区分记录的零与未记录；Python bool 不应被当成 token 计数。"""
     if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 9007199254740991:
         return {'availability': 'recorded', 'value': value}
     return {'availability': 'notRecorded', 'value': None}
 
 
 def _snapshot(thread_id, row, payload, values, *, family, scope='thread', scope_id=None, mode='cumulative', attribution='unseparated', coverage=''):
+    """把一个来源的计数包装成快照，身份包含来源族、作用域与 session。"""
     scope_id = scope_id or thread_id
+    # session 缺失时使用明确的未知范围，不从计数下降或时间间隔推断新 session。
     epoch = payload.get('session_id') if isinstance(payload.get('session_id'), str) and payload['session_id'] else f'unknown-epoch:{thread_id}'
     source_identity = f'{family}:{thread_id}:{scope}:{scope_id}:{epoch}'
     request = payload.get('response_id')
@@ -23,10 +26,10 @@ def _snapshot(thread_id, row, payload, values, *, family, scope='thread', scope_
 
 
 def usage_snapshots(thread_id, records):
-    """Select one main family; inherited/child records never become own usage.
+    """按可信来源优先级选一组用量，继承记录和子任务记录不算成本任务用量。
 
-    The cumulative baseline can survive fork/resume. Without validated isolation,
-    even a matching owner id does not imply that the cumulative total is self-only.
+    fork/resume 可能保留累计基线；即使 owner 相同，没有隔离证据也不能声明为自身消耗。
+    优先累计 token_usage_record，其次明确请求，最后才用 token_count 最近观测。
     """
     records = sorted(records, key=lambda row: row['ordinal'])
     inherited = False
@@ -44,9 +47,8 @@ def usage_snapshots(thread_id, records):
         if row.get('projectionExcluded') or row.get('inherited'):
             continue
         if checkpoint:
-            # This field is the resume boundary, not another billable response.
-            # Explicit null clears the reachable baseline; old values must not be
-            # carried into the current summary as if the checkpoint preserved them.
+            # checkpoint 是恢复边界，不是新请求。明确的 null 会清空可达基线，
+            # 避免把压缩前旧计数继续展示为压缩后仍可证明的累计值。
             checkpoint_payload = payload['latest_token_usage_record']
             if checkpoint_payload is None:
                 primary, fallback, requests = {}, None, {}
@@ -71,8 +73,7 @@ def usage_snapshots(thread_id, records):
                     item['coverage'] += '计数下降，保留最新观测；未据此推定新请求或新 epoch。'
                 primary[item['epoch']] = item
             elif isinstance(payload.get('usage'), dict) and isinstance(payload.get('response_id'), str) and payload['response_id']:
-                # A single response is attributed explicitly, but its presence does
-                # not establish complete request coverage or a thread total.
+                # response_id 只证明这一条请求的归属，不能证明请求覆盖完整或任务总量。
                 key = (payload.get('session_id'), payload['response_id'])
                 requests[key] = _snapshot(thread_id, row, payload, payload['usage'], family='token_usage_record',
                     scope='request', scope_id=payload['response_id'], mode='perRequest', attribution='selfOnly',
@@ -83,6 +84,7 @@ def usage_snapshots(thread_id, records):
             if isinstance(values, dict):
                 fallback = _snapshot(thread_id, row, {}, values, family='token_count', mode='observation', attribution=attribution,
                     coverage='token_count 最近观测；可能含恢复基线或估计，只展示此来源，不与其他快照相加。')
+    # 同一来源族内部以最新快照替换；跨来源和跨 epoch 都不做加法。
     if primary:
         result = sorted(primary.values(), key=lambda item: item['order'])
         if len(result) > 1:

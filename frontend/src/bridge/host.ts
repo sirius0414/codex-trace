@@ -10,7 +10,7 @@ export type Activation = {
   downloadExpectedSha256: string; downloadExpectedBytes: number;
 };
 
-/** Only host adapter talks to MCP. No sendMessage or model-context writes. */
+/** M0 宿主接入诊断适配器；正式轨迹使用 client.ts，二者结果信封不可混用。 */
 export class HostAdapter {
   readonly instanceId = crypto.randomUUID();
   readonly app = new App({ name: 'Codex Display', version: APP_VERSION },
@@ -18,7 +18,7 @@ export class HostAdapter {
   private context: Record<string, unknown> = {};
   private connection: Promise<Record<string, unknown>> | null = null;
   constructor(onActivation: (activation: Activation) => void, onContext: (value: Record<string, unknown>) => void) {
-    // Register before connect: the host can deliver the opening result immediately.
+    // 在握手前注册回调，宿主可能在连接完成前立即送达打开结果。
     this.app.ontoolresult = result => {
       const data = result.structuredContent as Record<string, unknown> | undefined;
       if (data?.kind === 'activation' && typeof data.activationId === 'string') onActivation(data as Activation);
@@ -29,8 +29,7 @@ export class HostAdapter {
     };
   }
   connect() {
-    // Opening results can arrive while connect() is finishing its handshake.
-    // All outbound tool calls await this same promise, including diagnostics.
+    // 诊断和普通请求共用同一握手 Promise，打开结果可在握手收尾时先行到达。
     this.connection ??= withDeadline((signal: AbortSignal) => this.app.connect(undefined, { timeout: 12000, maxTotalTimeout: 12000, signal })).then(() => {
       this.context = { ...(this.app.getHostContext() || {}) };
       return this.context;
@@ -58,6 +57,7 @@ export class HostAdapter {
   }
   async observe(activation: Activation) {
     await this.connect();
+    // 诊断只采字段名、显示模式和能力键，不提交完整的宿主上下文对象。
     return this.call('probe_host_observation', { activationId: activation.activationId, uiInstanceId: this.instanceId,
       contextKeys: Object.keys(this.context).sort(), displayMode: this.context.displayMode ?? null,
       hostCapabilityKeys: Object.keys(this.app.getHostCapabilities() || {}).sort() });

@@ -1,12 +1,11 @@
-"""Read-only, bounded rollout catalog and byte ranges.
+"""只读、限量地读取 rollout 物理片段，并验证明确的继承字节/ordinal 边界。
 
-The lineage format is verified against codex-rs/protocol/src/protocol.rs
-(HistoryPosition) and thread-store/src/local/rollout_lineage.rs. A history_base
-thread_id identifies a *rollout*, which may differ from its owning thread after
-revert. No filename or mtime is used as evidence of logical inheritance.
+继承格式对应 codex-rs/protocol/src/protocol.rs 的 HistoryPosition 及
+thread-store/src/local/rollout_lineage.rs。history_base.thread_id 指 rollout，
+revert 后可能与其 owner thread 不同；文件名或 mtime 不能证明逻辑继承。
 
-Paths and byte payloads in RawSnapshot are service-internal, never diagnostics.
-Only SourceRef/SourceCoverage dictionaries are suitable for the public contract.
+RawSnapshot 的路径与字节正文只供服务内部使用，不得进入诊断；公开契约只使用
+SourceRef/SourceCoverage 元数据。目录、字节、行数和继承深度均有独立上限。
 """
 from __future__ import annotations
 
@@ -32,6 +31,7 @@ _MAX_INTEGER = 2**53 - 1
 
 @dataclass
 class RawSnapshot:
+    """一次有明确边界的来源观测；可含部分读取及其原因，不代表历史覆盖完整。"""
     records: list[dict[str, Any]] = field(default_factory=list)
     sources: list[dict[str, Any]] = field(default_factory=list)
     segments: list[dict[str, Any]] = field(default_factory=list)
@@ -41,7 +41,7 @@ class RawSnapshot:
 
 
 class RawError(ValueError):
-    """Fixed error codes only: never include a source path or body."""
+    """错误只使用固定代码，避免路径或记录正文经工具错误泄露。"""
 
 
 def _identifier(value: Any) -> str:
@@ -64,7 +64,7 @@ def _filename(path: Path) -> tuple[str, str] | None:
 
 
 def _open(path: Path) -> int:
-    """Reject symlinks at every component, including directory-swap races."""
+    """逐层使用目录描述符拒绝符号链接，阻止父目录被替换后绕过路径检查。"""
     directory = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         for part in path.parts[1:-1]:
@@ -85,6 +85,7 @@ def _json(data: bytes) -> dict[str, Any] | None:
 
 
 class RawAdapter:
+    """拥有来源缓存与 watcher；调用方必须 close，不能靠文件通知跳过读取校验。"""
     def __init__(self, session_roots: list[Path], *, max_bytes: int = 64 * 1024 * 1024,
                  max_line_bytes: int = 4 * 1024 * 1024, max_records: int = 100_000,
                  max_segments: int = 64, max_catalog_entries: int = 20_000):
@@ -107,15 +108,17 @@ class RawAdapter:
         self._cache_bytes = 0
         self._cache_limit = max(128 * 1024 * 1024, max_bytes)
         self._watcher = SourceWatcher()
-        # Internal counters contain numbers only and are never tool results.
+        # 性能计数只含数字，属于内部指标，不作为工具结果返回。
         self.metrics = {"statChecks": 0, "readBytes": 0, "verifiedBytes": 0,
                         "parsedBytes": 0, "parsedLines": 0, "cacheHits": 0,
                         "appendReads": 0, "rebuilds": 0}
 
     def wait_for_changes(self, timeout: float = .25) -> bool:
+        """最多短暂等待变化提示；提示不是内容变更或任务状态的证据。"""
         return self._watcher.wait_for_changes(timeout)
 
     def close(self) -> None:
+        """回收本适配器持有的监听描述符与正文缓存，不触碰会话源文件。"""
         self._watcher.close()
         with self._lock:
             self._loads.clear()
@@ -134,6 +137,7 @@ class RawAdapter:
         return b"".join(chunks)
 
     def _hash_prefix(self, descriptor, length):
+        """重验缓存前缀；即使文件变大，也须先证明旧字节未被原地改写。"""
         digest = hashlib.sha256()
         offset = 0
         while offset < length:
@@ -150,6 +154,7 @@ class RawAdapter:
         return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
     def _cache_load(self, key, value):
+        """同时按条目数与缓存字节淘汰最久未用的来源，控制多任务内存占用。"""
         old = self._loads.pop(key, None)
         self._cache_bytes -= len(old["data"]) if old else 0
         self._loads[key] = value
@@ -158,6 +163,7 @@ class RawAdapter:
             self._cache_bytes -= len(self._loads.popitem(last=False)[1]["data"])
 
     def _safe_path(self, value: Any) -> Path:
+        """限制在允许根目录内的规范绝对路径；打开时还会再次逐级校验。"""
         if not isinstance(value, (str, Path)):
             raise RawError("source-not-recorded")
         path = Path(value)
@@ -169,11 +175,11 @@ class RawAdapter:
 
     def _find(self, *, rollout_id: str | None = None, basename: str | None = None,
               owner_id: str | None = None) -> Path:
+        """限量查找唯一物理片段；多个候选必须报歧义，不能选最新文件猜归属。"""
         matches: list[Path] = []
         count = 0
         for root in self.roots:
-            # The walk never follows a symlink; _safe_path and descriptor walking
-            # independently verify each candidate before any content is read.
+            # 遍历不跟随符号链接；读正文前仍会独立验证规范路径和目录描述符。
             if root.is_symlink():
                 continue
             for directory, dirs, files in os.walk(root, followlinks=False):
@@ -194,8 +200,7 @@ class RawAdapter:
                         matches.append(Path(directory) / name)
         if not matches:
             raise RawError("source-missing")
-        # Plain and compressed twins are not assumed equivalent; duplicate
-        # candidates require explicit resolution rather than choosing newest.
+        # 同名明文与压缩文件不能假定内容等价；多个候选不会按 mtime 自动决断。
         if len(matches) != 1:
             raise RawError("ambiguous-source")
         return self._safe_path(matches[0])
@@ -208,8 +213,7 @@ class RawAdapter:
         try:
             path.lstat()
         except FileNotFoundError:
-            # An archive move retains the physical basename. The located file
-            # still requires a header identity check; mtime is irrelevant.
+            # 归档移动保留物理文件名；重新找到后仍须校验头部身份，不以 mtime 认领。
             return self._find(basename=path.name)
         return path
 
@@ -226,6 +230,7 @@ class RawAdapter:
 
     def _load(self, path: Path, owner: str | None, rollout_id: str | None,
               cutoff: dict | None, remaining: int) -> dict[str, Any]:
+        """冻结本段可读字节并重验前缀；只在旧前缀可信时复用解析检查点。"""
         path = self._safe_path(path)
         descriptor = _open(path)
         try:
@@ -248,8 +253,7 @@ class RawAdapter:
             prefix_verified = False
             parsed = None
             if unchanged:
-                # Still opened through O_NOFOLLOW and checked by descriptor.
-                # No body read, hashing or JSON decoding on stable-file polls.
+                # 稳定轮询仍安全打开并验证描述符身份，但不重复读正文、哈希或 JSON 解码。
                 data, first = cached["data"], cached["first"]
                 digest = cached["hasher"]
                 parsed = cached.get("parsed")
@@ -264,9 +268,7 @@ class RawAdapter:
                     raise RawError("compressed-header-unsupported") from None
                 data, digest = b"", hashlib.sha256()
             else:
-                # Stat growth alone cannot prove append-only behavior. Validate
-                # the captured prefix before trusting cached rows, then decode
-                # only the bytes following the previous complete-line boundary.
+                # stat 变大不证明只追加；先验证已捕获前缀，再读新字节，并从完整行边界续解码。
                 if same_file and target >= len(cached["data"]) and physical_size >= cached["physicalBytes"]:
                     prefix_verified = self._hash_prefix(descriptor, len(cached["data"])) == cached["dataHash"]
                 if prefix_verified:
@@ -309,8 +311,7 @@ class RawAdapter:
             changed_during = self._stat_identity(after) != self._stat_identity(before)
             if changed_during and after.st_size == before.st_size:
                 raise RawError("source-changed-during-read")
-            # Read back a fresh acquisition, or any capture concurrent with
-            # writes. Ordinary stable polls do zero content I/O.
+            # 首次读取或并发写入后重读校验所捕获前缀，防止发布拼接自不同版本的快照。
             if not compressed and (not unchanged or changed_during) and self._hash_prefix(descriptor, len(data)) != digest.hexdigest():
                 raise RawError("source-changed-during-read")
             self._watcher.watch(str(path), descriptor)
@@ -330,7 +331,7 @@ class RawAdapter:
             os.close(descriptor)
 
     def _parse(self, part, cutoff):
-        """Keep a complete-line checkpoint; half UTF-8 never reaches JSON."""
+        """按完整行保存检查点；半行和不完整 UTF-8 留待追加后重读，不提前送入 JSON。"""
         data = part["data"]
         parsed = part.get("parsed")
         if parsed is None:
@@ -338,8 +339,7 @@ class RawAdapter:
                       "previousOrdinal": -1, "invalidCutoff": False, "readBytes": 0, "limited": False}
         elif parsed["readBytes"] == len(data):
             return parsed
-        # Copy small state/list containers so old snapshots cannot observe
-        # partially appended rows; individual old records stay immutable.
+        # 只复制状态与列表外壳；旧记录保持不可变，既有快照不能看到尚未完成的追加。
         parsed = {**parsed, "rows": list(parsed["rows"]), "issues": list(parsed["issues"])}
         def issue(code):
             if code not in parsed["issues"]:
@@ -378,6 +378,7 @@ class RawAdapter:
                 continue
             parsed["previousOrdinal"] = ordinal
             if cutoff and ordinal >= cutoff["end_ordinal_exclusive"]:
+                # 继承边界必须同时满足字节和 ordinal；任一越界都不能投影这段继承记录。
                 issue("inheritance-ordinal-boundary-invalid")
                 parsed["rows"] = []
                 parsed["invalidCutoff"] = True
@@ -391,11 +392,12 @@ class RawAdapter:
         parsed["issues"] = list(dict.fromkeys(parsed["issues"]))
         parsed["readBytes"] = len(data)
         part["parsed"] = parsed
-        # _load installs this same object in the bounded cache before parsing.
+        # _load 已把同一个 part 放入限量缓存，这里同步保存下一次增量解析检查点。
         return parsed
 
     @staticmethod
     def _base(payload: dict) -> dict | None:
+        """只接受受支持分页格式中的显式继承位置，不从 fork 信息猜读取范围。"""
         value = payload.get("history_base")
         if value is None:
             return None
@@ -411,6 +413,7 @@ class RawAdapter:
                 "end_byte_offset": value["end_byte_offset"]}
 
     def read(self, thread_id: str, metadata: dict[str, Any]) -> RawSnapshot:
+        """串行采集一个任务及其可达继承范围，元数据身份必须与请求一致。"""
         identifier = _identifier(thread_id)
         if not isinstance(metadata, dict) or metadata.get("id", identifier) != identifier:
             raise RawError("thread-identity-mismatch")
@@ -418,6 +421,7 @@ class RawAdapter:
             return self._read(identifier, metadata)
 
     def _read(self, identifier: str, metadata: dict[str, Any]) -> RawSnapshot:
+        """先验证从当前片段回溯的继承链，再按祖先到自身的逻辑顺序发布记录。"""
         result = RawSnapshot()
         loaded: list[tuple[dict, dict | None]] = []
         remaining = self.max_bytes
@@ -466,8 +470,7 @@ class RawAdapter:
                 state = "missing" if code == "source-missing" else "unsupported" if "unsupported" in code else "unreadable"
                 result.sources.append(self._coverage(source_id, owner or missing_id, state=state, reason=code, inherited=inherited))
                 break
-        # Parent ranges precede the selected physical source. All data is already
-        # frozen to explicit bounds before any projection is emitted.
+        # 先收集并冻结每段明确边界，再倒序发布祖先范围，避免投影期间继承链漂移。
         signatures = []
         for part, inherited_cutoff in reversed(loaded):
             source_id = self._source_id(part["threadId"], part["rolloutId"])
@@ -475,6 +478,7 @@ class RawAdapter:
             info = part["stat"]
             previous = self._versions.get(source_id)
             generation = previous["generation"] if previous else 0
+            # generation 表示物理重写/替换而非追加次数；旧字节位置不能跨代继续使用。
             if previous and (part["cacheInvalidated"] or (info.st_dev, info.st_ino) != previous["identity"] or
                              info.st_size < previous["physicalSize"] or
                              (info.st_mtime_ns != previous["mtimeNs"] and info.st_size <= previous["physicalSize"] and len(data) < previous["length"]) or
@@ -518,6 +522,7 @@ class RawAdapter:
                 version = part["payload"].get("cli_version")
                 version = version if isinstance(version, str) and len(version) <= 128 else None
                 excluded_start = loaded[0][0]["payload"].get("subagent_history_start_ordinal") if loaded else None
+                # 继承与子代理上下文边界供领域层分别使用：可保留原始证据，但不能认作自身行为。
                 for row in parsed["rows"]:
                     if len(result.records) >= self.max_records:
                         reasons.append("record-count-limit")
@@ -535,6 +540,7 @@ class RawAdapter:
                                                  generation=generation, format=format, end=end, consumed=consumed, inherited=inherited))
             signatures.append((source_id, generation))
         result.issues = list(dict.fromkeys(result.issues))
+        # 片段拓扑/版本决定任务代次；正文追加只改变 fingerprint，不使所有游标失效。
         topology = _digest(json.dumps(signatures, separators=(",", ":")).encode())
         previous_thread = self._thread_versions.get(identifier)
         result.generation = previous_thread[1] + (previous_thread[0] != topology) if previous_thread else 0

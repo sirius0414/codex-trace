@@ -3,6 +3,7 @@ import { createBuildInfo } from './scripts/build-info.mjs';
 
 const buildInfo = createBuildInfo();
 
+// 构建产物交给 package_plugin.py 内联：固定单份 IIFE 和 CSS，供离线 MCP 面板加载。
 export default defineConfig({
   root: 'frontend',
   // Library builds preserve process.env by default; sandboxed app iframes have no Node global.

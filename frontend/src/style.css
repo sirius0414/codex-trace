@@ -1,4 +1,4 @@
-/* Layout and colors follow the four confirmed local UI references. */
+/* 嵌入式轨迹面板；颜色统一由面板变量及宿主主题决定，内部滚动区承接有限高度。 */
 :root{color-scheme:light dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}
 :root[data-theme="light"]{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}
 *{box-sizing:border-box}html,body,#root{height:100%;margin:0;overflow:hidden}button,input,select{font:inherit}button{color:inherit}button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--cx-green);outline-offset:-2px}
@@ -168,6 +168,7 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 @media(max-width:780px){.cx-range{margin-left:auto}.cx-count{max-width:150px;overflow:hidden;text-overflow:ellipsis}}
 @media(max-width:480px){.cx-modes{gap:5px}.cx-overview-toolbar{gap:3px}.cx-popover{right:10px}.cx-group-count{max-width:80px;overflow:hidden;text-overflow:ellipsis}.cx-count{max-width:78px}.cx-demo-label{font-size:0;gap:0}.cx-scenario{max-width:81px}.cx-read-status{font-size:10px}.cx-step{margin-left:0}}
 
+/* 正式宿主布局覆盖前面的原型尺寸；覆盖顺序影响窄屏/短面板，调整时需同时检查媒体查询。 */
 .cx-panel{height:100%;min-height:180px;--cx-height:100%;border-radius:0;border:0}
 .cx-toolbar{height:39px;min-height:39px;max-height:39px;flex-wrap:nowrap}.cx-overview{height:auto;min-height:0}.cx-filterbar{height:34px;min-height:34px}.cx-footer{height:24px;min-height:24px}
 .cx-task{display:flex;align-items:center;gap:6px;text-align:left;max-width:320px;overflow:hidden}.cx-task span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.cx-task svg{margin-left:auto}
@@ -176,6 +177,7 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-range-brush{fill:color-mix(in srgb,var(--cx-green) 13%,transparent);stroke:var(--cx-green);stroke-width:1;pointer-events:none;vector-effect:non-scaling-stroke}
 .cx-svg-mark{cursor:pointer;stroke:none;fill:var(--cx-blue)}.cx-svg-mark.lane-1{fill:var(--cx-purple)}.cx-svg-mark.lane-2{fill:var(--cx-green);opacity:.72}.cx-svg-mark.failed{fill:var(--cx-red);opacity:1}.cx-svg-mark.child{opacity:.65}.cx-svg-mark.selected .cx-visible-mark{stroke:var(--cx-ink);stroke-width:1;vector-effect:non-scaling-stroke}.cx-svg-mark:focus-visible .cx-visible-mark{stroke:var(--cx-ink);stroke-width:2;vector-effect:non-scaling-stroke}
 .cx-turns{overflow-x:auto;scrollbar-width:thin}.cx-turns button{min-width:115px;flex:0 0 auto}.cx-calls b{white-space:nowrap}.cx-muted{color:var(--cx-muted)}
+/* 虚拟行的 28px 高度需与 model.ts 的行几何一致，否则总高度和阅读锚点会漂移。 */
 .cx-virtual-content{position:relative;min-width:0}.cx-row{height:28px;min-height:28px}.cx-state.failed{color:var(--cx-red)}.cx-state.running{color:var(--cx-green)}.cx-turn:disabled{opacity:1}.cx-inspector{overflow:hidden}.cx-detail-body{position:relative}.cx-code{max-width:100%;tab-size:2;unicode-bidi:plaintext}.cx-message{white-space:pre-wrap;unicode-bidi:plaintext}.cx-content-part{min-width:0}.cx-more-content{margin-top:7px}.cx-copy-status{font-size:10px;color:var(--cx-green);position:sticky;bottom:0;display:block;background:var(--cx-bg)}
 .cx-task-picker{position:absolute;z-index:8;left:112px;top:38px;width:360px;max-width:calc(100% - 20px);max-height:calc(100% - 62px);display:flex;flex-direction:column;background:var(--cx-bg);border:1px solid var(--cx-line);border-radius:6px;box-shadow:0 6px 20px #0002;overflow:hidden}
 .cx-picker-search{display:flex;gap:5px;padding:8px}.cx-task-scopes{display:flex;gap:10px;padding:0 10px 7px;border-bottom:1px solid var(--cx-line)}.cx-task-scopes button{border:0;background:transparent;color:var(--cx-muted);padding:2px 0;font-size:11px}.cx-task-scopes button[aria-pressed=true]{color:var(--cx-green);border-bottom:1px solid var(--cx-green)}.cx-task-options{overflow:auto;min-height:0;scrollbar-width:thin}.cx-task-options>button{display:flex;width:100%;height:32px;align-items:center;gap:8px;padding:0 10px;border:0;border-bottom:1px solid var(--cx-line);background:transparent;text-align:left;font-size:11px}.cx-task-options>button:hover,.cx-task-options>button[aria-selected=true]{background:var(--cx-select)}.cx-task-options>button span{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cx-task-options small{color:var(--cx-muted);white-space:nowrap;font-size:10px}.cx-task-options .cx-note{padding:0 10px}
@@ -184,14 +186,14 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 @media(max-width:480px){.cx-filterbar{padding-inline:7px;gap:4px}.cx-type{max-width:81px}.cx-toolbar{gap:4px;padding-inline:6px}.cx-follow-label{min-width:30px}.cx-divider{margin:0}.cx-footer{gap:6px;padding-inline:7px}.cx-calls{gap:12px;font-size:10px}.cx-range span{max-width:66px}.cx-task{font-size:11px}.cx-task-status{margin-left:0}.cx-task-status .cx-status-dot{display:none}.cx-count{max-width:105px}.cx-turns button{min-width:100px}}
 @media(pointer:coarse){.cx-icon{width:25px;height:25px}.cx-toolbar{min-height:39px}.cx-filterbar{height:34px}.cx-search,.cx-button,.cx-type{height:25px}.cx-search input{font-size:11px}.cx-row{height:28px;min-height:28px}}
 @media(max-height:330px){.cx-overview{padding-block:3px}.cx-chart{padding-top:0}.cx-lane-labels{grid-template-rows:repeat(3,18px);line-height:14px}.cx-timeline{height:54px}.cx-turns,.cx-calls{height:70px}.cx-axis{font-size:9px}.cx-popover{top:39px;max-height:calc(100% - 60px)}.cx-detail-head{min-height:29px}.cx-tabs button{padding-block:3px}}
-/* Dense marks are counted clusters, with bounded record selection. */
+/* 密集标记显示为带数量的聚合簇；具体记录在有界分页选择器中展开。 */
 .cx-timeline.ordered{cursor:default}.cx-svg-mark.cluster{opacity:1}.cx-svg-mark.cluster .cx-visible-mark{fill:color-mix(in srgb,currentColor 14%,var(--cx-bg));stroke:var(--cx-muted);stroke-width:.6;stroke-dasharray:2 1;vector-effect:non-scaling-stroke}.cx-svg-mark.cluster text{font-size:11px;fill:var(--cx-ink);stroke:none;pointer-events:none;font-family:ui-monospace,SFMono-Regular,monospace}.cx-axis.ordered{font:10px/1.3 inherit;color:var(--cx-muted)}
 .cx-cluster-picker{position:absolute;z-index:9;top:112px;left:46px;width:400px;max-width:calc(100% - 58px);max-height:calc(100% - 94px);display:flex;flex-direction:column;background:var(--cx-bg);border:1px solid var(--cx-line);border-radius:7px;box-shadow:0 8px 24px #0003;padding:9px 10px}.cx-cluster-picker .cx-popover-head{margin:0}.cx-cluster-note{font-size:10px;color:var(--cx-muted);margin:3px 0 7px}.cx-cluster-options{min-height:0;overflow:auto;scrollbar-width:thin}.cx-cluster-options button{display:flex;width:100%;gap:8px;align-items:center;height:28px;padding:0 4px;border:0;border-bottom:1px solid var(--cx-line);background:transparent;text-align:left;font-size:11px}.cx-cluster-options button:hover{background:var(--cx-select)}.cx-cluster-options span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cx-cluster-options small{font:10px ui-monospace,monospace;color:var(--cx-muted)}.cx-cluster-actions{display:flex;gap:6px;align-items:center;padding-top:8px;font-size:10px;color:var(--cx-muted)}.cx-cluster-actions button:last-child{margin-left:auto}@media(max-width:480px){.cx-cluster-picker{left:10px;max-width:calc(100% - 20px)}.cx-cluster-actions{gap:4px}}@media(max-height:330px){.cx-cluster-picker{top:38px;max-height:calc(100% - 62px)}}
 .cx-svg-mark.lane-0{color:var(--cx-blue)}.cx-svg-mark.lane-1{color:var(--cx-purple)}.cx-svg-mark.lane-2{color:var(--cx-green)}.cx-axis.ordered{font-family:inherit;font-size:10px;line-height:1.3}
-/* Reading continuity is anchored by event identity, not the browser's DOM heuristic. */
+/* 由 EventList 按事件身份恢复阅读位置，关闭浏览器自动锚定以免双重补偿。 */
 .cx-scroll{overflow-anchor:none}
 
-/* Agent selection stays separate from the visualization mode controls. */
+/* Agent 范围选择与概览模式分行，允许窄屏多选换行且保留独立语义。 */
 .cx-agent-bar{display:flex;align-items:flex-start;gap:9px;padding-bottom:6px;margin-bottom:2px;border-bottom:1px solid var(--cx-line)}
 .cx-agent-label{display:flex;align-items:center;gap:4px;flex-shrink:0;height:28px;font-size:11px;color:var(--cx-ink)}
 .cx-agent-label small{font-size:10px;color:var(--cx-muted)}
@@ -203,7 +205,7 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-agent-button[aria-pressed="true"]{background:var(--cx-select);border-color:var(--cx-green);color:var(--cx-green);font-weight:500}
 .cx-chart-empty{position:absolute;inset:0 0 16px 36px;display:flex;align-items:center;justify-content:center;pointer-events:none;color:var(--cx-muted);font-size:11px}
 .cx-zoom{margin-left:3px}
-/* The usage strip belongs to the page edge, outside the scrolling ledger. */
+/* 用量条固定在面板底部，不随事件列表滚动；主任务用量不受 Agent 筛选影响。 */
 .cx-usage-bar{display:flex;align-items:center;gap:15px;flex-shrink:0;min-height:41px;padding:6px 11px;border-top:1px solid var(--cx-line);background:var(--cx-bg)}
 .cx-usage-label{display:flex;align-items:center;gap:5px;white-space:nowrap;color:var(--cx-muted);font-size:11px}
 .cx-usage-label small{font-size:10px}
@@ -215,7 +217,7 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-usage-bar .cx-usage-trigger{margin-left:auto}
 .cx-usage-note+.cx-usage-trigger{margin-left:0}
 .cx-usage-popover{top:auto;bottom:72px;right:11px;max-height:calc(100% - 90px)}
-/* Type uses a stripe, a tinted row, and a labelled icon; selection and errors remain distinct. */
+/* 类型用色条/底色/文字共同表达；后续错误与选中样式优先，不能只凭类型色判断状态。 */
 .cx-row{--cx-kind:light-dark(#607080,#acb7c3);background:color-mix(in srgb,var(--cx-kind) 7%,var(--cx-bg));border-left:3px solid var(--cx-kind);padding-left:8px}
 .cx-row.kind-userMessage{--cx-kind:light-dark(#316eb0,#88b9ef)}
 .cx-row.kind-assistantMessage{--cx-kind:light-dark(#8051a6,#c7a5e4)}
@@ -241,5 +243,5 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 @media(max-width:780px){.cx-usage-note{display:none}.cx-usage-bar .cx-usage-trigger{margin-left:auto}}
 @media(max-width:480px){.cx-overview{padding-inline:7px}.cx-agent-bar{gap:6px}.cx-agent-label{display:block;line-height:14px}.cx-agent-label small{display:block}.cx-agent-button{max-width:145px;padding-inline:7px}.cx-usage-bar{gap:8px;padding-inline:7px}.cx-usage-label{gap:3px;font-size:10px}.cx-usage-label small,.cx-usage-label>svg{display:none}.cx-usage-metrics{flex:1;justify-content:space-between;gap:9px}.cx-usage-metrics>div{display:block}.cx-usage-metrics dd{font-size:11px}.cx-usage-bar .cx-usage-trigger{width:20px}.cx-usage-popover{right:7px}}
 @media(max-height:420px){.cx-agent-buttons{flex-wrap:nowrap;max-height:none;overflow-x:auto}.cx-agent-button{flex-shrink:0}.cx-agent-bar{padding-bottom:3px;margin-bottom:0}.cx-overview{padding-block:3px}.cx-overview-toolbar{height:25px}.cx-lane-labels{grid-template-rows:repeat(3,20px)}.cx-timeline{height:60px}.cx-turns,.cx-calls{height:76px}.cx-usage-bar{min-height:34px;padding-block:3px}.cx-agent-label small{display:none}}
-/* Very short embedded panels retain enough room for the event list. */
+/* 极短的嵌入面板压缩概览及用量区，为事件列表保留可操作空间。 */
 @media(max-height:330px){.cx-agent-bar{padding-bottom:2px}.cx-agent-label{height:22px;line-height:22px}.cx-agent-button{min-height:22px;padding-block:1px}.cx-overview-toolbar{height:22px}.cx-overview{padding-block:2px}.cx-lane-labels{grid-template-rows:repeat(3,12px);font-size:9px;line-height:12px}.cx-timeline{height:36px}.cx-axis{padding-top:1px}.cx-svg-mark.cluster text{font-size:20px}.cx-turns,.cx-calls{height:49px}.cx-usage-bar{min-height:30px}.cx-usage-metrics>div{display:flex;gap:4px}.cx-usage-metrics dt{font-size:9px}.cx-usage-metrics dd{font-size:10px}.cx-column-head{height:28px}}

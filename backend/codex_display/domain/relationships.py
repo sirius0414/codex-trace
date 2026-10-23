@@ -1,4 +1,4 @@
-"""Explicit ownership edges; communication and fork do not imply child groups."""
+"""只用明确创建证据建立父子层级；通信和 fork 单独保留，不推导所有权。"""
 from copy import deepcopy
 from .evidence import identity, source_ref, timestamp, state, milliseconds
 
@@ -8,7 +8,7 @@ def _text(value):
 
 
 def resolve_relationships(edges):
-    """Merge matching evidence and expose ambiguity/cycles without reparenting."""
+    """合并同一关系的证据，显式标出多父、歧义和环，不自动改挂父节点。"""
     merged = {}
     for original in edges:
         edge = deepcopy(original)
@@ -30,6 +30,7 @@ def resolve_relationships(edges):
         if edge['resolution'] != 'confirmed':
             previous['resolution'] = edge['resolution']
     result = list(merged.values())
+    # 多个父级或有向环都会阻止层级展开，不能任意挑选一条边消除冲突。
     by_child = {}
     for edge in result:
         if edge['type'] == 'spawned-by':
@@ -73,6 +74,7 @@ def _reported_status(value):
 
 
 def project_relationships(thread_id, records, api_items, events, mode):
+    """提取关系和父级对子任务的状态观察，返回可安全展开的子组与诊断。"""
     edges, observations, names = [], {}, {}
     event_by_item, event_by_record, inherited_items = {}, {}, set()
     for event in events:
@@ -111,6 +113,7 @@ def project_relationships(thread_id, records, api_items, events, mode):
                 inherited_items.add((payload.get('turn_id'), item['id']))
 
     def observe(child, value, source, at, event):
+        """先比较同一逻辑流中的位置，再比较时间；不可比时显式保留未知。"""
         at = milliseconds(at)
         incoming = {'value': value, 'source': source, 'at': at,
                     'eventId': event['eventId'] if event else None,
@@ -124,14 +127,13 @@ def project_relationships(thread_id, records, api_items, events, mode):
         elif at is not None and previous['at'] is not None:
             newer = at > previous['at']
         elif incoming['eventId'] is not None and incoming['eventId'] == previous['eventId']:
-            # Exact same persisted operation can catch up with a stale API item.
+            # 同一操作的持久化终态可补齐滞后的 API 非终态。
             newer = previous['value'] in ('running', 'unknown') and value in ('completed', 'failed', 'stopped')
         elif source['kind'] == previous['source']['kind'] == 'raw':
-            # Called in logical source order, which remains usable without time.
+            # raw 按逻辑来源顺序处理，即使时间缺失也仍然可比较先后。
             newer = True
         else:
-            # Cross-source observations with neither an exact identity nor a
-            # comparable position cannot safely supersede one another.
+            # 跨来源没有精确身份和可比位置时，不能互相覆盖。
             observations[child] = {**previous, 'value': 'unknown'}
             return
         if newer:
@@ -146,7 +148,7 @@ def project_relationships(thread_id, records, api_items, events, mode):
             if not child or activity not in ('started', 'interacted', 'interrupted', 'completed'):
                 return
             if current_meta and current_meta.get('forked_from_id') and not own_provenance:
-                # API fork history can contain ancestor activity without a sender id.
+                # fork 的 API 历史可能带祖先活动；缺少本任务来源证明时不能据此认领子任务。
                 return
             name = _text(item.get('agentPath', item.get('agent_path')))
             if name:
@@ -215,6 +217,7 @@ def project_relationships(thread_id, records, api_items, events, mode):
                 if value:
                     observe(child, value, source, payload.get('completed_at_ms', timestamp(record.get('timestamp'))), event)
     edges = resolve_relationships(edges)
+    # 只有确认的 spawned-by 才形成组；通信对象和 fork 祖先不能成为子组。
     groups = []
     for edge in edges:
         if edge['type'] != 'spawned-by' or edge['toThreadId'] != thread_id or edge['resolution'] != 'confirmed':

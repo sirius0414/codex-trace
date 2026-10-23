@@ -50,6 +50,7 @@ class HtmlAssetCheck(HTMLParser):
 
 
 class RpcClient:
+    """串行发送探测请求，后台排空 stdout/stderr，避免子进程因管道写满卡住。"""
     def __init__(self, command: list[str], cwd: Path, env: dict[str, str]):
         self.process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -81,6 +82,7 @@ class RpcClient:
         self.process.stdin.flush()
 
     def request(self, method: str, params: dict, timeout: float = 15) -> dict:
+        """仅接受当前请求 ID 的响应；服务端反向请求一律返回只读探测错误。"""
         self.sequence += 1
         request_id = self.sequence
         self.send(method, params, request_id)
@@ -229,6 +231,7 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
 
         called = set()
         def call(name, arguments, meta=None, *, error=False):
+            # 每次工具调用同时检查公开信封与私有契约，防止正文泄漏被功能成功掩盖。
             params = {"name": name, "arguments": arguments}
             if meta is not None: params["_meta"] = meta
             result = client.request("tools/call", params)
@@ -293,6 +296,7 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
             current = call("download_records", {**read_request, "cursor": chunk["nextCursor"]})
         else:
             raise RuntimeError("synthetic export exceeded chunk limit")
+        # 校验原始字节而非解析后的 JSON，覆盖未知类型、坏 UTF-8 和末尾半行。
         with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
             records = [n for n in archive.namelist() if n.startswith("records/")]
             check("raw_unknown_and_partial_bytes_preserved", len(records) == 1 and archive.read(records[0]) == original_source)
@@ -345,6 +349,7 @@ def main() -> int:
             codex_home = root / "codex-home"
             codex_home.mkdir(mode=0o700)
             if args.cache_copy_only:
+                # 删除安装源后再启动，确保服务和离线 UI 真正从缓存副本独立工作。
                 installed = codex_home / "plugins/cache/synthetic/codex-display" / manifest["version"]
                 source = root / "input-package"
                 shutil.copytree(package, source)

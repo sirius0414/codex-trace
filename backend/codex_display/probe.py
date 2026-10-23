@@ -1,4 +1,4 @@
-"""M0 diagnostics. No task execution, guessed identity, or raw-body logging."""
+"""M0 宿主能力诊断：只验证候选身份、合成下载与字段名，不推定真实任务绑定。"""
 from __future__ import annotations
 
 import base64
@@ -33,7 +33,7 @@ FIELD_NAME_PATTERN = r"^[A-Za-z_$][A-Za-z0-9_$./:-]{0,199}$"
 
 
 def field_names(value: list[str] | None) -> list[str]:
-    """Accept bounded field-name tokens, never objects, values, or free-form text."""
+    """仅接受限量字段名，不接受字段值、对象或自由文本，避免诊断带入任务正文。"""
     if value is None:
         return []
     if not isinstance(value, list) or len(value) > 100:
@@ -44,6 +44,7 @@ def field_names(value: list[str] | None) -> list[str]:
 
 
 def canonical_uuid(value: str) -> str:
+    """只接收标准 UUID 形式并统一大小写，避免同一实例出现多个作用域键。"""
     if not isinstance(value, str):
         raise ValueError("invalid-instance-id")
     try:
@@ -56,6 +57,7 @@ def canonical_uuid(value: str) -> str:
 
 
 def candidate_identity(metadata: dict, *, entrypoint: str = "global") -> dict:
+    """识别元数据中的候选 thread ID；格式正确仍不代表入口语义已验证。"""
     if entrypoint not in ("global", "thread"):
         raise ValueError("invalid-entrypoint")
     keys = [key for key in ("thread_id", "threadId") if key in metadata]
@@ -68,6 +70,7 @@ def candidate_identity(metadata: dict, *, entrypoint: str = "global") -> dict:
             values.append(value.lower())
         except (ValueError, AttributeError, TypeError):
             return {"candidateThreadId": None, "identityReason": "invalid-identity"}
+    # 两种字段拼写同时出现且冲突时拒绝挑选一个，防止错误绑定当前任务。
     if len(set(values)) > 1:
         return {"candidateThreadId": None, "identityReason": "conflicting-identities"}
     return {
@@ -77,7 +80,7 @@ def candidate_identity(metadata: dict, *, entrypoint: str = "global") -> dict:
 
 
 def probe_zip() -> bytes:
-    """Synthetic invalid/unknown/partial bytes, never real task content."""
+    """生成含非法字节、未知类型和半行的合成 ZIP，只测试传输保真，不含真实任务。"""
     raw = b'{"type":"m0_fixture","text":"local only"}\r\n\xffbad\n{"partial":'
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_STORED) as archive:
@@ -93,6 +96,7 @@ def probe_zip() -> bytes:
 
 
 class ProbeService:
+    """拥有本进程激活记录与合成导出幂等键；服务重启后旧激活不可继续使用。"""
     def __init__(self, audit_path: Path | None = None):
         self.server_instance = str(uuid4())
         self.audit_path = audit_path
@@ -102,11 +106,10 @@ class ProbeService:
         self.exports: dict[str, tuple[tuple[str, str], dict]] = {}
 
     def export_records(self, activation_id: str, ui_instance_id: str, request_id: str, store) -> dict:
-        """Save only the synthetic M0 ZIP, once per request in this server instance.
+        """同一服务实例中，每个请求只保存一次合成 ZIP，并绑定激活/UI 身份。
 
-        The lock also covers an abandoned RPC whose worker is still saving, so
-        a timeout retry cannot create a second file. A restarted service rejects
-        the old activation instead of silently interpreting it as a new export.
+        锁覆盖超时后仍在保存的 RPC worker，避免重试产生第二份文件。旧激活在服务重启后
+        直接失效；未确认的候选结果先保留，重试时重新校验，而不是再次创建文件。
         """
         activation_id = canonical_uuid(activation_id)
         ui_instance_id = canonical_uuid(ui_instance_id)
@@ -144,6 +147,7 @@ class ProbeService:
             return dict(result)
 
     def audit(self, kind: str, fields: dict):
+        """追加调用方已筛选的诊断元数据；落盘文件拒绝符号链接并限制为当前用户可读写。"""
         if self.audit_path is None:
             return
         self.audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -155,6 +159,7 @@ class ProbeService:
             output.write(json.dumps({"atMs": int(time.time() * 1000), "kind": kind, **fields}) + "\n")
 
     def activate(self, metadata: dict, *, entrypoint: str = "global") -> dict:
+        """签发仅在本进程有效的激活身份，只记录字段名和候选 ID，不声称自动绑定成功。"""
         result = {"kind": "activation", "activationId": str(uuid4()), "serverInstanceId": self.server_instance,
                   "entrypoint": entrypoint, "serverVersion": __version__,
                   "metadataKeys": sorted(metadata), **candidate_identity(metadata, entrypoint=entrypoint),
@@ -169,6 +174,7 @@ class ProbeService:
 
     def observe(self, activation_id: str, ui_instance_id: str, context_keys: list[str], display_mode: str | None,
                 host_capability_keys: list[str] | None = None) -> dict:
+        """记录指定激活/UI 的能力字段名，用于诊断宿主可见信息的形状。"""
         if not isinstance(activation_id, str) or activation_id not in self.activations:
             raise ValueError("unknown-activation")
         result = {"activationId": activation_id, "uiInstanceId": canonical_uuid(ui_instance_id),
@@ -181,6 +187,7 @@ class ProbeService:
                          code: str | None = None, elapsed_ms: int | None = None,
                          visibility: str | None = None, context_keys: list[str] | None = None,
                          host_capability_keys: list[str] | None = None) -> dict:
+        """通过阶段/代码白名单记录下载与 UI 诊断，禁止传入任意错误消息正文。"""
         if not isinstance(activation_id, str) or activation_id not in self.activations:
             raise ValueError("unknown-activation")
         if phase not in DIAGNOSTIC_PHASES:
@@ -206,6 +213,7 @@ class ProbeService:
         return {"recorded": True, **result}
 
     def download_chunk(self, offset: int) -> dict:
+        """按字节偏移返回固定合成包，整包/分块摘要供客户端验证完整性。"""
         if type(offset) is not int or offset < 0 or offset > len(self.download):
             raise ValueError("invalid-offset")
         chunk = self.download[offset:offset + 65536]
@@ -220,10 +228,9 @@ class ProbeService:
 
 
 def _open_source_without_symlinks(path: Path) -> int:
-    """Walk directory descriptors so a parent swap cannot bypass O_NOFOLLOW.
+    """逐层使用目录描述符，防止父目录替换绕过 O_NOFOLLOW。
 
-    The nonblocking flag also lets us reject FIFOs and other special files
-    before reading them. It does not change regular-file reads.
+    非阻塞打开使 FIFO 等特殊文件可在读取前被拒绝，不改变普通文件读取行为。
     """
     directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     directory_fd = os.open(path.anchor, directory_flags)
@@ -238,7 +245,7 @@ def _open_source_without_symlinks(path: Path) -> int:
 
 
 def inspect_source(path_string: str | None, thread_id: str, codex_home: Path) -> dict:
-    """Inspect one identity-checked physical segment; never claim complete lineage."""
+    """只检查一个片段的头部身份与可读性；不回溯继承链，不声称历史覆盖完整。"""
     if not path_string:
         return {"readable": False, "reason": "source-not-recorded"}
     try:

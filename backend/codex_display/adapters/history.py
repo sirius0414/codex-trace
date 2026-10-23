@@ -1,9 +1,7 @@
-"""Bounded, read-only access to the Codex app-server history API.
+"""通过自有 app-server 子进程限量、只读地访问历史 API。
 
-The child app-server may maintain its own runtime cache. This adapter never
-resumes, starts, interrupts or changes a Codex task. M0 exposes metadata only;
-raw response bodies are neither logged nor retained as diagnostics. Historical
-items are returned only to the projection service, never as diagnostic text.
+子进程可能维护自身运行时缓存，因此它的冷读取状态不能证明用户任务当前执行状态。
+适配器只允许读取方法，不恢复、启动或中断任务；历史正文只交给投影服务，不写入诊断。
 """
 
 from __future__ import annotations
@@ -20,6 +18,7 @@ from collections.abc import Callable
 from typing import Any
 
 
+# 即使内部调用传错方法，也必须在发送 JSON-RPC 前拒绝有副作用的操作。
 READ_METHODS = frozenset({
     "initialize", "thread/list", "thread/read", "thread/turns/list", "thread/items/list",
 })
@@ -31,7 +30,7 @@ _RUNTIME_STATUSES = frozenset({"notLoaded", "idle", "systemError", "active"})
 
 
 class HistoryError(RuntimeError):
-    """An error whose public message never contains app-server response text."""
+    """仅暴露固定代码和数值 rpc_code，不透传上游正文或完整错误对象。"""
 
     def __init__(self, code: str, *, rpc_code: int | None = None):
         self.code = code
@@ -70,6 +69,7 @@ def _page_params(thread_id: str, cursor: str | None, limit: int, sort_direction:
 
 def _history_page(result: dict[str, Any], limit: int, *, thread_id: str,
                   turn_id: str | None = None, items: bool) -> dict[str, Any]:
+    """逐项校验来源身份和页面上限，保留 API 原有 wrapper 与不透明游标。"""
     rows = result.get("data")
     if not isinstance(rows, list) or len(rows) > limit:
         raise HistoryError("invalid-history-page")
@@ -99,6 +99,7 @@ def _history_page(result: dict[str, Any], limit: int, *, thread_id: str,
 
 
 def _metadata(thread: Any) -> dict[str, Any]:
+    """从线程对象白名单提取元数据，阻止 preview/指令等正文混入诊断。"""
     if not isinstance(thread, dict):
         raise HistoryError("invalid-thread-metadata")
     identifier = _thread_id(thread.get("id"))
@@ -111,14 +112,13 @@ def _metadata(thread: Any) -> dict[str, Any]:
     status = thread.get("status")
     if isinstance(status, dict):
         status = status.get("type")
-    # In particular, never return preview, turns, instructions, or arbitrary
-    # nested source/status objects: those may contain message bodies.
+    # 不复制任意嵌套 source/status；它们与 preview/turns/instructions 都可能携带正文。
     result: dict[str, Any] = {
         "id": identifier,
         "name": _bounded_text(thread.get("name"), 1024),
         "path": _bounded_text(thread.get("path"), 8192),
         "sourceType": source_type if isinstance(source_type, str) and source_type in _SOURCE_TYPES else "unknown",
-        # Cold-reader runtime state is not evidence of the task lifecycle.
+        # 冷读取器运行时状态单独标注，不能进入生命周期事实。
         "runtimeStatus": status if isinstance(status, str) and status in _RUNTIME_STATUSES else "unknown",
     }
     for field in ("createdAt", "updatedAt"):
@@ -128,12 +128,10 @@ def _metadata(thread: Any) -> dict[str, Any]:
 
 
 class HistoryAdapter:
-    """One serialized stdio connection owned exclusively by this adapter.
+    """独占一条串行 stdio 连接；通过上下文管理器或 close 显式回收。
 
-    Use as a context manager or call close(). On a protocol, I/O, or timeout
-    failure the connection is closed, so a delayed response cannot satisfy a
-    later request. process_factory is only a dependency-injection seam for
-    synthetic transport tests; production defaults to subprocess.Popen.
+    协议、I/O 或超时出错就关闭连接，防止迟到响应被下一请求误收。process_factory
+    仅为合成传输测试提供依赖注入，生产使用 subprocess.Popen。
     """
 
     def __init__(
@@ -189,6 +187,7 @@ class HistoryAdapter:
         self.close()
 
     def _write(self, message: dict[str, Any], deadline: float) -> None:
+        """在本次请求的统一截止时间内写完 JSON 行，处理管道短写和背压。"""
         data = json.dumps(message, ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode() + b"\n"
         if len(data) > _MAX_REQUEST_BYTES:
             raise HistoryError("request-too-large")
@@ -208,6 +207,7 @@ class HistoryAdapter:
                 offset += count
 
     def _call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        """串行收发一个只读 RPC；锁等待、写入和读取共享有限时间预算。"""
         if method not in READ_METHODS:
             raise HistoryError("method-not-allowed")
         deadline = time.monotonic() + self.timeout_seconds
@@ -246,8 +246,7 @@ class HistoryAdapter:
                                 "code": -32601, "message": "Read-only history observer",
                             }}, deadline)
                             raise HistoryError("unsolicited-server-request")
-                        # Notifications do not establish execution state and are
-                        # ignored within the same time/byte/message budget.
+                        # 通知不能证明执行状态；忽略时仍消耗同一时间、字节和消息预算。
                         continue
                     if type(message.get("id")) is not int or message["id"] != request_id:
                         raise HistoryError("unexpected-response-id")
@@ -273,6 +272,7 @@ class HistoryAdapter:
                     raise HistoryError("app-server-disconnected")
                 self._pending += chunk
         except (OSError, ValueError, HistoryError) as error:
+            # 任意传输/协议失败都废弃连接，后续请求不能消费本次迟到或错位的响应。
             self._close_unlocked()
             if isinstance(error, HistoryError):
                 raise
@@ -281,6 +281,7 @@ class HistoryAdapter:
             self._lock.release()
 
     def list_threads(self, *, cursor: str | None = None, limit: int = 50) -> dict[str, Any]:
+        """读取一页元数据，不返回列表 API 中可能附带的任务正文。"""
         if type(limit) is not int or not 1 <= limit <= 100:
             raise HistoryError("invalid-page-limit")
         if cursor is not None and (not isinstance(cursor, str) or not 1 <= len(cursor) <= 8192):
@@ -298,19 +299,20 @@ class HistoryAdapter:
         return {"data": [_metadata(row) for row in rows], "nextCursor": next_cursor}
 
     def read(self, thread_id: str, *, include_turns: bool = False) -> dict[str, Any]:
+        """先验证响应 thread ID，再提取元数据；正文必须走有界分页入口。"""
         identifier = _thread_id(thread_id)
         if include_turns is not False:
             raise HistoryError("metadata-only-read")
         result = self._call("thread/read", {"threadId": identifier, "includeTurns": False})
         thread = result.get("thread")
-        # Identity is verified before projecting even one metadata field.
+        # 任何字段进入下游前都先确认身份，不能用返回对象反向改变请求绑定。
         if not isinstance(thread, dict) or thread.get("id") != identifier:
             raise HistoryError("thread-identity-mismatch")
         return _metadata(thread)
 
     def list_turns(self, thread_id: str, *, cursor: str | None = None, limit: int = 50,
                    sort_direction: str = "desc", items_view: str = "summary") -> dict[str, Any]:
-        """Return official turn rows and opaque cursors in their original order."""
+        """按官方顺序返回轮次与原始游标；正序归一化由上层读取器负责。"""
         params = _page_params(thread_id, cursor, limit, sort_direction, maximum=100)
         if items_view not in ("notLoaded", "summary", "full"):
             raise HistoryError("invalid-items-view")
@@ -321,11 +323,10 @@ class HistoryAdapter:
     def list_items(self, thread_id: str, *, turn_id: str | None = None,
                    cursor: str | None = None, limit: int = 200,
                    sort_direction: str = "desc") -> dict[str, Any]:
-        """Keep ThreadItemEntry's turnId/item/startedAtMs/completedAtMs wrapper.
+        """保留 ThreadItemEntry 的 turnId/item/startedAtMs/completedAtMs 外壳。
 
-        Unknown item types are retained here for the versioned projector to
-        ignore. Cursors are opaque strings returned by the official API; this
-        observer does not synthesize cursor offsets or item anchors.
+        未知 item 类型交给版本化投影器忽略；游标是官方返回的不透明字符串，不能自行
+        推算偏移或根据 item 构造替代游标。
         """
         params = _page_params(thread_id, cursor, limit, sort_direction, maximum=500)
         if turn_id is not None:
@@ -337,14 +338,10 @@ class HistoryAdapter:
 
     def read_history(self, thread_id: str, max_items: int = 200,
                      cursor: str | None = None) -> dict[str, Any]:
-        """Read one bounded item page plus the corresponding recorded turns.
+        """读取一页有界 item 及其轮次元数据，先验证线程身份再读正文。
 
-        Metadata identity is checked before body reads. The item continuation
-        and reverse cursors are the exact upstream strings. Turn paging stops
-        once all returned items' turns are found, or after ten bounded pages;
-        turnsComplete exposes that bound without pretending missing metadata
-        means there are no earlier turns. This is a historical read, not an
-        atomic source snapshot or a live execution-status subscription.
+        找齐本页轮次或最多十页后停止；turnsComplete 显式表达上限，缺失元数据不代表
+        没有更早轮次。保留上游续页/反向游标；多次调用不构成原子快照或实时状态订阅。
         """
         _page_params(thread_id, cursor, max_items, "desc", maximum=500)
         thread = self.read(thread_id)
@@ -370,6 +367,7 @@ class HistoryAdapter:
                 "turnsNextCursor": turn_cursor, "turnsComplete": complete}
 
     def _close_unlocked(self) -> None:
+        """仅回收本连接持有的子进程、selector 和管道，调用方须已持有连接锁。"""
         if self._closed:
             return
         self._closed = True
@@ -379,8 +377,7 @@ class HistoryAdapter:
         process = self._process
         if process is None:
             return
-        # Only this Popen handle is signalled; never process groups or a PID
-        # obtained from Codex's files, desktop process, or a different client.
+        # 只向本类创建的 Popen 发信号；不操作进程组、桌面进程或来源文件记载的 PID。
         if process.poll() is None:
             try:
                 process.terminate()
@@ -400,5 +397,6 @@ class HistoryAdapter:
                     stream.close()
 
     def close(self) -> None:
+        """幂等关闭本适配器连接，不改变用户任务生命周期。"""
         with self._lock:
             self._close_unlocked()

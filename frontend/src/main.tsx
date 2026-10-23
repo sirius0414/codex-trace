@@ -14,6 +14,7 @@ import './style.css';
 
 type Token = ReturnType<SessionGate['capture']>;
 
+/** 连接宿主、读取状态和展示组件；异步结果写入界面前核对对应会话、选择及请求代次。 */
 function TrajectoryApp() {
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [view, setView] = useState<ViewState>(defaultView);
@@ -32,6 +33,8 @@ function TrajectoryApp() {
   const client = useRef<TrajectoryClient | null>(null);
   const gate = useRef(new SessionGate());
   const preferences = useRef(new PreferenceGate());
+  // 异步回调通过 ref 读取最新值，避免使用发起请求时的 React 闭包快照。
+  // 写入时同时更新 ref 与 state，保证同一轮回调里的后续请求也能看到新状态。
   const currentView = useRef(view);
   const currentSnapshot = useRef(snapshot);
   const currentDetail = useRef(detail);
@@ -63,6 +66,7 @@ function TrajectoryApp() {
   function applySnapshot(next: ThreadSnapshot) {
     const current = currentSnapshot.current;
     if (current && next.generation > current.generation) {
+      // generation 变化代表来源已重建，旧删除标记和详情游标不能跨代沿用。
       removedEvents.current.clear(); confirmedRevision.current = next.revision;
       invalidateDetails();
     }
@@ -75,6 +79,7 @@ function TrajectoryApp() {
     partRequests.current.clear(); detailRequests.current.clear(); detailVersions.current.clear(); setDetailLoading(false);
   }
   function stopReads() {
+    // 停止旧界面的读取不会撤销后端已接受的导出保存，保存结果仍需用原请求核对。
     exports.current?.bind(null);
     groupReads.current?.cancel();
     changes.current?.pause(); confirmedRevision.current = null;
@@ -89,6 +94,7 @@ function TrajectoryApp() {
     invalidateDetails(); removedEvents.current.clear(); transportError.current = ''; pendingTiming.current = null;
   }
 
+  /** 同一个偏好对象串行执行 CAS 保存；切换任务后旧对象不能回写新任务状态。 */
   async function flushPreferences(token: Token, owner = preferences.current): Promise<void> {
     const existing = saveOperations.current.get(owner);
     if (existing) { await existing; return flushPreferences(token, owner); }
@@ -106,7 +112,7 @@ function TrajectoryApp() {
       if (!result.saved) setError('另一窗口已更新阅读状态；已保留本窗口当前视图，点击重试可重新读取。');
     } catch (failure) {
       owner.saving = false;
-      // Keep latest pending state for the next deliberate edit/retry; no blind CAS loop.
+      // 保留保存期间产生的最新编辑，交给后续编辑或显式重试，避免盲目重试 CAS。
       owner.pending ??= pending.state;
       showError(failure, token);
     }
@@ -114,7 +120,7 @@ function TrajectoryApp() {
     saveOperations.current.set(owner, operation);
     await operation;
     saveOperations.current.delete(owner);
-    // A transport failure retains pending state without an unbounded retry loop.
+    // 只有已确认保存成功才能继续排空；传输错误不触发无界自动重试。
     if (succeeded && owner.pending) await flushPreferences(token, owner);
   }
   function patchView(patch: Partial<ViewState>) {
@@ -127,12 +133,13 @@ function TrajectoryApp() {
   function selectEvent(eventId: string | null) {
     const wasSelected = currentView.current.selectedEventId === eventId;
     patchView(selectedView(currentView.current, currentSnapshot.current, eventId));
-    // Reclicking the same row keeps its loaded details and scroll position.
+    // 重复选择同一行时保留已加载详情及其滚动位置。
     if (wasSelected) return;
     invalidateDetails();
     currentDetail.current = null; setDetail(null); setDetailLoading(false);
   }
 
+  /** 首屏/重试先恢复偏好与锚点，再开放增量读取；历史分页只扩展当前加载范围。 */
   async function readSnapshot(token: Token, cursor: string | null = null, restore = false, groupId: string | null = null) {
     if (!token.binding || !client.current) return;
     const adapter = client.current;
@@ -158,15 +165,13 @@ function TrajectoryApp() {
       const result = initial.snapshot; missingAnchor = initial.missing;
       if (signal.aborted || !gate.current.accepts(token, result.binding)) return;
       if (cursor && currentSnapshot.current && result.generation !== currentSnapshot.current.generation) {
-        // Paging cannot acknowledge a new generation from just an older slice.
-        // Let the serialized change reader rebuild around the reading anchor.
+        // 一页历史不足以确认新一代的完整状态，交给串行增量读取器围绕阅读锚点重建。
         changes.current?.retry(); return;
       }
       first = result;
       initialRevision = result.revision;
       if (restore) {
-        // Bind the task first, then restore preferences before mounting rows: a
-        // default tail-scroll must not overwrite the saved reading anchor.
+        // 挂载列表前恢复偏好，避免默认的滚动到底部覆盖持久化阅读锚点。
         const saved = await adapter.call<ReadViewStateResult>('read_view_state', { binding: token.binding }, { signal });
         if (signal.aborted || !gate.current.accepts(token, saved.binding) || owner !== preferences.current) return;
         const accepted = owner.restored(saved.preferenceRevision);
@@ -194,7 +199,7 @@ function TrajectoryApp() {
       if (restore && owner.pending) void flushPreferences(token, owner);
     } catch (failure) {
       if (!signal.aborted && first && gate.current.accepts(token)) {
-        // Preference failure must not hide successfully read task records.
+        // 偏好读取失败也保留已成功读取的轨迹，读取状态和内容可用性分别处理。
         if (!owner.loaded && owner.editVersion === edited) applyView(restoredView(currentView.current, 0, first));
         applySnapshot(first);
       }
@@ -213,6 +218,7 @@ function TrajectoryApp() {
   }
 
   async function selectTask(threadId: string) {
+    // 保存旧偏好期间用户可能再次切换，只有最后一次选择意图可以创建新绑定。
     const intent = ++selectionIntent.current;
     stopReads();
     const old = gate.current.capture();
@@ -225,6 +231,7 @@ function TrajectoryApp() {
     const open = gate.current.open;
     if (!open || !client.current) return;
     const activation = gate.current.activation, serial = ++threadSerial.current;
+    // 列表尚未绑定具体任务，用打开会话及请求序号排除旧搜索/旧分页响应。
     const cursor = append ? threadCursor.current : null;
     if (append && !cursor) return;
     try {
@@ -254,8 +261,7 @@ function TrajectoryApp() {
     }
     const previous = currentDetail.current?.eventId === selected ? currentDetail.current.parts[part] : undefined;
     const versionKey = `${selected}:${part}`;
-    // A cursor names a frozen version. Refresh the same visible window before
-    // requesting more bytes from a version that has changed underneath it.
+    // 详情游标绑定冻结版本；事件更新后先刷新当前已显示窗口，再继续读取新字节。
     if (append && detailVersions.current.get(versionKey) !== event.eventRevision) append = false;
     const cursor = append ? previous?.nextCursor : null;
     if (append && !cursor || !append && previous && detailVersions.current.get(versionKey) === event.eventRevision) return;
@@ -272,6 +278,7 @@ function TrajectoryApp() {
       const read = (chunkCursor: string | null) => adapter.call<EventDetail>('read_event', { binding: token.binding,
         generation: state.generation, eventId: selected, part, chunkCursor }, { signal });
       const response = append ? await read(cursor ?? null) : await readDetailWindow(read, previous ? new TextEncoder().encode(previous.text).length : 0);
+      // 选择、来源代次或事件版本任一过期，都不能把旧正文拼入当前详情。
       if (signal.aborted || !gate.current.accepts(token, response.binding) || serial !== detailSerial.current || currentView.current.selectedEventId !== response.eventId
         || response.generation !== currentSnapshot.current?.generation) return;
       const currentEvent = currentSnapshot.current.events.find(row => row.eventId === selected);
@@ -302,6 +309,7 @@ function TrajectoryApp() {
         const state = currentSnapshot.current;
         if (!state) return;
         const next = mergeChanges(state, batch);
+        // 墓碑保留删除发生的 revision，阻止稍晚返回的历史页把已删事件加回来。
         for (const id of batch.removeEventIds) removedEvents.current.set(id, batch.revision);
         for (const event of batch.upsertEvents) removedEvents.current.delete(event.eventId);
         confirmedRevision.current = batch.revision;
@@ -314,6 +322,7 @@ function TrajectoryApp() {
         }
       },
       reset: async (_batch, signal) => {
+        // reset 不清空用户阅读意图：先补回锚点页，再单独补回可能在另一页的选择。
         const token = gate.current.capture(), before = currentSnapshot.current;
         if (!token.binding || !before) return;
         const location = eventLocation(currentView.current, before), anchor = location.anchorEventId;
@@ -354,6 +363,7 @@ function TrajectoryApp() {
     });
     changes.current = reader;
     const visibility = () => {
+      // 页面隐藏时停轮询以释放观察租约；“暂停跟随”只影响滚动，不影响这里的读取。
       const visible = document.visibilityState !== 'hidden';
       reader.setVisible(visible); groupReads.current?.setVisible(visible); exports.current?.setVisible(visible);
     };
@@ -433,8 +443,8 @@ function TrajectoryApp() {
     const state = currentSnapshot.current, token = gate.current.capture();
     if (!state || !token.binding) return;
     const serial = ++querySerial.current;
-    // Structured filters are immediate and local. Applying a previous server
-    // ID set during paging would briefly hide new rows and destroy the anchor.
+    // 结构化筛选在本地立即生效；正文搜索由服务端查已加载正文，且结果绑定加载范围。
+    // 无正文查询时不用旧 ID 集合，避免历史分页新增行被短暂隐藏并扰动阅读锚点。
     if (!currentView.current.filters.text) { setSearchResult(null); return; }
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, selectionAbort.current.signal]);

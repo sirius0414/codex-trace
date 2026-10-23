@@ -1,5 +1,6 @@
 import type { ThreadSnapshot, ThreadSummary, ViewState, ContentPart } from '../../contracts/types';
 
+/** UI 缓存已拼接正文与续读游标；跨请求的绑定/版本核验由状态层在写入前完成。 */
 export type DetailPart = { text: string; nextCursor: string | null; completeness: string; sourceTruncated: boolean };
 export type DetailData = { eventId: string; summary: string; parts: Partial<Record<ContentPart, DetailPart>>; explanation: string };
 export type TraceUIProps = {

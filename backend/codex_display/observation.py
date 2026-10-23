@@ -1,7 +1,7 @@
-"""Shared read-only collectors and revision-bound, UI-private change batches.
+"""共享只读采集器与每个 UI 独立的、绑定版本的增量批次。
 
-Raw and API I/O run on separate workers: a slow cold history request must not
-become the fast path for already persisted records. No worker runs task actions.
+raw/API 分开采集，避免慢历史请求阻塞已落盘记录的展示。generation 表示来源重置，
+revision 表示可见投影变化；批次固定在某一 revision，直到最后一页交付才提交已加载范围。
 """
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ def _key(row):
 
 
 class Observation:
+    """TrajectoryService 的采集混入类；共享状态由服务锁保护，来源 I/O 尽量在锁外。"""
     def _init_observation(self, enabled):
         self._observe_stop = threading.Event()
         self._observe_wakeup = threading.Event()
@@ -39,6 +40,7 @@ class Observation:
                 worker.start()
 
     def _active_ids(self):
+        """只采集最近活跃 UI 选中的任务及已确认子任务，并限制关联展开数量。"""
         now = time.monotonic()
         with self.lock:
             self._reap()
@@ -61,6 +63,7 @@ class Observation:
         return {edge["relationshipId"]: edge for edge in resolve_relationships(edges)}
 
     def _raw_loop(self):
+        """独立追踪落盘变化；单个任务失败只降级其来源健康度，不终止整个采集器。"""
         while not self._observe_stop.is_set():
             for identifier in self._active_ids():
                 if self._observe_stop.is_set():
@@ -68,7 +71,7 @@ class Observation:
                 try:
                     self.refresh_raw(identifier)
                 except Exception:
-                    # Fail closed without emitting source bodies or stopping other tasks.
+                    # 采集失败时保留既有记录，不泄露来源正文，也不阻塞其他任务。
                     self._collector_error(identifier, "raw")
             try:
                 if hasattr(self.raw, "wait_for_changes"):
@@ -79,6 +82,7 @@ class Observation:
                 self._observe_stop.wait(.25)
 
     def _api_loop(self):
+        """按退避期限校验 API，发现尚未加载的子任务时先验证其身份与来源。"""
         while not self._observe_stop.is_set():
             identifiers = self._active_ids()
             for identifier in identifiers:
@@ -92,8 +96,7 @@ class Observation:
                         previous = self._discovery_failures.get(identifier, (0, 0))
                         if time.monotonic() < previous[1]:
                             continue
-                        # Identity validation and source loading are done outside
-                        # the global cache lock, including unavailable children.
+                        # 来源可能很慢或不可用，身份校验与读取不能占用全局缓存锁。
                         self._load(identifier)
                         self._discovery_failures.pop(identifier, None)
                         with self.lock:
@@ -110,10 +113,10 @@ class Observation:
             self._observe_wakeup.clear()
 
     def _stop_observation(self):
+        """先停调度并关闭自有历史连接以解除在途请求，再等待 worker 并回收 raw。"""
         self._observe_stop.set()
         self._observe_wakeup.set()
-        # Closing this observer's own app-server releases an in-flight request;
-        # it never controls the task or the user's app-server process.
+        # 只关闭本观察器拥有的 app-server，不操作用户任务或其他 app-server 进程。
         self.history.close()
         for worker in self._observe_threads:
             worker.join(timeout=15)
@@ -121,12 +124,14 @@ class Observation:
             self.raw.close()
 
     def _touch(self, task, *, added=(), changed=(), removed=()):
+        """推进可见 revision 并保存有限差异；落后于保留窗口的 UI 必须重取快照。"""
         task.revision += 1
         task.changes.append({"revision": task.revision, "added": set(added),
                              "changed": set(changed), "removed": set(removed)})
         del task.changes[:-CHANGE_RETENTION]
 
     def _collector_error(self, identifier, source, *, expected_task=None):
+        """分别退避 raw/API；重复失败不反复制造可见版本，但保留最后成功投影。"""
         with self.lock:
             task = self.tasks.get(identifier)
             if task is None or expected_task is not None and task is not expected_task:
@@ -156,9 +161,8 @@ class Observation:
                 health["success"] = observed
 
     def _compose(self, identifier, own):
-        # Projection values are immutable after construction except the event
-        # revision and composed group metadata. Copy only those owned shells;
-        # large detail strings and untouched evidence can be shared safely.
+        """沿确认的 spawned-by 边组合子任务；各任务用量独立保留，不并入主任务。"""
+        # 投影构建后仅事件 revision 和组合组元数据会变；复制可变外壳，复用大正文和只读证据。
         result = {**own, "events": [dict(event) for event in own["events"]],
                   "turns": list(own["turns"]), "details": dict(own["details"]),
                   "groups": deepcopy(own["groups"]), "relationships": deepcopy(own["relationships"])}
@@ -204,6 +208,7 @@ class Observation:
         return result
 
     def _commit_projection(self, identifier, task, own, *, historical=False, reset=False, propagate=True):
+        """按稳定事件键计算差异；重置来源时推进 generation 并废弃旧差异窗口。"""
         old = SimpleNamespace(projection=task.projection, event_hashes=dict(task.event_hashes))
         task.own_projection = own
         task.projection = self._compose(identifier, own)
@@ -216,6 +221,7 @@ class Observation:
         if reset:
             task.generation += 1
             task.changes.clear()
+        # 历史补页只扩大已知范围，不当作新活动触发自动滚动/进展时间。
         if reset or previous != current or changed or metadata_changed:
             self._touch(task, added=() if historical else current - previous, changed=changed, removed=previous - current)
             if not historical and (changed or current - previous or old.projection.get("mainUsage") != own.get("mainUsage")):
@@ -224,12 +230,14 @@ class Observation:
             self._refresh_ancestors(identifier, reset=reset, historical=historical)
 
     def _refresh_ancestors(self, identifier, *, reset=False, historical=False):
+        """把子任务变化重组到已加载父级；禁止递归传播以免环或多重组合重复提交。"""
         for parent_id, parent in list(self.tasks.items()):
             if parent_id != identifier and any(group["threadId"] == identifier for group in parent.projection["groups"]):
                 self._commit_projection(parent_id, parent, parent.own_projection or parent.projection,
                                         historical=historical, reset=reset, propagate=False)
 
     def refresh_raw(self, identifier, *, force=False):
+        """锁外读取 raw，回锁后确认绑定仍有效，再处理追加、来源重写与暂时失联。"""
         with self.lock:
             task = self.tasks.get(identifier)
             if task is None or not force and time.monotonic() < task.raw_retry_at:
@@ -242,7 +250,7 @@ class Observation:
             return False
         with self.lock:
             if self.tasks.get(identifier) is not task or task.metadata != metadata:
-                return False  # A newer source binding superseded this read.
+                return False  # 较新的任务实例或来源绑定已经取代本次读取，不能覆盖它。
             task.raw_observed = _now()
             self._raw_health(task, raw)
             readable = any(source["state"] in ("readable", "partial") for source in raw.sources)
@@ -279,9 +287,8 @@ class Observation:
             if stable_own and stable_present:
                 missing = {key for key, s in old_segments.items() if key not in new_segments and s.get("inheritedRange") is not None}
                 if missing and failed_inheritance:
-                    # The unchanged owning header proves the same inheritance
-                    # boundary. Keep cached rows only for the unavailable range;
-                    # export always recaptures independent, currently readable bytes.
+                    # 自身头部及继承边界未变时，仅为暂时失联的祖先范围保留缓存。
+                    # 缓存只支持展示；导出仍须独立重捕获当前可读字节。
                     task.raw_coverage = deepcopy(raw)
                     raw = deepcopy(raw)
                     raw.records[:0] = [row for row in task.raw.records if row["source"]["segmentId"] in missing]
@@ -291,8 +298,7 @@ class Observation:
                     task.raw_retry_at = time.monotonic() + RETRY_SECONDS[min(task.raw_failures - 1, 3)]
                     reset = False
                 elif not missing and all(key in old_segments for key in new_segments):
-                    # Reappearance after a temporary lineage lookup failure is
-                    # not itself a physical rewrite.
+                    # 暂时继承查找失败后的重现不等于物理重写，不应使旧游标全部失效。
                     reset = False
             if task.error is None:
                 task.raw_failures, task.raw_retry_at = 0, 0
@@ -301,13 +307,13 @@ class Observation:
                 task.api_items, task.api_turns, task.api_cursor = [], [], None
             own = self.project(identifier, raw.records, task.api_items, task.api_turns, mode=task.mode)
             self._commit_projection(identifier, task, own, reset=reset)
-            # The first growth starts a bounded coalescing window. Continuous
-            # appends cannot push this deadline indefinitely into the future.
+            # 第一次增长开启有限合并窗口；连续追加不能把 API 校验期限无限向后推迟。
             task.api_due_at = min(task.api_due_at, time.monotonic() + .75)
             self._observe_wakeup.set()
             return True
 
     def _latest_history(self, identifier, known, metadata):
+        """从最新页追赶到已知身份，限制页数与耗时，最后还原为官方正序。"""
         pages, turns, seen, cursor = [], {}, set(), None
         started = time.monotonic()
         for _ in range(64):
@@ -329,6 +335,7 @@ class Observation:
         return [row for page in reversed(pages) for row in reversed(page)], list(reversed(turns.values())), next_cursor, metadata
 
     def refresh_history(self, identifier, *, force=False):
+        """串行更新单任务 API；来源变代或替换后丢弃旧响应，防止跨来源混合。"""
         with self.lock:
             task = self.tasks.get(identifier)
             if task is None or not force and time.monotonic() < task.api_due_at:
@@ -343,8 +350,7 @@ class Observation:
                 old_items = list(task.api_items)
                 metadata = dict(task.metadata)
             rows, turns, next_cursor, metadata = self._latest_history(identifier, {_key(row) for row in old_items}, metadata)
-            # Explicit unfinished history items remain under verification after
-            # leaving the latest page. This does not turn cold status into fact.
+            # 已知未完结 item 即使离开最新页也须单独追踪；冷读取状态仍然只是待验证信息。
             unfinished = {row.get("turnId") for row in old_items
                           if row.get("item", {}).get("status") in ("inProgress", "running")}
             if hasattr(self.history, "list_items"):
@@ -374,8 +380,7 @@ class Observation:
                 recovered = task.api_error is not None
                 origin_changed = self._timeline_origin(task.metadata) != self._timeline_origin(metadata)
                 reset = task.mode != "api"
-                # A changed physical source must be checked before mixing its
-                # new history with raw bytes from the previous source.
+                # 物理来源变化时先校验新 raw，再重置 API 缓存，避免把新历史拼到旧字节上。
                 if replacement is not None:
                     task.raw = replacement
                     task.api_items, task.api_turns, task.api_cursor = [], [], None
@@ -426,11 +431,10 @@ class Observation:
                 **{key: snapshot[key] for key in ("turns", "groups", "relationships", "status", "timelineOrigin", "mainUsage", "statistics", "coverage", "freshness")}}
 
     def _clear_change_batch(self, view):
-        """Retire only this observer's batch after ack, reset or selection.
+        """在确认、重置或切换选择时只回收此 UI 的增量批次，调用方须持服务锁。
 
-        Historical/detail cursors have independent lifetimes. The context
-        identity check also makes this safe when a caller repeats cleanup.
-        Callers hold the service lock while changing observer state.
+        历史/详情游标有独立生命周期；回收前核对 context 对象身份，重复清理也不会误删
+        其他批次的游标。
         """
         context = view.batch_context
         if context:
@@ -441,6 +445,7 @@ class Observation:
         view.batch, view.batch_context = None, None
 
     def read_changes(self, request):
+        """按 UI 已加载范围返回固定批次；批次有效期内重试同一基线/续页复用原结果。"""
         from .service import ServiceError
         binding = request["binding"]
         with self.lock:
@@ -471,8 +476,7 @@ class Observation:
                     self._clear_change_batch(view)
                     return self._change_result(binding, view, task, after, reset="expiredCursor")
                 return deepcopy(view.batch)
-            # The next base revision acknowledges the previous frozen batch.
-            # Single-page and empty reads need no continuation storage at all.
+            # 新的基线 revision 表示上一固定批次已确认；单页/空页无需保留续页游标。
             self._clear_change_batch(view)
             if after > task.revision or task.changes and after < task.changes[0]["revision"] - 1:
                 return self._change_result(binding, view, task, after, reset="expiredCursor")
@@ -487,6 +491,7 @@ class Observation:
             loaded_threads = {event["threadId"] for event in events if event["eventId"] in view.loaded}
             selected = {event["eventId"] for event in events if event["eventId"] in view.loaded and event["eventId"] in changed
                         or event["eventId"] in added and (event["threadId"] == binding["threadId"] or event["threadId"] in loaded_threads)}
+            # 暂存加载范围与组游标，不能让第一页就把尚未交付的后续事件纳入可搜索范围。
             staged = deepcopy(view)
             for child_id in requested - {binding["threadId"]}:
                 child_events = [e for e in events if e["threadId"] == child_id]
@@ -513,8 +518,7 @@ class Observation:
                 next_token = self._cursor("changes", binding, task, after=after, result=chunk, context=context)
                 context["cursorIds"].add(next_token)
             first = {**result, "upsertEvents": deepcopy(pages[0]), "continuationCursor": next_token}
-            # Scope becomes searchable only after the final page was delivered.
-            # A lost response can retry the immutable final page without a second commit.
+            # 最后一页交付后才提交可搜索范围；响应丢失可重试固定尾页，提交操作幂等。
             if first["continuationCursor"] is None:
                 self._commit_batch(view, context)
             view.batch = first if task.revision > after or selected else None
@@ -522,6 +526,7 @@ class Observation:
             return deepcopy(first)
 
     def _commit_batch(self, view, context):
+        """仅在整批交付完成后推进 UI 加载范围，避免重试时再次增加 scope_revision。"""
         if context["committed"]:
             return
         previous = set(view.loaded)

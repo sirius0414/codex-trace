@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 
+/** 用源码内容标识安装版本；builtAt 单独记录，重复构建不会因此改变 buildId。 */
 export function createBuildInfo(root = projectRoot) {
   const files = [];
   function collect(relative) {
@@ -22,6 +23,7 @@ export function createBuildInfo(root = projectRoot) {
   const hash = createHash('sha256');
   for (const file of files.sort()) {
     const bytes = readFileSync(join(root, file));
+    // 路径、长度和内容共同参与哈希，防止不同文件划分拼接成相同的输入序列。
     hash.update(`${file}\0${bytes.length}\0`).update(bytes);
   }
   const sourceHash = hash.digest('hex');

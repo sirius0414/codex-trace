@@ -11,6 +11,7 @@ export default function Overview(props: TraceUIProps) {
   const [width, setWidth] = useState(1000);
   const svg = useRef<SVGSVGElement>(null);
   const chooser = useRef<HTMLElement>(null);
+  // 概览保留当前 Agent 的全貌；列表的正文/类型/时间筛选不反过来裁剪概览，便于重新框选。
   const events = useMemo(() => snapshot ? scopedEvents(snapshot, view) : [], [snapshot, view.agentScope]);
   const frame = useMemo(() => overviewFrame(snapshot, events), [snapshot?.timelineOrigin, events]);
   const { origin, ordered, min: fullMin, max: fullMax } = frame;
@@ -52,6 +53,7 @@ export default function Overview(props: TraceUIProps) {
     return min + Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * (max - min);
   };
   function startDrag(event: React.PointerEvent<SVGSVGElement>) {
+    // 顺序轴没有可确认的时间含义，禁止用它生成 timeRange；标记点击交给具体记录选择。
     if (ordered || (event.target as Element).closest('[data-overview-key]')) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     const value = x(event); setDrag([value, value]);
@@ -115,7 +117,7 @@ export default function Overview(props: TraceUIProps) {
         {marks.map(mark => {
           const event = mark.events[0], count = mark.events.length, grouped = count > 1;
           const position = Math.max(0, coordinate(mark.start));
-          // A cluster extent denotes a range of records, never one operation's duration.
+          // 聚合簇宽度覆盖多条记录的范围，不能解释为某一次操作的持续时间。
           const extent = Math.max(3, Math.min(1000, coordinate(mark.end)) - position);
           const isChild = !grouped && event.groupId !== snapshot?.rootGroupId;
           const y = mark.lane * 30 + (mark.lane === 2 && isChild ? 17 : 7);

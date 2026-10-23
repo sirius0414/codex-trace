@@ -6,7 +6,7 @@ export class ChangeProtocolError extends Error {
   constructor() { super('增量记录批次不连续，保留已有内容并重试。'); this.name = 'ChangeProtocolError'; }
 }
 
-/** Freeze a logical batch until every continuation page has arrived. */
+/** 同一逻辑批次收齐所有续页后才提交，避免事件和元信息在界面中呈现半个版本。 */
 export class ChangeAssembly {
   private pages: ChangeBatch[] = [];
   private cursors = new Set<string>();
@@ -21,6 +21,7 @@ export class ChangeAssembly {
       || !Number.isSafeInteger(page.revision) || page.revision < page.baseRevision
       || first && page.revision !== first.revision || !Array.isArray(page.upsertEvents) || !Array.isArray(page.removeEventIds)) throw new ChangeProtocolError();
     if (page.continuationCursor !== null && (typeof page.continuationCursor !== 'string' || !page.continuationCursor.length || this.cursors.has(page.continuationCursor))) throw new ChangeProtocolError();
+    // 同时约束游标前进、页数与条目数，错误服务响应不能形成无限续读。
     this.itemCount += page.upsertEvents.length + page.removeEventIds.length;
     if (this.pages.length >= 1024 || this.itemCount > 100000) throw new ChangeProtocolError();
     if (page.continuationCursor) this.cursors.add(page.continuationCursor);
@@ -44,7 +45,9 @@ export class ChangeAssembly {
   }
 }
 
-/** One atomic update; a late batch cannot roll back a newer historical page. */
+/** 调用方先用 ChangeAssembly 收齐批次，再一次合并；此函数不检查续页是否结束。
+ * 较晚到达的批次不能回滚更高 revision 的历史页元信息。
+ */
 export function mergeChanges(current: ThreadSnapshot, batch: ChangeBatch): ThreadSnapshot {
   if (!sameBinding(current.binding, batch.binding) || batch.resetRequired || current.generation !== batch.generation
     || batch.baseRevision > current.revision) throw new ChangeProtocolError();
@@ -56,6 +59,7 @@ export function mergeChanges(current: ThreadSnapshot, batch: ChangeBatch): Threa
   }
   const sorted = [...events.values()].sort((a, b) => (a.order.section === b.order.section ? 0 : a.order.section === 'context' ? -1 : 1)
     || a.order.ordinal - b.order.ordinal || a.eventId.localeCompare(b.eventId));
+  // 加载范围可先于事件修订变化，分页信息用 scopeRevision 独立决胜。
   const scope = batch.coverage.scopeRevision > current.coverage.scopeRevision ? batch
     : batch.coverage.scopeRevision < current.coverage.scopeRevision ? current
       : batch.revision >= current.revision ? batch : current;
@@ -82,7 +86,7 @@ type ReaderOptions = {
   clearTimer?: (timer: unknown) => void;
 };
 
-/** Serialized foreground reader. Follow/scroll state is intentionally absent. */
+/** 前台串行轮询器；读取与跟随滚动独立，暂停跟随后仍应接收任务进展。 */
 export class ChangeReader {
   private active = false;
   private visible = true;
@@ -113,12 +117,14 @@ export class ChangeReader {
   retry() { this.failures = 0; if (this.active) this.schedule(0); }
   dispose() { this.disposed = true; this.active = false; this.cancel(); }
   private cancel() {
+    // abort 用于尽快停止请求，代次检查用于拒收来不及取消的旧响应，两者缺一不可。
     this.generation++; this.wakeRequested = false;
     if (this.timer !== null) { this.clearTimer(this.timer); this.timer = null; }
     this.controller?.abort();
   }
   private schedule(delay: number) {
     if (this.disposed || !this.active || !this.visible) return;
+    // 忙时只记一次唤醒意图，不并发发起第二轮；finally 负责继续调度。
     if (this.busy) { this.wakeRequested = true; return; }
     if (this.timer !== null) this.clearTimer(this.timer);
     this.timer = this.setTimer(() => { this.timer = null; void this.tick(); }, Math.max(0, delay));
@@ -152,6 +158,7 @@ export class ChangeReader {
         break;
       }
       this.failures = 0;
+      // 正常周期从本轮开始时刻计算，服务耗时已经包含在 750 ms 周期中。
       delay = Math.max(0, 750 - (this.now() - requestStartedAt));
     } catch (failure) {
       if (!valid()) return;
@@ -166,7 +173,7 @@ export class ChangeReader {
   }
 }
 
-/** Opt-in, metadata-only local harness instrumentation; disabled in normal UI. */
+/** 本地验收显式启用的耗时采样，只记录版本/数量/时间元信息，正常界面默认关闭。 */
 declare global {
   interface Window {
     __CODEX_DISPLAY_TIMING__?: boolean;

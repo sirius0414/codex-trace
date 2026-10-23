@@ -50,6 +50,7 @@ def locked_versions(lockfile: Path) -> dict[str, str]:
 
 
 def verify_runtime(python: Path, versions: dict[str, str]) -> dict:
+    """在目标解释器中实测 zstd 和锁定依赖，避免误用打包脚本自身的环境。"""
     command = """import importlib.metadata,json,sys
 try:
  from compression import zstd
@@ -70,6 +71,7 @@ print(json.dumps({'python':sys.version.split()[0],'versionInfo':list(sys.version
 
 
 def offline_html(assets: Path) -> str:
+    """将单份 JS/CSS 内联为宿主可直接加载的 HTML，并检查已知的远程依赖入口。"""
     javascript = (assets / "app.js").read_text()
     if re.search(r"\bprocess\s*\.\s*env\s*\.\s*NODE_ENV\b", javascript):
         raise ValueError("Browser UI still references process.env.NODE_ENV; configure Vite to define the production value before packaging")
@@ -82,12 +84,14 @@ def offline_html(assets: Path) -> str:
     css = re.sub(r"/\*# sourceMappingURL=.*?\*/", "", css)
     if re.search(r"@import\s|url\(\s*['\"]?(?:https?:|//)", css, re.I):
         raise ValueError("UI CSS contains a remote dependency")
+    # 内联内容可能带 HTML 结束标签；必须转义，避免浏览器提前结束资源节点。
     javascript = re.sub(r"</script", r"<\\/script", javascript, flags=re.I)
     css = re.sub(r"</style", r"<\\/style", css, flags=re.I)
     return '<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>执行轨迹</title><style>' + css + '</style></head><body><div id="root"></div><script>' + javascript + '</script></body></html>\n'
 
 
 def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
+    """验证外部运行环境后在同级临时目录组包，完整写入后才发布到新目录。"""
     backend = ROOT / "backend" / "codex_display"
     if not (backend / "app.py").is_file():
         raise ValueError("Production backend app.py is missing")
@@ -111,6 +115,7 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
         (staged / "ui" / "trajectory-v1.html").write_text(html)
         shutil.copyfile(ROOT / "requirements.lock", staged / "requirements.lock")
         shutil.copyfile(ROOT / "LICENSE", staged / "LICENSE")
+        # 代码随安装缓存移动，cwd 因此相对包根；解释器保留绝对路径以摆脱 GUI 的 PATH。
         launch = {"mcpServers": {"codex-display": {
             "command": str(python), "args": ["-m", "codex_display.app"], "cwd": "./backend",
             "env": {"CODEX_DISPLAY_CODEX_EXECUTABLE": str(codex), "CODEX_DISPLAY_STATE_ROOT": str(Path.home() / ".local/share/codex-display/index"),
@@ -128,6 +133,7 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
             metadata["frontendBuild"] = frontend_build
         (staged / "runtime.json").write_text(json.dumps(metadata, indent=2) + "\n")
         (staged / "INSTALL.txt").write_text("Codex Display 0.1.0 local package\n\nUI, contracts and backend code are included in this cacheable package.\nThe MCP cwd is relative to the installed package; runtime executables are absolute.\nPython >=3.14 with compression.zstd is required. No dependencies are installed at startup.\nKeep runtime.json paths installed; rebuild and reinstall after relocating them.\nOpen Execution Trace from a chat's New Tab menu. The global entry asks you to select a task.\nReload/restart Codex when convenient after an update to refresh plugin resources.\nUninstalling the plugin does not remove ZIPs in ~/Downloads/Codex Display/.\n")
+        # 在同一父目录完成重命名，避免失败的组包结果被当作可安装目录使用。
         staged.rename(output)
     return {"output": str(output), "uiBytes": len(html.encode()), "python": str(python), "codex": str(codex)}
 

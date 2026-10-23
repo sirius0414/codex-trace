@@ -9,7 +9,7 @@ export async function sha256(bytes) {
   } catch { throw new DownloadError('digest-failed', '本地字节校验失败，尚未请求保存。'); }
 }
 
-/** Read and validate bounded synthetic bytes; saving remains a separate user gesture. */
+/** M0 合成下载探针：按偏移及分块/整包哈希核验有界字节，读取成功不代表已请求保存。 */
 export async function prepareDownload(call, expected, progress, isCurrent = () => true) {
   const assertCurrent = () => {
     if (!isCurrent()) throw new DownloadError('cancelled', '任务选择已变化，已取消旧下载。');
@@ -51,6 +51,7 @@ export async function prepareDownload(call, expected, progress, isCurrent = () =
         (!result.done && bytes.length === 0)) throw new DownloadError('invalid-chunk', '下载字节位置不一致，尚未请求保存。');
     if (await sha256(bytes) !== result.chunkSha256) throw new DownloadError('checksum-mismatch', '下载字节块校验失败，尚未请求保存。');
     assertCurrent();
+    // 只有通过校验的块才前移偏移，零进展且未结束的响应已在上面拒绝。
     chunks.push(bytes); offset = result.nextOffset; progress('chunk-verified');
   } while (!result.done);
   const bytes = new Uint8Array(offset); let start = 0;

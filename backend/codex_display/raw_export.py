@@ -1,8 +1,7 @@
-"""Bounded, read-only source collection into a private, streaming ZIP.
+"""按资源预算只读采集来源，以原始字节流写入私有 ZIP。
 
-This collector knows nothing about UI loaded sets or save receipts. Source
-identity/ranges come from RawAdapter; relationship discovery uses independent
-history pages. Only confirmed spawn descendants enter the frozen export scope.
+采集独立于 UI 已加载范围和保存回执；来源身份、继承范围由 RawAdapter 提供，
+关系另行翻页枚举。只有已确认的 spawn 后代进入冻结范围，通信或 fork 不扩大范围。
 """
 from __future__ import annotations
 
@@ -29,7 +28,7 @@ _DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 
 class RawExportError(RuntimeError):
-    """Fixed public code, with a content-free partial manifest when available."""
+    """向上层提供固定错误码，必要时附带不含任务正文的部分 manifest。"""
     def __init__(self, code, manifest=None):
         self.code, self.manifest = code, manifest
         super().__init__(code)
@@ -37,6 +36,8 @@ class RawExportError(RuntimeError):
 
 @dataclass(frozen=True)
 class ExportLimits:
+    """枚举和复制的独立预算；max_bytes 计算来源字节总量，非压缩后的 ZIP 大小。"""
+
     max_tasks: int = 64
     max_depth: int = 16
     max_sources: int = 256
@@ -94,6 +95,8 @@ def _safe_reason(value):
 
 
 class RawExportCollector:
+    """先冻结来源成员、字节上界和哈希，再复制核验；不声明跨文件原子快照。"""
+
     def __init__(self, history, raw, *, limits=None):
         self.history, self.raw = history, raw
         self.limits = limits or ExportLimits()
@@ -103,6 +106,7 @@ class RawExportCollector:
             raise RawExportError('export-time-limit')
 
     def _relationship_rows(self, rows, unresolved, identifier):
+        """只给关系 reducer 保留必要字段；坏行/超限仍会使关系枚举标记为不完整。"""
         selected, relation_count, limited = [], 0, False
         for row in rows:
             record, payload = row['record'], row['record'].get('payload', {})
@@ -110,8 +114,7 @@ class RawExportCollector:
                 continue
             kind = record.get('type')
             if kind == 'session_meta':
-                # The relationship reducer needs only explicit metadata. Do not
-                # duplicate system instructions or ordinary message bodies.
+                # 关系只依赖显式元数据，避免额外复制系统指令或普通消息正文。
                 selected.append({**row, 'raw': b'', 'record': {**record, 'payload': {key: payload[key] for key in _META_FIELDS if key in payload}}})
             elif kind == 'event_msg' and (payload.get('type') in ('task_started', 'turn_started', 'task_complete', 'turn_complete', 'turn_aborted', 'sub_agent_activity', 'collab_agent_spawn_end')
                     or payload.get('type') == 'item_completed' and isinstance(payload.get('item'), dict) and payload['item'].get('type') in _RELATIONS):
@@ -132,6 +135,7 @@ class RawExportCollector:
         return selected
 
     def _read_relations(self, identifier, rows, unresolved, deadline):
+        """使用独立的完整历史游标查找关系，触限或故障写入未解决范围。"""
         candidates, cursor, seen = [], None, set()
         for _ in range(self.limits.max_history_pages):
             try:
@@ -167,10 +171,11 @@ class RawExportCollector:
             break
         else:
             unresolved.append(f'history-page-limit:{identifier}')
-        # API is descending; exact IDs still merge when a raw completion exists.
+        # API 按倒序返回；逆序后仍以精确 ID 合并 raw 中的完成记录。
         return project(identifier, self._relationship_rows(rows, unresolved, identifier), reversed(candidates), mode='api')['relationships']
 
     def _enumerate(self, root, unresolved, deadline):
+        """有界遍历已确认后代；最终重算可达范围，剔除后续变成冲突的父子关系。"""
         tasks, relationships, queue = {}, [], [(root, 0)]
         while queue:
             identifier, depth = queue.pop(0)
@@ -200,8 +205,7 @@ class RawExportCollector:
                 tasks[identifier] = {'segments': [], 'sources': []}
                 continue
             tasks[identifier] = {'segments': snapshot.segments, 'sources': snapshot.sources}
-            # Malformed/limited records may hide creation evidence; preserving
-            # their bytes does not establish complete relationship enumeration.
+            # 坏行或投影限制可能隐藏创建证据；原字节可导出不代表后代已完整枚举。
             for issue in snapshot.issues:
                 if issue != 'incomplete-tail':
                     unresolved.append(f'raw-enumeration-{_safe_reason(issue)}:{identifier}')
@@ -245,6 +249,7 @@ class RawExportCollector:
         return digest.hexdigest(), prefix.hexdigest(), last
 
     def _freeze_source(self, segment, remaining, deadline):
+        """固定单来源可复制前缀并校验身份；追加可继续，已冻结前缀不能变化。"""
         if not segment.get('exportable', False):
             raise RawExportError('unsafe-inherited-range')
         descriptor = _open_source(Path(segment['path']))
@@ -256,9 +261,11 @@ class RawExportCollector:
             if before.st_size < segment['byteEnd']:
                 raise RawExportError('source-truncated')
             compressed = segment['format'] != 'jsonl'
+            # 压缩文件的物理字节与逻辑偏移不能互换，故要求枚举后整份文件未变。
             if compressed and (before.st_size != segment['physicalBytes'] or before.st_mtime_ns != segment['mtimeNs'] or before.st_ctime_ns != segment['ctimeNs']):
                 raise RawExportError('compressed-source-changed')
             upper = segment['byteEnd'] if segment.get('inheritedRange') is not None else before.st_size
+            # 继承段仅复制已证明属于本任务的上界，不能带入父任务后来追加的内容。
             copy_end = min(upper, remaining)
             if copy_end <= 0:
                 raise RawExportError('export-byte-limit')
@@ -281,6 +288,7 @@ class RawExportCollector:
             os.close(descriptor)
 
     def _copy_source(self, frozen, directory, archive, entry_name, deadline):
+        """先复制至匿名暂存并复核哈希，再开 ZIP 条目，避免未校验字节进入 ZIP。"""
         descriptor = _open_source(Path(frozen['segment']['path']))
         name = '.segment-' + uuid4().hex
         spool = None
@@ -290,7 +298,7 @@ class RawExportCollector:
                 raise RawExportError('source-changed-before-copy')
             try:
                 spool = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
-                os.unlink(name, dir_fd=directory)  # Anonymous, private per-source staging.
+                os.unlink(name, dir_fd=directory)  # 匿名私有暂存，关闭描述符即释放。
             except OSError as error:
                 raise RawExportError('private-copy-failed') from error
             offset, digest = 0, hashlib.sha256()
@@ -334,8 +342,7 @@ class RawExportCollector:
             except OSError as error:
                 raise RawExportError('zip-write-failed') from error
             except RawExportError as error:
-                # Once an entry header was emitted, a timeout cannot be
-                # downgraded to an omitted source in a successful archive.
+                # ZIP 条目头写入后再超时，必须令整包失败，不能降级为成功包中的缺源。
                 raise RawExportError('zip-time-limit') from error
         finally:
             os.close(descriptor)
@@ -343,6 +350,7 @@ class RawExportCollector:
                 os.close(spool)
 
     def collect(self, root_thread_id, destination_path, *, destination_fd=None):
+        """生成一次冻结 ZIP；未知类型、坏行和末尾半行按原字节保留在来源条目中。"""
         root = _id(root_thread_id)
         path = Path(destination_path)
         if not path.is_absolute() or '..' in path.parts or path.suffix != '.zip':
@@ -370,6 +378,7 @@ class RawExportCollector:
             tasks, relations = self._enumerate(root, unresolved, deadline)
             manifest['relationships'] = relations
             manifest['enumerationCutoff'] = _now()
+            # 全部冻结计划先于 ZIP 条目写入；每源采集时间不同，manifest 明确 atomicSnapshot=False。
             plans, remaining = [], self.limits.max_bytes
             for logical_id, task in tasks.items():
                 represented = set()
@@ -431,6 +440,7 @@ class RawExportCollector:
                 manifest['collectionEndedAt'] = _now()
                 manifest['unresolvedRanges'] = list(dict.fromkeys(unresolved))
                 manifest['enumerationComplete'] = not manifest['unresolvedRanges']
+                # 可生成并校验部分来源 ZIP；保存成功与来源完整是两个独立结论。
                 if copied == 0:
                     raise RawExportError('allSourcesUnreadable', manifest)
                 archive.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2).encode() + b'\n')

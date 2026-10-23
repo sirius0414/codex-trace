@@ -1,8 +1,7 @@
-"""Private, rebuildable SQLite data owned only by Codex Display.
+"""插件独占的私有 SQLite：保存可重建投影、视图偏好与持久化导出回执。
 
-The database contains derived projections, view preferences and durable export
-receipts. It never opens or writes a Codex session database. All mutations use
-short SQLite transactions so multiple plugin processes can share this store.
+不打开或写入 Codex 会话数据库。进程内锁保护连接，短 SQLite 事务协调多插件进程；
+视图与回执使用 revision 做比较交换，冲突时返回现值供调用方处理。
 """
 from __future__ import annotations
 
@@ -28,7 +27,7 @@ if not _SCHEMA_PATH.is_file():
 
 
 class StorageError(RuntimeError):
-    """Public errors contain fixed codes, never persisted payloads or SQL."""
+    """公开错误只含固定代码，不暴露持久化正文、路径或 SQL。"""
 
 
 def _key(value: Any) -> str:
@@ -44,6 +43,7 @@ def _revision(value: Any) -> int:
 
 
 def _encode(value: Any, *, maximum: int = _MAX_JSON_BYTES) -> str:
+    """限制持久化 JSON 大小并拒绝 NaN；ASCII 编码使字符长度等于落盘字节长度。"""
     try:
         encoded = json.dumps(value, ensure_ascii=True, allow_nan=False, separators=(",", ":"))
     except (ValueError, TypeError, RecursionError):
@@ -61,7 +61,7 @@ def _decode(value: str) -> Any:
 
 
 def _open_directory(path: Path) -> int:
-    """Create missing owned directories without ever traversing symlinks."""
+    """逐级创建/打开目录并拒绝符号链接；检查最终目录归属并收紧权限，不改既有祖先权限。"""
     current = os.open(path.anchor, _DIRECTORY_FLAGS)
     try:
         for component in path.parts[1:]:
@@ -86,6 +86,7 @@ def _open_directory(path: Path) -> int:
 
 
 class DerivedStore:
+    """持有一个私有数据库连接和目录 fd；上下文退出或 close 时统一释放。"""
     def __init__(self, root: Path | None = None):
         self.root = Path(root) if root is not None else Path.home() / ".local" / "share" / "codex-display" / "index"
         if not self.root.is_absolute() or ".." in self.root.parts or self.root == Path(self.root.anchor):
@@ -134,10 +135,10 @@ class DerivedStore:
             raise StorageError("unsafe-storage-file")
 
     def _verify_location(self) -> None:
+        """重新核对目录、数据库与边车文件，避免打开后路径被替换到其他位置。"""
         if self._closed:
             raise StorageError("storage-closed")
-        # Verify the entire path again without following any symlink. Existing
-        # ancestors are never chmod'ed; only the plugin's own final directory is.
+        # 重走整条路径，不跟随符号链接；既有祖先目录不会被 chmod。
         current = os.open(self.root.anchor, _DIRECTORY_FLAGS)
         try:
             for component in self.root.parts[1:]:
@@ -162,6 +163,7 @@ class DerivedStore:
             os.close(current)
 
     def _initialize(self) -> None:
+        """在单事务中建立受支持版本；sourceInstanceId 跨进程重启保持稳定。"""
         with self._transaction() as connection:
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version not in (0, 1):
@@ -183,6 +185,7 @@ class DerivedStore:
             connection.execute("PRAGMA user_version=1")
 
     class _Transaction:
+        """进程锁内使用 BEGIN IMMEDIATE；仅在调用方成功且路径复核通过后提交。"""
         def __init__(self, store: DerivedStore):
             self.store = store
 
@@ -229,20 +232,24 @@ class DerivedStore:
                 raise StorageError("storage-read-failed") from None
 
     def load_projection(self, thread: str, generation: int, parser_version: str) -> Any | None:
+        """缓存键含来源代次与解析器版本，避免复用重写前或旧规则生成的投影。"""
         row = self._one("SELECT payload FROM projections WHERE thread_id=? AND generation=? AND parser_version=?",
                         (_key(thread), _revision(generation), _key(parser_version)))
         return None if row is None else _decode(row[0])
 
     def save_projection(self, thread: str, generation: int, parser_version: str, payload: Any) -> None:
+        """保存同一来源版本的派生缓存；这不修改轨迹原始记录。"""
         params = (_key(thread), _revision(generation), _key(parser_version), _encode(payload))
         with self._transaction() as connection:
             connection.execute("INSERT INTO projections VALUES(?,?,?,?) ON CONFLICT(thread_id,generation,parser_version) DO UPDATE SET payload=excluded.payload", params)
 
     def load_view(self, thread: str) -> dict[str, Any]:
+        """读取任务级偏好；revision 0 表示尚无保存值，不能当成已提交状态。"""
         row = self._one("SELECT revision,payload FROM views WHERE thread_id=?", (_key(thread),))
         return {"preferenceRevision": 0, "state": None} if row is None else {"preferenceRevision": row[0], "state": _decode(row[1])}
 
     def save_view(self, thread: str, expected: int, state: dict[str, Any]) -> dict[str, Any]:
+        """校验偏好契约后按 revision 比较交换，防止多个 UI 互相覆盖新偏好。"""
         identifier, revision = _key(thread), _revision(expected)
         encoded = _encode(state, maximum=_MAX_VIEW_BYTES)
         if not self._view_validator.is_valid(state):
@@ -256,14 +263,14 @@ class DerivedStore:
             return {"saved": True, "preferenceRevision": current + 1, "state": json.loads(encoded)}
 
     def get_receipt(self, key: str) -> dict[str, Any] | None:
+        """读取持久回执供导出重试恢复；不存在与未确认回执必须由调用方区分。"""
         row = self._one("SELECT revision,payload FROM receipts WHERE key=?", (_key(key),))
         return None if row is None else {"revision": row[0], "value": _decode(row[1])}
 
     def put_receipt(self, key: str, value: Any, expected_revision: int = 0) -> dict[str, Any]:
-        """CAS receipt; expected 0 inserts only, so retry cannot erase evidence.
+        """按 revision 比较交换回执；expected=0 只允许首次插入，重试不能擦掉既有证据。
 
-        Return the current value on conflict. Receipt cleanup is deliberately
-        absent: releasing temporary export resources must not forget outcomes.
+        冲突返回当前回执；不随导出临时资源清理回执，避免重启/重试遗忘已经产生的结果。
         """
         identifier, expected, encoded = _key(key), _revision(expected_revision), _encode(value)
         with self._transaction() as connection:
@@ -275,6 +282,7 @@ class DerivedStore:
             return {"saved": True, "revision": current + 1, "value": json.loads(encoded)}
 
     def close(self) -> None:
+        """幂等释放数据库连接与自有目录 fd；持久缓存和回执继续保留。"""
         with self._lock:
             if self._closed:
                 return

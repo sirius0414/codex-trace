@@ -27,8 +27,7 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
   const relation = snapshot?.relationships.find(item => item.relationshipId === group?.relationshipId);
   const turn = snapshot?.turns.find(item => item.turnId === event?.turnId && item.threadId === event?.threadId);
   useLayoutEffect(() => {
-    // Overlay details replace the usable list surface. Wide split-view details
-    // deliberately leave focus on the row so list arrow navigation still works.
+    // 窄屏覆盖详情需接管焦点；宽屏分栏保持行焦点，让方向键仍能连续浏览列表。
     if (props.overlay && !panel.current?.contains(document.activeElement)) closeButton.current?.focus({ preventScroll: true });
   }, [props.overlay, view.selectedEventId]);
   function close() {
@@ -41,6 +40,7 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
     });
   }
   function containTab(event: React.KeyboardEvent<HTMLElement>) {
+    // 只在覆盖详情时约束 Tab，宽屏分栏允许在列表和详情间正常移动。
     if (!props.overlay || event.key !== 'Tab') return;
     const focusable = [...panel.current!.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],[tabindex]')]
       .filter(element => element.tabIndex >= 0 && !element.hasAttribute('disabled') && !element.closest('[inert]') && element.getClientRects().length > 0);
@@ -59,13 +59,14 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
       textarea.value = text; textarea.style.position = 'fixed'; textarea.style.opacity = '0';
       let success = false;
       try { document.body.appendChild(textarea); textarea.select(); success = document.execCommand('copy'); }
-      catch { /* The host can deny clipboard access; do not claim success. */ }
+      catch { /* 宿主可能拒绝剪贴板访问，失败时不显示复制成功。 */ }
       finally { textarea.remove(); if (active instanceof HTMLElement && active.isConnected) active.focus({ preventScroll: true }); }
       setCopied(success ? '已复制当前已加载内容' : '复制不可用，请选择文本复制');
     }
     setTimeout(() => setCopied(''), 2000);
   }
   function content(part: ContentPart, label: string, value: DetailPart | undefined) {
+    // 来源截断、已保存内容完整性与 UI 分页分别展示；有下一页并不表示来源内容完整。
     const state = value?.completeness ?? event?.content.find(ref => ref.part === part)?.completeness ?? 'notRecorded';
     const output = part === 'output' && label === '输出';
     return <section className="cx-content-part" key={part}>

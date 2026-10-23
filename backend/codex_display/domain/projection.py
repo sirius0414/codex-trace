@@ -1,8 +1,7 @@
-"""Versioned persisted-record projection; this module performs no I/O.
+"""把已校验来源投影为版本化轨迹与详情；领域层不执行 I/O。
 
-API pages are passed in canonical ascending order. The reader reverses descending
-pages before calling this function. Raw ordinals are logical source positions,
-not wall-clock ordering. Only exact identity can attach a raw record to an API item.
+调用方须先把 API 倒序页还原为正序；raw ordinal 表示逻辑位置，不是墙钟时间。
+API 与 raw 只通过精确身份关联，禁止按文本或时间接近合并；正文与列表元数据分开返回。
 """
 from __future__ import annotations
 
@@ -61,11 +60,12 @@ def _timestamp(value: Any) -> int | None:
 
 
 def unknown_status(explanation: str = '没有可靠的任务执行状态记录。') -> dict:
+    """没有可靠证据时显式返回 unknown，避免 UI 根据缺省值推断任务已结束。"""
     return {'value': 'unknown', 'evidence': [], 'lastKnown': None, 'explanation': explanation}
 
 
 def _status(value: Any, scope: str, scope_id: str, source: dict, observed: int | float | None) -> dict:
-    # Cold "inProgress" and "interrupted" are not evidence of desktop execution.
+    # 独立历史读取的 inProgress/interrupted 反映冷读取上下文，不能证明桌面执行状态。
     normalized = {'completed': 'completed', 'failed': 'failed', 'declined': 'stopped'}.get(value) if isinstance(value, str) else None
     if normalized is None:
         return unknown_status('独立历史读取的非终态或中断状态不能证明当前执行状态。')
@@ -76,9 +76,9 @@ def _status(value: Any, scope: str, scope_id: str, source: dict, observed: int |
 
 
 def _timing(start=None, end=None, duration=None, source=None, basis='时间未记录') -> dict:
+    """归一化可证明的时间精度；没有起点时保留时长，不反推时间区间。"""
     start, end, duration = _number(start), _number(end), _number(duration)
-    # The public contract uses integer milliseconds. Rust Duration carries ns;
-    # round explicitly at this adapter boundary, preserving a real sub-ms zero.
+    # 契约要求整数毫秒，Rust Duration 可含纳秒；显式舍入并保留真实的亚毫秒零值。
     start = round(start) if start is not None else None
     end = round(end) if end is not None else None
     duration = round(duration) if duration is not None else None
@@ -86,8 +86,7 @@ def _timing(start=None, end=None, duration=None, source=None, basis='时间未�
         end = None
     if duration is None and start is not None and end is not None:
         duration = end - start
-    # An end timestamp is not a recorded start. Keep that evidence on status /
-    # raw details; the timeline contract has no end-only interval variant.
+    # 只有结束时间无法构成契约支持的时间区间；该证据仍保留在状态或 raw 详情中。
     if start is None:
         end = None
     precision = 'exact' if start is not None and (end is not None or duration is not None) else 'startOnly' if start is not None else 'durationOnly' if duration is not None else 'orderOnly'
@@ -123,6 +122,7 @@ def _content(part: str, text: str, completeness: str = 'unknown') -> dict:
 def _event(thread_id: str, event_id: str, turn_id: str | None, kind: str, parts: dict,
            source: dict, order: int, *, role=None, tool=None, timing=None, status=None,
            call_key=None, completeness='unknown', section=None) -> tuple[dict, dict]:
+    """同时生成轻量事件索引和独立详情正文；索引只标注可读取范围。"""
     parts = {part: text for part, text in parts.items() if isinstance(text, str)}
     summary = _LABELS[kind] + (f' · {tool}' if tool else '')
     parts.setdefault('summary', summary)
@@ -141,6 +141,7 @@ def _event(thread_id: str, event_id: str, turn_id: str | None, kind: str, parts:
 
 
 def _normalize_raw_item(item: dict) -> dict:
+    """在来源边界转换 raw 命名和时间单位，统一交给同一套事件投影规则。"""
     result = dict(item)
     kind = _ITEM_TYPES.get(item.get('type')) if isinstance(item.get('type'), str) else None
     if kind is None:
@@ -167,6 +168,7 @@ def _normalize_raw_item(item: dict) -> dict:
 
 
 def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tuple[dict, dict] | None:
+    """仅投影已知且有 turn/item 身份的类型；未知类型留在原始来源中。"""
     item = wrapper.get('item')
     turn_id = _str(wrapper.get('turnId'))
     if not isinstance(item, dict) or not _str(item.get('id')) or turn_id is None:
@@ -186,7 +188,7 @@ def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tu
     elif kind == 'reasoning':
         summary = _text(item.get('summary'))
         if not summary:
-            return None  # Encrypted/private reasoning is never reconstructed.
+            return None  # 只展示公开摘要，不尝试重建加密或私有推理。
         event_kind, role, parts = 'reasoningSummary', 'assistant', {'output': summary}
     elif kind == 'hookPrompt':
         fragments = item.get('fragments')
@@ -203,8 +205,7 @@ def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tu
         output_field = {'commandExecution': 'aggregatedOutput', 'mcpToolCall': 'result', 'dynamicToolCall': 'contentItems', 'collabAgentToolCall': 'agentsStates'}.get(kind)
         if output_field and item.get(output_field) is not None:
             parts['output'] = _value(item[output_field])
-            # These persisted result fields prove readable bytes, not absence of
-            # upstream truncation. Operation terminality is a separate property.
+            # 结果字段只证明这些字节可读，不证明上游未截断；操作终态也不等于正文完整。
             completeness = 'fragment' if item.get('status') == 'inProgress' else 'unknown'
         else:
             parts['output'] = ''
@@ -229,7 +230,7 @@ def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tu
     elif kind == 'functionCallOutput':
         event_kind, role, tool = 'toolResult', 'tool', _str(item.get('name'))
         parts = {'output': _value(item.get('output'))}
-        # An output's id is not documented as its owning call id.
+        # output 自身的 id 没有被定义为调用 id，不能仅凭它绑定某次调用。
     elif kind == 'contextCompaction':
         event_kind, parts = 'compaction', {'output': '摘要未记录'}
     else:
@@ -239,18 +240,20 @@ def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tu
 
 
 def _raw_source(record: dict, association='physicalRecord') -> dict:
-    # SourceRef is a flat validated contract of scalar fields, not raw payload.
+    # 公开 SourceRef 只复制已校验的标量元数据，不带入原始正文。
     source = dict(record['source'])
     source['association'] = association
     return source
 
 
 def _raw_key(thread_id: str, record: dict, suffix: str = '') -> str:
+    """以物理片段版本和字节位置标识 raw 事件，重写后不会沿用旧身份。"""
     source = record['source']
     return 'event:' + _identity('raw', thread_id, source['segmentId'], source['generation'], source['byteStart'], suffix)
 
 
 def _attach(event: dict, parts: dict, record: dict, association='exactItemId') -> None:
+    """给已精确匹配的事件附加来源和 raw 详情，同一条来源重读不重复追加。"""
     source = _raw_source(record, association)
     is_new = source not in event['sources']
     if is_new:
@@ -263,6 +266,7 @@ def _attach(event: dict, parts: dict, record: dict, association='exactItemId') -
 
 
 def statistics(events: Iterable[dict]) -> dict:
+    """只统计已加载范围；操作累计时长、区间并集与任务墙钟分别表达。"""
     events = list(events)
     tools = {event['callKey'] for event in events if event.get('callKey')}
     starts, ends, durations = [], [], []
@@ -279,6 +283,7 @@ def statistics(events: Iterable[dict]) -> dict:
             category = 'tool' if event['kind'] in ('toolCall', 'collaboration') else 'input' if event['kind'] == 'userMessage' else 'model'
             categories[category].append((start, end if end is not None else start + duration))
     def union(intervals):
+        # 同类并行区间只计一次，避免把重叠操作误当成额外墙钟时间。
         if not intervals:
             return None
         intervals = sorted(intervals)
@@ -299,10 +304,11 @@ def statistics(events: Iterable[dict]) -> dict:
 
 
 def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] = (), api_turns: Iterable[dict] = (), mode: str = 'api') -> dict:
-    """Project known records. Inputs must belong to an identity-checked source catalog.
+    """投影身份已校验的来源目录，返回事件、详情、关系、状态和统计。
 
-    API items/turns are in canonical ascending order; raw records carry canonical
-    logical ordinals. No cross-source correspondence is inferred from text/time.
+    API 模式以官方 item 为主，raw 补充来源和 API 未覆盖的记录；raw 模式才回退到旧格式。
+    API 输入须为正序，raw 按明确 ordinal 排序；继承边界由适配层标注，用量和生命周期
+    会再次按归属过滤。
     """
     if mode not in ('api', 'raw'):
         raise ValueError('unsupported projection mode')
@@ -335,6 +341,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             if pair:
                 event_id = add(pair)
                 official_order[event_id] = ordinal
+    # 新格式 item 已存在时抑制旧 response_item 的重复展示，避免一条操作出现两次。
     persisted_items = any(r['record'].get('type') == 'event_msg' and isinstance(r['record'].get('payload'), dict) and r['record']['payload'].get('type') == 'item_completed' for r in records)
     persisted_compactions = any(e['kind'] == 'compaction' for e in events.values()) or any(r['record'].get('type') == 'event_msg' and isinstance(r['record'].get('payload'), dict) and isinstance(r['record']['payload'].get('item'), dict) and r['record']['payload']['item'].get('type') == 'ContextCompaction' for r in records)
     active_turn = None
@@ -380,8 +387,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                     raw_end = pair[0]['timing']['endMs']
                     raw_terminal = pair[0]['status']['value'] in ('completed', 'failed', 'stopped')
                     prior_terminal = previous['status']['value'] in ('completed', 'failed', 'stopped')
-                    # Persisted completion can arrive before history has projected it.
-                    # A stale API item must not erase that newer, same-ID completion.
+                    # 同身份的 raw 完成记录可能先于 API 更新，不能让滞后 API 擦掉终态。
                     if raw_terminal and (not prior_terminal or (raw_end is not None and previous_end is not None and raw_end > previous_end)):
                         old_sources = previous['sources']
                         old_raw = details[event_id].get('raw')
@@ -394,8 +400,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                     _attach(events[event_id], details[event_id], row)
                     continue
         elif outer == 'event_msg' and subtype in ('sub_agent_activity', 'collab_agent_spawn_end'):
-            # These public records have explicit IDs. They can share an exact
-            # item identity with API history, without matching text or timestamps.
+            # 协作公开记录提供明确 id，可与 API 精确匹配，无须比较文本或时间。
             item = None
             if subtype == 'sub_agent_activity' and _str(payload.get('event_id')):
                 item = _normalize_raw_item({**payload, 'type': 'SubAgentActivity', 'id': payload['event_id']})
@@ -416,7 +421,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                     raw_positions[event_id] = ordinal
                     continue
         elif outer == 'session_meta':
-            # Session instructions are a recorded snapshot, not proof that a skill executed.
+            # 会话指令只是保存的上下文快照，不能据此声称某个 skill 已执行。
             base = payload.get('base_instructions')
             base_text = base.get('text') if isinstance(base, dict) else None
             if isinstance(base_text, str):
@@ -448,7 +453,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                     raw_results.append((row, turn_id, call_key, timing))
                     continue
                 event_id = 'event:' + _identity('call', thread_id, turn_id, call_id) if call_key else _raw_key(thread_id, row)
-                # Duplicate input records are ambiguous unless they are literally the same source.
+                # 相同调用键出现多条输入时保留歧义，不能把独立物理记录强行折叠。
                 if event_id in events:
                     event_id = _raw_key(thread_id, row)
                 pair = _event(thread_id, event_id, turn_id, 'toolCall', {'input': _value(payload.get('input', payload.get('arguments', ''))), 'output': ''}, source, ordinal,
@@ -457,7 +462,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                               completeness='notRecorded')
                 if call_key:
                     raw_calls.setdefault(call_key, []).append(event_id)
-            # Ordinary legacy function calls are omitted in API mode, avoiding duplicate inner tools.
+            # API 模式不再展示普通旧格式内部调用，避免和官方工具项重复计数。
         elif outer == 'compacted' and mode == 'raw' and not persisted_compactions:
             pair = _event(thread_id, _raw_key(thread_id, row), turn_id, 'compaction', {'output': payload.get('message') if isinstance(payload.get('message'), str) else '摘要未记录'}, source, ordinal, timing=timing)
         if pair:
@@ -466,6 +471,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             raw_positions[event_id] = ordinal
         if outer == 'event_msg' and subtype in ('task_complete', 'turn_complete', 'turn_aborted'):
             active_turn = None
+    # 结果晚于输入归并；只有同轮次、同 call_id 且唯一候选时才能附着到调用上。
     for row, turn_id, key, timing in raw_results:
         candidates = raw_calls.get(key, []) if key else []
         payload = row['record']['payload']
@@ -475,7 +481,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             event, parts = events[event_id], details[event_id]
             parts['output'] = parts.get('output', '') + text
             _attach(event, parts, row, 'exactCallId')
-            # A returned custom-tool fragment does not prove the nested operation completed.
+            # 自定义工具返回片段不证明嵌套操作已经完成，因此只标记 fragment。
             event['content'] = [_content(part, value, 'fragment' if part == 'output' else 'unknown') for part, value in parts.items()]
         else:
             source = _raw_source(row)
@@ -483,8 +489,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             event_id = add(pair)
             _attach(events[event_id], details[event_id], row)
             raw_positions[event_id] = row['ordinal']
-    # Official items anchor supplemental raw records. Without a comparable anchor,
-    # keep the supplement in the separate context section instead of guessing.
+    # 以共享精确身份的官方 item 为排序锚点；无可比锚点的 raw 补充项放入上下文区。
     anchors = sorted((raw_positions[eid], ordinal) for eid, ordinal in official_order.items() if eid in raw_positions)
     anchor_positions = [position for position, _ in anchors]
     final_anchor_position = anchor_positions[-1] if anchor_positions else 0
@@ -511,8 +516,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             turn_order[event['turnId']] = len(turn_order)
         parts = details[event['eventId']]
         prior = {p['part']: p for p in event['content']}
-        # Only source/raw attachment changes these parts after event creation.
-        # Returned tool fragments already rebuild their output metadata above.
+        # 事件创建后这里只会增加 source/raw，工具输出片段已在前面更新自己的读取元数据。
         event['content'] = [prior[part] if part in prior and part not in ('source', 'raw')
                             else _content(part, value, prior.get(part, {}).get('completeness', 'unknown'))
                             for part, value in parts.items()]
@@ -520,9 +524,8 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
     for turn_id in lifecycle:
         if turn_id not in turn_order:
             turn_order[turn_id] = len(turn_order)
-    # Raw first appearance is a logical sequence, independent of wall-clock time.
-    # API-only turns retain official order; raw-only turns are inserted around
-    # their exact shared turn IDs rather than appended after a later API page.
+    # raw 首次出现顺序与墙钟无关；API 独有轮次保持官方顺序，raw 独有轮次按共享 turn ID
+    # 插入附近，避免把早期轮次错误追加到较新的 API 页后。
     official_turns, official_turn_set = [], set()
     for wrapped_turn in api_turns:
         turn = wrapped_turn.get('turn', wrapped_turn)
@@ -533,8 +536,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
         if event['eventId'] in official_order and event['turnId'] not in official_turn_set:
             official_turns.append(event['turnId'])
             official_turn_set.add(event['turnId'])
-    # Accumulate insertions before each exact official anchor, then flatten once.
-    # Repeated list.index/insertion made many-turn histories quadratic.
+    # 先按锚点收集插入项，再一次展开，避免大量轮次下反复 list.index/insert 的平方开销。
     insertions, pending = {}, []
     for turn_id in raw_turn_order:
         if turn_id in official_turn_set:

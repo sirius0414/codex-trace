@@ -17,6 +17,7 @@ export function eventIcon(event: TraceEvent): IconName {
 export function eventColor(event: TraceEvent) {
   return event.status.value === 'failed' ? 'error' : ['assistantMessage', 'reasoningSummary', 'compaction'].includes(event.kind) ? 'model' : ['toolCall', 'toolResult', 'collaboration'].includes(event.kind) ? 'tool' : event.kind === 'userMessage' ? 'input' : 'context';
 }
+/** 虚拟列表只挂载可见行；阅读位置以事件 ID 和行内偏移保存，分页/更新后再定位。 */
 export default function EventList(props: TraceUIProps & { visible: TraceEvent[]; onCount: (count: number) => void }) {
   const { snapshot, view, visible } = props;
   const rows = useMemo(() => snapshot ? makeRows(snapshot, view, visible) : [], [snapshot, visible, view.expandedTurnIds, view.expandedGroupIds, view.agentScope]);
@@ -43,6 +44,7 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
     const element = scroll.current;
     if (!element) return;
     const generation = ++scrollGeneration.current;
+    // 标记程序滚动，避免 onScroll 把恢复锚点或自动跟随误认为用户主动阅读。
     automatic.current = true;
     element.scrollTop = top;
     lastTop.current = element.scrollTop;
@@ -64,10 +66,8 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
     return () => observer.disconnect();
   }, []);
   useLayoutEffect(() => {
-    // Async preference restore can arrive after the first tail page. Accept
-    // the external anchor even though the thread identity has not changed.
-    // Locally generated scroll updates already carry this same anchor and do
-    // not reposition the viewport again.
+    // 偏好可能晚于首屏返回；同任务下也要接受外部锚点。
+    // 本地滚动已持有同一锚点时不重复定位，避免反馈循环。
     const previous = receivedAnchor.current;
     receivedAnchor.current = view.anchor;
     if (previous?.eventId === view.anchor?.eventId && previous?.offsetPx === view.anchor?.offsetPx && previous?.groupId === view.anchor?.groupId) return;
@@ -102,16 +102,15 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
     } else if (anchor.current) {
       const same = rows.find(row => rowId(row) === anchor.current!.eventId);
       if (same) moveTo(same.top + anchor.current.offsetPx);
-      // Keep the requested anchor and signed offset. A transient page can
-      // remove the earlier-button row before newly loaded records appear,
-      // temporarily requiring a negative scrollTop. Clamping at zero must
-      // not erase that intent; the next complete page can restore it exactly.
+      // 分页过渡时“加载较早”行可能先消失，目标位置可暂时为负。
+      // 浏览器会钳制实际 scrollTop，但这里保留原锚点和带符号偏移，下一页才能精确恢复。
     } else { if (newThread) moveTo(0); capture = true; }
     if (!view.selectedEventId) lastSelected.current = null;
     if (capture) anchor.current = captureAnchor();
   }, [rows, snapshot?.binding.threadId, view.follow, view.selectedEventId]);
   useLayoutEffect(() => {
     if (pendingFocus.current) {
+      // 键盘目标可能尚未挂载；等待虚拟窗口移动后再聚焦，preventScroll 避免二次滚动。
       const button = scroll.current?.querySelector<HTMLButtonElement>(`[data-event-id="${CSS.escape(pendingFocus.current)}"]`);
       if (button) { button.focus({ preventScroll: true }); pendingFocus.current = null; }
     }
@@ -122,6 +121,7 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
     if (!automatic.current) {
       const next = captureAnchor();
       anchor.current = next;
+      // 只有用户向上阅读才暂停跟随；不改变后台读取和任务执行状态。
       props.onView({ anchor: next, ...(element.scrollTop < lastTop.current - 1 ? { follow: 'paused' as const } : {}) });
     }
     lastTop.current = element.scrollTop;

@@ -1,7 +1,7 @@
-"""Publish frozen ZIP files to the fixed local export directory.
+"""把已冻结 ZIP 发布到固定本地目录，不接受 UI 指定路径。
 
-The UI supplies no path. A private temporary file is verified before an atomic,
-no-overwrite hard-link publication in the same directory. No Codex data is read.
+先校验同目录的私有临时文件，再用硬链接原子创建最终名称，已有文件绝不覆盖。
+该层只处理冻结文件；不读取 Codex 来源，也不负责持久化幂等回执。
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _write_all(fd: int, data: bytes | memoryview) -> None:
 
 
 def _open_chain(path: Path) -> int:
-    """Walk existing directories without following any symlink component."""
+    """逐级打开已存在目录，任一层符号链接都不能绕过固定目录边界。"""
     current = os.open(path.anchor, _DIRECTORY_FLAGS)
     try:
         for part in path.parts[1:]:
@@ -52,6 +52,7 @@ def _open_chain(path: Path) -> int:
 
 
 def _verify_bytes(fd: int, expected_size: int, expected_sha256: str) -> None:
+    """读回尺寸和哈希，并要求读取期间文件版本稳定。"""
     for attempt in range(2):
         before = os.fstat(fd)
         if not stat.S_ISREG(before.st_mode) or before.st_size != expected_size:
@@ -69,11 +70,9 @@ def _verify_bytes(fd: int, expected_size: int, expected_sha256: str) -> None:
             raise ValueError("export-checksum-mismatch")
         if _version(before) == _version(after):
             return
-        # The winning publisher removes its temporary hard link after final
-        # readback. A concurrent verifier can see nlink 2 -> 1 and a new ctime
-        # without any byte change. Retry the entire hash once; never ignore
-        # ctime or accept the first pass as stable. Size/mtime, permissions,
-        # ownership and file identity must otherwise be unchanged.
+        # 发布进程在读回后移除临时硬链接，其他核验者可能看到 nlink 2→1 与 ctime
+        # 改变。仅此情形允许重算一次完整哈希；仍不能忽略 ctime 或接受首次不稳定读。
+        # 尺寸、mtime、权限、属主和文件身份必须保持不变。
         cleanup_only = ((before.st_nlink, after.st_nlink) == (2, 1)
                         and _version(before)[:-1] == _version(after)[:-1]
                         and (before.st_mode, before.st_uid, before.st_gid)
@@ -83,7 +82,7 @@ def _verify_bytes(fd: int, expected_size: int, expected_sha256: str) -> None:
 
 
 def _cleanup_owned_temp(directory: int, name: str, owned: tuple[int, int] | None) -> None:
-    """Never clean the final name or a temp name whose identity has changed."""
+    """只清理身份未变的自有临时名称；绝不删除最终文件。"""
     if owned is None:
         return
     try:
@@ -91,12 +90,12 @@ def _cleanup_owned_temp(directory: int, name: str, owned: tuple[int, int] | None
         if stat.S_ISREG(current.st_mode) and _identity(current) == owned:
             os.unlink(name, dir_fd=directory)
     except OSError:
-        # Cleanup must not mask the original failure or remove any other entry.
+        # 清理失败不能掩盖原始异常，也不能改删其他目录项。
         pass
 
 
 class ExportUnconfirmedError(RuntimeError):
-    """Publication succeeded, but the caller must verify this same candidate."""
+    """最终名称已发布但结果未确认；调用方只能继续核验同一候选。"""
 
     def __init__(self, candidate_result: dict):
         super().__init__("export-unconfirmed")
@@ -104,16 +103,16 @@ class ExportUnconfirmedError(RuntimeError):
 
 
 class ExportStore:
+    """在固定目录中无覆盖发布；恢复时以原候选路径和冻结哈希核验现有文件。"""
+
     def __init__(self, root: Path | None = None):
-        # root is constructor-only injection for local tests/configuration. It is
-        # never accepted from a tool request or from the UI.
+        # root 只允许在构造时由本地配置或测试注入，不能来自工具请求或前端。
         self.root = Path(root) if root is not None else Path.home() / "Downloads" / "Codex Display"
         if not self.root.is_absolute() or ".." in self.root.parts or self.root == Path(self.root.anchor):
             raise ValueError("invalid-export-directory")
 
     def _open_directory(self) -> int:
-        # Existing ancestors, including Downloads, must already be directories.
-        # Only the plugin's own final directory is created or chmod'ed.
+        # Downloads 等祖先目录必须已存在；只创建或修改本插件最终目录的权限。
         parent = _open_chain(self.root.parent)
         try:
             try:
@@ -145,11 +144,9 @@ class ExportStore:
             raise ValueError("invalid-export-result")
 
     def reserve(self, size: int, sha256: str, prefix: str = "codex-display") -> dict:
-        """Choose one final name before the caller durably records its receipt.
+        """选择唯一候选文件名，由调用方先持久化，再调用 publish_file。
 
-        This does not create a directory, temporary file or final file. The
-        caller must persist this exact candidate before calling publish_file;
-        retrying publication must never reserve another candidate.
+        此处不创建目录或文件；同一保存请求重试时必须复用原候选，不能再次分配。
         """
         if type(size) is not int or not 0 <= size <= _MAX_BYTES:
             raise ValueError("invalid-export-size")
@@ -162,12 +159,10 @@ class ExportStore:
                 "bytes": size, "sha256": sha256, "verified": False}
 
     def verify_saved(self, result: dict) -> dict:
-        """Re-read a server-cached result; never recreate or repair an export.
+        """读回服务端持久化的候选；不重建、不修复用户移动或删除的文件。
 
-        A result must name a generated basename directly inside this store's
-        fixed root. It may be an unconfirmed candidate from a publication error;
-        neither cached state is trusted until readback passes. No path supplied
-        by a UI/tool request is accepted here.
+        候选只能是固定目录下的服务端文件名，不能来自 UI 路径。即便历史回执
+        已 verified，本次核验也必须检查实际字节与目录身份。
         """
         self._validate_result(result)
         filename, size, checksum = result["filename"], result["bytes"], result["sha256"]
@@ -196,24 +191,21 @@ class ExportStore:
             os.close(directory)
 
     def publish_file(self, source_fd: int, candidate: dict) -> dict:
-        """Copy a caller-owned frozen ZIP FD without changing its offset.
+        """复制调用方持有的冻结 ZIP 描述符，不改变其读取偏移。
 
-        The only path accepted is the already reserved server-side candidate.
-        Existing candidates are verified without reading source_fd, writing or
-        changing their names; even a missing source can therefore be recovered.
+        目标只能是已预留并持久化的候选。候选已存在时只读回核验，因此临时
+        来源已不存在也能恢复保存结果；核验失败不能换名或覆盖。
         """
         self._validate_result(candidate)
         candidate = dict(candidate)
         if candidate["verified"]:
-            # A previous verified receipt never authorizes recreating a file
-            # that the user subsequently moved or removed.
+            # 历史 verified 回执不能授权重建用户之后移动或删除的文件。
             return self.verify_saved(candidate)
         try:
             return self.verify_saved(candidate)
         except FileNotFoundError:
             pass
-        # All other failures (collision, symlink, replaced parent, corruption)
-        # leave the candidate untouched; callers must not silently choose anew.
+        # 冲突、符号链接、父目录变化或损坏均保留原候选，调用方不能静默另选目标。
         if type(source_fd) is not int or source_fd < 0:
             raise ValueError("invalid-export-source-descriptor")
         before = os.fstat(source_fd)
@@ -240,7 +232,7 @@ class ExportStore:
         return self._publish(candidate, copy_source, existing_ok=True)
 
     def save_bytes(self, payload: bytes, prefix: str = "codex-display") -> dict:
-        """Compatibility path for small M0 probes; production uses file FDs."""
+        """兼容小型 M0 合成探针；正式导出使用文件描述符流式复制。"""
         if not isinstance(payload, bytes):
             raise TypeError("export-payload-must-be-bytes")
         candidate = self.reserve(len(payload), hashlib.sha256(payload).hexdigest(), prefix)
@@ -251,6 +243,7 @@ class ExportStore:
         return self._publish(candidate, copy_bytes, existing_ok=False)
 
     def _publish(self, candidate_result: dict, copy, *, existing_ok: bool) -> dict:
+        """临时写入、fsync、核验、无覆盖发布、最终读回；发布后异常必须保留目标。"""
         filename, size, checksum = candidate_result["filename"], candidate_result["bytes"], candidate_result["sha256"]
         temporary_name = f".codex-display-tmp-{uuid4().hex}"
         directory = self._open_directory()
@@ -270,21 +263,18 @@ class ExportStore:
                 current = os.stat(temporary_name, dir_fd=directory, follow_symlinks=False)
                 if not stat.S_ISREG(current.st_mode) or _identity(current) != owned:
                     raise ValueError("export-temporary-replaced")
-                # link(2) atomically creates the destination only if it does not
-                # already exist. There is no exists-check followed by rename/replace.
+                # link(2) 仅在目标不存在时原子创建名称，避免先检查再 rename 的覆盖竞态。
                 try:
                     os.link(temporary_name, filename, src_dir_fd=directory, dst_dir_fd=directory,
                             follow_symlinks=False)
                 except FileExistsError:
                     if existing_ok:
-                        # A concurrent retry may have published this exact
-                        # candidate while we copied. It must pass readback.
+                        # 复制期间另一重试可能已发布同一候选，仍须通过实际读回核验。
                         return self.verify_saved(candidate_result)
                     raise
                 except Exception:
-                    # A failure injected immediately after a successful link
-                    # may arrive before the assignment below. Check through
-                    # the still-open directory FD, even if its pathname moved.
+                    # link 成功后、标志赋值前也可能抛异常；通过仍持有的目录描述符
+                    # 确认目标归属，即使目录路径已经变化也不误判为未发布。
                     try:
                         entry = os.stat(filename, dir_fd=directory, follow_symlinks=False)
                         publication_complete = stat.S_ISREG(entry.st_mode) and _identity(entry) == owned
@@ -303,8 +293,7 @@ class ExportStore:
                 final = os.stat(filename, dir_fd=directory, follow_symlinks=False)
                 if not stat.S_ISREG(final.st_mode) or _identity(final) != owned:
                     raise ValueError("export-published-file-replaced")
-                # Returning a real path also requires the configured directory name
-                # to still refer to the directory through which this save occurred.
+                # 返回绝对路径前，还需证明该目录名称仍指向本次写入使用的目录。
                 current_directory = _open_chain(self.root)
                 try:
                     if _identity(os.fstat(current_directory)) != directory_identity:
@@ -318,9 +307,8 @@ class ExportStore:
                     os.close(temporary)
                 os.close(directory)
         except Exception:
-            # The published name belongs to this request even when fsync or
-            # readback fails. Preserve it so a retry verifies instead of saving
-            # another copy; never expose the original exception text.
+            # fsync 或读回失败时，已发布名称仍属于原请求；保留供同键核验，避免
+            # 重试另存一份。向上层只报告未确认状态，不泄露底层异常正文。
             if publication_complete:
                 raise ExportUnconfirmedError(candidate_result) from None
             raise

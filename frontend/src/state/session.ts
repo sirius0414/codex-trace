@@ -4,6 +4,7 @@ import { sameBinding } from './binding.mjs';
 import { mergeGroupCoverage } from './coverage.mjs';
 export { sameBinding } from './binding.mjs';
 
+/** 只持有可恢复的偏好和 ID；正文、来源路径及导出材料不进入 ViewState。 */
 export function defaultView(): ViewState {
   return { filters: { text: '', kinds: [], toolName: null, failedOnly: false, timeRange: null },
     agentScope: { kind: 'all', groupId: null }, overviewMode: 'duration', selectedEventId: null,
@@ -12,19 +13,20 @@ export function defaultView(): ViewState {
 
 export type SearchMatches = { contextKey: string; requestKey: string; ids: Set<string> };
 const noSearchMatches = new Set<string>();
+/** 条件变化建立新搜索上下文；同一上下文的分页/修订变化只刷新请求版本。 */
 export function searchKeys(view: ViewState, snapshot: ThreadSnapshot | null) {
   const contextKey = JSON.stringify([view.filters, view.agentScope, snapshot?.binding ?? null, snapshot?.generation ?? null]);
   return { contextKey, requestKey: JSON.stringify([contextKey, snapshot?.revision,
     snapshot?.coverage.loadedSetId, snapshot?.coverage.scopeRevision]) };
 }
-/** New text searches stay empty; updates retain the last confirmed matching set. */
+/** 新查询先显示空结果，避免闪现旧查询结果；同条件更新保留上次已确认集合。 */
 export function searchVisibility(text: string, keys: ReturnType<typeof searchKeys>, cached: SearchMatches | null) {
   if (!text) return { matchedIds: null, searching: false };
   if (!cached || cached.contextKey !== keys.contextKey) return { matchedIds: noSearchMatches, searching: true };
   return { matchedIds: cached.ids, searching: cached.requestKey !== keys.requestKey };
 }
 
-/** Every async channel uses this same gate, including preference and detail reads. */
+/** 观察会话与任务选择共用一道响应门禁，详情和偏好读取也必须经过它。 */
 export class SessionGate {
   open: OpenResult | null = null;
   binding: Binding | null = null;
@@ -50,12 +52,14 @@ export class SessionGate {
   }
   capture() { return { activation: this.activation, binding: this.binding ? { ...this.binding } : null }; }
   accepts(token: ReturnType<SessionGate['capture']>, binding = token.binding) {
+    // 仅 threadId 相同仍可能是重开或重新选择后的旧响应，必须核对完整 Binding。
     return token.activation === this.activation && sameBinding(this.binding, token.binding) && sameBinding(this.binding, binding);
   }
   acceptsOpen(activation: number, viewId: string) { return activation === this.activation && viewId === this.open?.viewSessionId; }
   invalidate() { this.activation += 1; this.binding = null; }
 }
 
+/** 历史页可乱序到达：事件按自身版本合并，元信息按快照版本选择，加载范围另看 scopeRevision。 */
 export function mergeSnapshot(current: ThreadSnapshot | null, incoming: ThreadSnapshot, removed: ReadonlyMap<string, number> = new Map()): ThreadSnapshot {
   if (!current || !sameBinding(current.binding, incoming.binding)) return incoming;
   if (incoming.generation < current.generation) return current;
@@ -63,6 +67,7 @@ export function mergeSnapshot(current: ThreadSnapshot | null, incoming: ThreadSn
   const base = incoming.revision > current.revision || incoming.revision === current.revision && incoming.coverage.scopeRevision >= current.coverage.scopeRevision ? incoming : current;
   const events = new Map(current.events.map(event => [event.eventId, event]));
   for (const event of incoming.events) {
+    // 删除墓碑只拦截删除之前的页，后续合法的新版本仍可再次引入同一事件。
     if ((removed.get(event.eventId) ?? -1) >= incoming.revision) continue;
     const previous = events.get(event.eventId);
     if (!previous || event.eventRevision > previous.eventRevision) events.set(event.eventId, event);
@@ -76,13 +81,16 @@ export function mergeSnapshot(current: ThreadSnapshot | null, incoming: ThreadSn
   return { ...base, events: sorted, coverage, groups: mergeGroupCoverage(base.groups, scopeGroups) };
 }
 
+/** 调用方先校验绑定、generation 和事件版本；分块偏移使用 UTF-8 字节数。
+ * 已有该 part 正文时，只接受紧接其末尾的追加块。
+ */
 export function mergeDetail(current: DetailData | null, response: EventDetail, append: boolean): DetailData {
   const result: DetailData = current?.eventId === response.eventId ? { ...current, parts: { ...current.parts } }
     : { eventId: response.eventId, summary: response.summary, parts: {}, explanation: response.explanation };
   result.summary = response.summary; result.explanation = response.explanation;
   for (const chunk of response.chunks) {
     const previous = result.parts[chunk.part];
-    // Retries of the same page do not append its bytes a second time.
+    // 重试同一页时偏移不再等于末尾，跳过它，避免把同一批字节追加两次。
     const previousBytes = previous ? new TextEncoder().encode(previous.text).length : 0;
     const prefix = append && previous && chunk.byteOffset === previousBytes ? previous.text : '';
     if (append && previous && chunk.byteOffset !== previousBytes) continue;
@@ -92,12 +100,13 @@ export function mergeDetail(current: DetailData | null, response: EventDetail, a
   return result;
 }
 
-/** Explicit stored collapse state wins; first use opens the available turns. */
+/** 首次使用展开已知轮次；已保存的显式折叠状态优先，不因重开而覆盖。 */
 export function restoredView(state: ViewState, revision: number, snapshot: ThreadSnapshot): ViewState {
   return revision === 0 ? { ...state, expandedTurnIds: snapshot.turns.map(turn => turn.turnId) } : state;
 }
 
 export type EventLocation = { anchorEventId: string | null; groupId?: string };
+/** 优先使用事件的已知分组，事件尚未加载时保留锚点自带的分组定位线索。 */
 export function eventLocation(view: ViewState, snapshot: ThreadSnapshot | null, eventId = view.anchor?.eventId ?? view.selectedEventId): EventLocation {
   if (!eventId) return { anchorEventId: null };
   const groupId = snapshot?.events.find(event => event.eventId === eventId)?.groupId
@@ -107,7 +116,7 @@ export function eventLocation(view: ViewState, snapshot: ThreadSnapshot | null, 
 export function isNotFound(failure: unknown): boolean {
   return !!failure && typeof failure === 'object' && 'code' in failure && failure.code === 'notFound';
 }
-/** A missing saved anchor must not trap a reset forever in the old generation. */
+/** 锚点或分组已不可定位时逐级回退，避免重建永远卡在失效定位上；其他错误继续上抛。 */
 export async function readAnchorPage(read: (location: EventLocation) => Promise<ThreadSnapshot>, location: EventLocation) {
   try { return { snapshot: await read(location), missing: false }; }
   catch (failure) {
@@ -129,6 +138,7 @@ export async function readSelectionPage(read: (location: EventLocation) => Promi
   }
 }
 
+/** 定位详情时展开其轮次和祖先创建路径，防环集合也保护不完整的关系数据。 */
 export function selectedView(view: ViewState, snapshot: ThreadSnapshot | null, eventId: string | null): ViewState {
   if (!eventId) return { ...view, selectedEventId: null };
   const event = snapshot?.events.find(value => value.eventId === eventId);
@@ -155,7 +165,7 @@ export function partsForTab(tab: ViewState['detailTab'], available: ContentPart[
   return parts.length ? parts : ['summary'];
 }
 
-/** A preference conflict blocks automatic retries until a fresh explicit reload. */
+/** 每次最多一个 CAS 保存；冲突后暂停自动保存，等待显式重读，避免覆盖另一窗口。 */
 export class PreferenceGate {
   revision = 0;
   blocked = false;
@@ -173,6 +183,7 @@ export class PreferenceGate {
   take() {
     if (this.saving || !this.loaded || this.blocked || !this.pending) return null;
     const request = { expectedPreferenceRevision: this.revision, state: this.pending };
+    // 取走本次快照后，保存期间的新编辑仍可独立进入 pending。
     this.pending = null; this.saving = true; return request;
   }
   finish(result: { saved: boolean; preferenceRevision: number }) {

@@ -1,4 +1,8 @@
-"""M0 SDK-based stdio app. App-only tools; no task mutation endpoints."""
+"""保留的 M0 宿主接入诊断入口；正式插件由 codex_display.app 启动。
+
+诊断工具验证身份字段和合成下载，不提供任务执行变更接口。这里保留 M0 的
+structuredContent 诊断协议；正式任务内容的 UI 私有信封以 app.py 为准。
+"""
 from __future__ import annotations
 
 import asyncio
@@ -34,6 +38,7 @@ OPEN_TOOLS = {
 
 
 def schema(properties=None, required=None):
+    """诊断参数同样拒绝未声明字段，避免采集自由文本或任务正文。"""
     return {"type": "object", "properties": properties or {}, "required": required or [], "additionalProperties": False}
 
 
@@ -88,6 +93,7 @@ async def list_resources():
 
 @server.read_resource()
 async def read_resource(uri):
+    """两个宿主入口复用离线诊断界面，资源 URI 使用固定白名单。"""
     if str(uri) not in (URI, PANEL_URI):
         raise ValueError("unknown-resource")
     path = Path(os.environ.get("CODEX_DISPLAY_UI_PATH", Path(__file__).parents[2] / "ui" / "trajectory-v1.html"))
@@ -95,6 +101,7 @@ async def read_resource(uri):
 
 
 def verify_thread(thread_id: str) -> dict:
+    """只读核对显式选择的身份；冷读状态不能证明原任务仍在运行或已经完成。"""
     from .adapters.history import HistoryAdapter
     executable = os.environ.get("CODEX_DISPLAY_CODEX_EXECUTABLE")
     if not executable or not Path(executable).is_absolute():
@@ -112,9 +119,9 @@ def verify_thread(thread_id: str) -> dict:
 
 @server.call_tool(validate_input=False)
 async def call_tool(name: str, arguments: dict):
+    """执行 M0 诊断协议；合成导出的路径信息单独保留在 app-only 元数据。"""
     try:
-        # SDK default validation echoes offending values in its error message.
-        # Validate the same advertised schemas here, inside the bounded error path.
+        # SDK 默认校验会回显非法值；在统一错误边界内校验同一份对外 schema。
         tool = next((definition for definition in await list_tools() if definition.name == name), None)
         if tool is None:
             raise ValueError("unknown-tool")
@@ -137,7 +144,7 @@ async def call_tool(name: str, arguments: dict):
         elif name == "probe_export_records":
             result = await asyncio.to_thread(service.export_records, arguments["activationId"],
                                             arguments["uiInstanceId"], arguments["requestId"], export_store)
-            # Paths and any later export details stay in the UI-only envelope.
+            # 即便是合成导出，实际保存路径和结果也只进入 UI 私有信封。
             return CallToolResult(content=[TextContent(type="text", text="Local export result is available in the app.")],
                                   _meta={"codex-display/result": result})
         elif name == "probe_thread_identity":
@@ -147,7 +154,7 @@ async def call_tool(name: str, arguments: dict):
         return CallToolResult(content=[TextContent(type="text", text="Local M0 probe result.")], structuredContent=result,
                               _meta={"ui": {"resourceUri": OPEN_TOOLS[name][1]}} if name in OPEN_TOOLS else None)
     except Exception as error:
-        # Do not serialize server errors, commands, paths, or task text into diagnostics.
+        # 诊断错误仅暴露异常类型，不序列化异常正文中的命令、路径或任务文本。
         return CallToolResult(content=[TextContent(type="text", text=f"M0 probe failed ({type(error).__name__}).")], isError=True)
 
 

@@ -9,7 +9,7 @@ function assertCurrent(isCurrent) {
   if (!isCurrent()) throw new LocalExportError('cancelled', '任务选择已变化，旧导出结果不会显示到当前任务。');
 }
 
-/** Rechecking a task is not a new save intent, including equivalent ID edits. */
+/** M0 合成保存探针：等价任务 ID 的重复校验仍复用原保存意图，不能生成第二个请求。 */
 export class LocalExportBinding {
   constructor() { this.clear(); }
   clear() { this.key = null; this.attempt = null; }
@@ -27,7 +27,7 @@ export class LocalExportBinding {
   }
 }
 
-/** One idempotent local save attempt. Retrying never invents a new request ID. */
+/** 单次幂等保存尝试固定请求 ID，并发点击共用进行中的 Promise，重试仍核对原请求。 */
 export class LocalExportAttempt {
   constructor(activation, uiInstanceId, requestId = crypto.randomUUID()) {
     if (!activation || typeof activation.activationId !== 'string' || !UUID.test(activation.activationId) ||
@@ -69,7 +69,7 @@ export class LocalExportAttempt {
   }
 }
 
-/** A lost response does not establish whether the local write already completed. */
+/** 丢失响应或超时无法证明文件未落盘，因此只报告未确认，不报告保存失败。 */
 export function exportFailure(error) {
   const code = ['timeout', 'rpc-error', 'isError', 'invalid-envelope', 'invalid-manifest', 'checksum-mismatch'].includes(error?.code)
     ? error.code : 'unknown';

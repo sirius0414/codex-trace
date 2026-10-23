@@ -20,6 +20,7 @@ def main():
         parser.error("A built codex-display package is required")
     if target.exists():
         parser.error("Output already exists; choose a new generated directory")
+    # 市场使用独立副本，便于在注册前审阅；生成过程不依赖已安装缓存。
     destination = target / "plugins/codex-display"
     destination.parent.mkdir(parents=True)
     shutil.copytree(package, destination)

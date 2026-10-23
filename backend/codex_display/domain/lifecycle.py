@@ -1,4 +1,4 @@
-"""Persisted lifecycle evidence has explicit turn/event scope, never guessed thread scope."""
+"""生命周期必须绑定明确作用域：轮次/操作结束不能外推为整个任务结束。"""
 from copy import deepcopy
 from .evidence import source_ref, timestamp, state, milliseconds
 
@@ -7,6 +7,7 @@ _RELIABLE = {'verifiedHost', 'persistedLifecycle', 'verifiedCompleteCoverage'}
 
 
 def _scoped_state(value, scope, scope_id):
+    """只接受身份、作用域和证据基础均匹配的状态，丢弃无依据的显示值。"""
     evidence = [deepcopy(item) for item in value.get('evidence', [])
                 if item.get('scope') == scope and item.get('scopeId') == scope_id
                 and item.get('status') in _KNOWN and item.get('basis') in _RELIABLE]
@@ -33,17 +34,13 @@ def _merge_evidence(*values):
 
 
 def compose_group_status(parent_group_status, child_thread_status, child_turns, group_id):
-    """Combine an explicit parent observation with identity-bound child evidence.
+    """合并父级观察与身份已确认的子任务证据，不扩大证据原有作用域。
 
-    Loading a child whose thread status is unknown is not a new observation and
-    must not erase the parent's reliable group state. A strictly later child turn
-    can invalidate an older group observation, but can never terminate the group.
-    Missing times cannot establish cross-source order. Turn evidence keeps its
-    original scope; only a child *thread* observation maps to this child group.
+    读取到未知子状态不算新观察，不能覆盖父级的可靠记录。更晚的子轮次只能让旧组状态
+    失效，不能终结整个组。没有可比时间时保留冲突；只有线程级证据可映射到子任务组。
     """
     result = _scoped_state(parent_group_status, 'group', group_id)
-    # Group IDs are the projector's stable main:<threadId> identity, including
-    # when that standalone main group is composed under its confirmed parent.
+    # 子任务独立读取和挂到父任务下时都使用 main:<threadId>，以此约束证据身份。
     child_id = group_id.removeprefix('main:') if group_id.startswith('main:') else None
     if child_id is None:
         return result
@@ -59,8 +56,7 @@ def compose_group_status(parent_group_status, child_thread_status, child_turns, 
         elif child['value'] == result['value'] and child['lastKnown'] == result['lastKnown']:
             result['evidence'] = _merge_evidence(result['evidence'], child['evidence'])
         elif child_at is None or parent_at is None or child_at == parent_at:
-            # Contradictory thread/group observations without a reliable order
-            # cannot be resolved by whichever collector happened to finish last.
+            # 无可靠先后关系的矛盾证据不能由采集完成顺序裁决。
             result['value'] = 'unknown'
             result['evidence'] = _merge_evidence(result['evidence'], child['evidence'])
             result['explanation'] = '子任务与父级观察存在冲突或时间不足；保留最后可靠观察，当前状态未知。'
@@ -84,6 +80,7 @@ def compose_group_status(parent_group_status, child_thread_status, child_turns, 
 
 
 def turn_states(thread_id, records):
+    """只从本任务自身的持久化生命周期记录归约轮次状态。"""
     result = {}
     for row in sorted(records, key=lambda value: value['ordinal']):
         if row.get('projectionExcluded') or row.get('inherited'):
@@ -103,6 +100,7 @@ def turn_states(thread_id, records):
         at = timestamp(record.get('timestamp'))
         source = source_ref(row)
         if kind in ('task_started', 'turn_started'):
+            # 启动曾发生是事实；当前仍在执行需要实时证据，因此保留 unknown。
             result[turn_id] = state('running', 'turn', turn_id, source, at,
                 '已保存该轮次启动；当前是否仍执行没有实时证据。', confirmed=False)
         elif kind in ('task_complete', 'turn_complete'):
@@ -116,6 +114,7 @@ def turn_states(thread_id, records):
 
 
 def thread_explanation(turns):
+    """解释线程状态为何未知；最近一个轮次结束不意味着不会再有下一轮。"""
     if not turns:
         return '没有可靠的任务执行状态记录。'
     latest = max(turns, key=lambda turn: turn['order'])['status']

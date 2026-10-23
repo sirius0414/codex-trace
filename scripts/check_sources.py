@@ -27,6 +27,7 @@ def main():
     for thread_id in args.thread_id:
         try:
             result = verify_thread(thread_id)
+            # 即使身份验证成功，诊断报告也不收集可能含任务正文的标题。
             checks.append({key: value for key, value in result.items() if key != "title"})
         except Exception as error:
             checks.append({"threadId": thread_id, "identityMatches": False, "errorClass": type(error).__name__})

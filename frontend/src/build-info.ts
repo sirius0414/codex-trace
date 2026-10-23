@@ -1,7 +1,7 @@
 type BuildInfo = { version: string; buildId: string; sourceHash: string; builtAt: string };
 declare const __CODEX_DISPLAY_BUILD__: BuildInfo;
 
-// Unbundled component previews have no production build identity.
+// Vite 在打包时注入源码指纹；独立组件预览未经过打包，不能冒用正式构建标识。
 export const buildInfo: BuildInfo = typeof __CODEX_DISPLAY_BUILD__ === 'undefined'
   ? { version: 'dev', buildId: '', sourceHash: '', builtAt: '' }
   : __CODEX_DISPLAY_BUILD__;

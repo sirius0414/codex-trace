@@ -22,6 +22,7 @@ export function relativeTime(milliseconds: number) {
   const seconds = Math.floor(Math.abs(milliseconds) / 1000);
   return `${milliseconds < 0 ? '−' : ''}${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
+/** 仅按可靠结束时间或 exact 时长延伸标记；缺少时长证据时只显示起点。 */
 export function recordedEnd(event: TraceEvent): number | null {
   const { startMs, endMs, durationMs, precision } = event.timing;
   if (startMs == null) return null;
@@ -29,6 +30,7 @@ export function recordedEnd(event: TraceEvent): number | null {
   if (precision === 'exact' && durationMs != null && Number.isFinite(durationMs) && durationMs >= 0 && Math.abs(startMs + durationMs) <= Number.MAX_SAFE_INTEGER) return startMs + durationMs;
   return startMs;
 }
+/** 时间轴原点只认主任务创建证据；无事件时间时退为顺序轴，不把位置解释为时长。 */
 export function overviewFrame(snapshot: Pick<ThreadSnapshot, 'timelineOrigin'> | null, events: TraceEvent[]) {
   const evidence = snapshot?.timelineOrigin;
   const origin = evidence?.basis === 'threadCreatedAt' && evidence.precision === 'second'
@@ -54,8 +56,7 @@ export type OverviewMark = {
   key: string; lane: number; start: number; end: number; events: TraceEvent[]; selected: boolean;
 };
 export function overviewMarks(events: TraceEvent[], options: { min: number; max: number; mode: 'time' | 'order'; selectedEventId: string | null; bins?: number }): OverviewMark[] {
-  // Bound SVG DOM by horizontal cells and three tracks, not source length.
-  // A selected event is always kept separate so its identity stays visible.
+  // 按横向格子和三条轨道聚合，限制 SVG 节点数量；选中事件始终单列，保留定位目标。
   const bins = Math.max(1, Math.min(40, Math.floor(options.bins ?? 40)));
   const groups = new Map<string, OverviewMark>();
   const span = Math.max(1, options.max - options.min);
@@ -72,17 +73,18 @@ export function overviewMarks(events: TraceEvent[], options: { min: number; max:
     if (current) { current.events.push(event); current.start = Math.min(current.start, start); current.end = Math.max(current.end, end); }
     else groups.set(key, { key, lane, start, end, events: [event], selected });
   }
-  // Paint the selected mark last, keeping its keyboard/visual target available.
+  // 选中标记最后绘制，避免被聚合簇遮住，也保留可访问的键盘目标。
   return [...groups.values()].sort((a, b) => Number(a.selected) - Number(b.selected) || a.start - b.start || a.lane - b.lane);
 }
 export function metric(value: UsageMetric | undefined, missing = '—') {
   return value?.availability === 'recorded' ? value.value.toLocaleString('zh-CN') : missing;
 }
 export function latestUsage(values: UsageSnapshot[]) {
-  // Choose a recorded scope, never add cumulative snapshots or child usage.
+  // 优先选任务范围内最新的用量记录，不叠加累计快照或子任务用量。
   const thread = values.filter(value => value.scope === 'thread');
   return (thread.length ? thread : values).reduce<UsageSnapshot | null>((last, item) => !last || item.order > last.order ? item : last, null);
 }
+/** 兼容旧层级范围与显式多选：旧分组含后代，显式多选只包含用户列出的 Agent。 */
 export function groupScope(snapshot: ThreadSnapshot, view: ViewState) {
   if (view.agentScope.kind === 'all') return null;
   if (view.agentScope.kind === 'main') return new Set([snapshot.rootGroupId]);
@@ -96,7 +98,7 @@ export function groupScope(snapshot: ThreadSnapshot, view: ViewState) {
   if (view.agentScope.groupId) add(view.agentScope.groupId);
   return result;
 }
-/** Resolve old saved scopes for the buttons without changing their meaning. */
+/** 将旧偏好范围映射为按钮选中态，沿用原范围语义。 */
 export function selectedAgentIds(snapshot: ThreadSnapshot, view: ViewState): Set<string> {
   return groupScope(snapshot, view) ?? new Set(snapshot.groups.map(group => group.groupId));
 }
@@ -126,10 +128,12 @@ export type ListRow = { key: string; height: number; top: number } & (
   { type: 'warning'; group: Group } |
   { type: 'earlier'; group?: Group }
 );
+/** 锚定首个未完全滚出视口的事件；偏移可为负，以保留前方标题行占据的空间。 */
 export function readingAnchor(rows: ListRow[], scrollTop: number): ViewState['anchor'] {
   const first = rows.find(row => row.type === 'event' && row.top + row.height > scrollTop);
   return first?.type === 'event' ? { eventId: first.event.eventId, groupId: first.event.groupId, offsetPx: scrollTop - first.top } : null;
 }
+/** 将分组/轮次折叠树展平为带绝对 top 的行；行高必须与 EventList/CSS 一致。 */
 export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: TraceEvent[]): ListRow[] {
   const rows: ListRow[] = [];
   let top = 0;
@@ -145,8 +149,7 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
   const unfiltered = !view.filters.text && !view.filters.kinds.length && !view.filters.toolName && !view.filters.failedOnly && !view.filters.timeRange;
   const allowedGroups = groupScope(snapshot, view);
   if (view.agentScope.kind === 'selected') {
-    // Explicit Agent selections are independent sections. An unselected parent,
-    // or its collapsed turn, must never hide a selected descendant.
+    // 显式多选的 Agent 各自成节，未选父任务及其折叠轮次不能隐藏已选后代。
     const selected = selectedAgentIds(snapshot, view);
     const appendEvents = (groupId: string, child: boolean) => {
       const events = visible.filter(event => event.groupId === groupId);
@@ -228,11 +231,11 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
     if (created.length) created.forEach(appendGroup);
     else if (visibleIds.has(event.eventId)) append({ key: `event:${event.eventId}`, type: 'event', event, child: false, height: 28 });
   }
-  // A confirmed child may be readable when its creation event is not in the
-  // loaded page. Keep it accessible without inventing a creation position.
+  // 已确认子任务可能可读，但创建事件尚未加载；保留入口，不虚构其创建位置。
   if (view.agentScope.kind !== 'main') children.filter(group => !rendered.has(group.groupId) && (!group.creationEventId || !snapshot.events.some(event => event.eventId === group.creationEventId))).forEach(appendGroup);
   return rows;
 }
+/** top 单调递增，二分定位首个可见行；上下预挂载少量行以覆盖滚动和键盘移动。 */
 export function virtualWindow(rows: ListRow[], scrollTop: number, height: number, overscan = 5) {
   let low = 0, high = rows.length;
   while (low < high) {

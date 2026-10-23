@@ -1,4 +1,8 @@
-"""Local observation sessions. All task access goes through read-only adapters."""
+"""只读观察服务：隔离页面选择，组织任务投影、分页和导出入口。
+
+任务缓存可被多个页面共享；已加载范围、游标和选择 epoch 属于各自页面。
+所有任务访问都经只读适配器，服务仅持久化派生索引、阅读偏好与导出回执。
+"""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -16,6 +20,7 @@ from .observation import Observation
 SCHEMA_VERSION = "1.0.0"
 PARSER_VERSION = "1.1.0"
 PAGE_SIZE = 200
+# 历史读取受单次页数、缓存条目总数和时间预算约束；触限后保留原游标供继续读取。
 HISTORY_PAGE_BUDGET = 64
 HISTORY_ITEM_LIMIT = 100_000
 HISTORY_TIME_BUDGET_SECONDS = 8.0
@@ -29,6 +34,7 @@ def now_ms():
 
 
 def default_view():
+    """返回可持久化的阅读偏好；不混入任务正文或本地来源路径。"""
     return {"filters": {"text": "", "kinds": [], "toolName": None, "failedOnly": False, "timeRange": None},
             "agentScope": {"kind": "all", "groupId": None}, "overviewMode": "duration",
             "selectedEventId": None, "detailTab": "preview", "expandedTurnIds": [],
@@ -36,6 +42,7 @@ def default_view():
 
 
 class ServiceError(RuntimeError):
+    """可向 UI 返回的稳定错误码与重试提示。"""
     def __init__(self, code, message, retryable=False):
         self.code, self.retryable = code, retryable
         super().__init__(message)
@@ -43,6 +50,8 @@ class ServiceError(RuntimeError):
 
 @dataclass
 class View:
+    """单页面的读取上下文；epoch 每次切换任务递增，loaded 仅含已返回事件。"""
+
     epoch: int = 0
     thread_id: str | None = None
     loaded: set = field(default_factory=set)
@@ -59,6 +68,8 @@ class View:
 
 @dataclass
 class Task:
+    """跨页面共享的任务缓存；generation 表示来源重建，revision 表示投影更新。"""
+
     metadata: dict
     raw: object
     api_items: list
@@ -92,6 +103,8 @@ class Task:
 
 
 class TrajectoryService(Observation):
+    """协调共享投影与页面隔离；全局锁只保护状态提交，不覆盖历史 I/O。"""
+
     def __init__(self, history, raw, store, projector=None, *, observe=False, exports=None, export_destination=None):
         if projector is None:
             from .domain.projection import project
@@ -108,12 +121,14 @@ class TrajectoryService(Observation):
         self._init_observation(observe)
 
     def _forget_view(self, identifier):
+        """一并失效该页面的变更批次与游标，防止回收后复用旧读取位置。"""
         view = self.views.pop(identifier)
         self._clear_change_batch(view)
         self.cursors = {key: value for key, value in self.cursors.items()
                         if value['binding']['viewSessionId'] != identifier}
 
     def _protected_tasks(self):
+        """活动页面的主任务及其已知子任务不能被缓存淘汰。"""
         roots = {view.thread_id for view in self.views.values() if view.thread_id}
         protected = set(roots)
         for identifier in roots:
@@ -123,7 +138,7 @@ class TrajectoryService(Observation):
         return protected
 
     def _reap(self, *, force=False):
-        """Bound our own caches; persisted preferences/receipts are untouched."""
+        """回收本进程的闲置缓存；持久化偏好和回执按独立生命周期保留。"""
         now = time.monotonic()
         if not force and now - self._last_reap < 60:
             return
@@ -138,6 +153,7 @@ class TrajectoryService(Observation):
                 self._discovery_failures.pop(identifier, None)
 
     def _reserve_task_slot(self, identifier):
+        """优先淘汰未受保护任务；仍无空间时返回资源错误，不伪装成空轨迹。"""
         self._reap(force=True)
         protected = self._protected_tasks() | {identifier}
         while len(self.tasks) >= MAX_CACHED_TASKS:
@@ -155,6 +171,7 @@ class TrajectoryService(Observation):
             self._discovery_failures.pop(oldest, None)
 
     def open(self, metadata, entrypoint="global"):
+        """创建页面会话；只有已验证的 thread 入口可直接绑定宿主任务。"""
         candidate = candidate_identity(metadata, entrypoint=entrypoint)
         identifier = candidate["candidateThreadId"]
         verified = False
@@ -166,8 +183,7 @@ class TrajectoryService(Observation):
                 pass
         with self.lock:
             self._reap(force=True)
-            # Repeated host activations have no close notification. Under
-            # pressure reclaim only sessions that have not read for a minute.
+            # 宿主重复激活没有关闭通知；容量紧张时只回收至少一分钟未读取的页面。
             if len(self.views) >= MAX_VIEWS:
                 inactive = [(view.last_seen, key) for key, view in self.views.items()
                             if time.monotonic() - view.last_seen >= 60]
@@ -178,7 +194,7 @@ class TrajectoryService(Observation):
             view_id = str(uuid4())
             view = self.views[view_id] = View()
             identity = {"state": "selectionRequired", "reason": "unverified", "explanation": "无法确定当前任务，请选择。"}
-            # Only the thread entrypoint's provenance was verified on this host.
+            # 全局入口的来源语义未获宿主验证，即便携带候选 ID 也必须显式选择。
             if entrypoint == "thread" and identifier:
                 if verified:
                     view.thread_id, view.epoch = identifier, 1
@@ -197,6 +213,7 @@ class TrajectoryService(Observation):
         return self.views[view_id]
 
     def _binding(self, binding, *, select=False):
+        """校验完整 Binding；任务 ID 相同也不能绕过来源、页面与 epoch 隔离。"""
         if binding.get("sourceInstanceId") != self.source_id or binding.get("schemaVersion") != SCHEMA_VERSION:
             raise ServiceError("identityRequired", "数据来源已变化，请重新打开。")
         view = self._view(binding["viewSessionId"])
@@ -206,6 +223,7 @@ class TrajectoryService(Observation):
             raise ServiceError("identityMismatch", "任务 ID 无效。") from None
         epoch = binding["selectionEpoch"]
         if select and epoch > view.epoch:
+            # 任务切换会替换整个阅读范围，旧游标、子任务分页和增量批次均不可沿用。
             self._clear_change_batch(view)
             self.cursors = {key: value for key, value in self.cursors.items()
                             if value['binding']['viewSessionId'] != binding['viewSessionId']}
@@ -220,8 +238,8 @@ class TrajectoryService(Observation):
         return view
 
     def _select(self, binding):
-        # Validate provenance before I/O, then recheck the epoch after the cold
-        # identity read. The global projection lock never covers history I/O.
+        """先只读确认候选任务，再以原 epoch 为条件提交选择，防止慢请求反向覆盖。"""
+        # I/O 前校验来源，I/O 后复查 epoch；等待历史进程时不占用全局投影锁。
         with self.lock:
             if binding.get("sourceInstanceId") != self.source_id or binding.get("schemaVersion") != SCHEMA_VERSION:
                 raise ServiceError("identityRequired", "数据来源已变化，请重新打开。")
@@ -242,6 +260,7 @@ class TrajectoryService(Observation):
             return self._binding(binding, select=True)
 
     def list_threads(self, request):
+        """为未选择任务的有效页面列出候选；不以列表顺序推断当前任务。"""
         with self.lock:
             self._view(request["viewSessionId"])
         page = self.history.list_threads(cursor=request.get("cursor"), limit=50)
@@ -264,6 +283,7 @@ class TrajectoryService(Observation):
             return {"viewSessionId": request["viewSessionId"], "threads": rows, "nextCursor": page.get("nextCursor")}
 
     def _stamp_events(self, task, old=None):
+        """只在事件内容或详情变化时递增事件版本，避免无关投影更新使详情游标失效。"""
         previous = {e["eventId"]: e for e in old.projection["events"]} if old else {}
         for event in task.projection["events"]:
             eid = event["eventId"]
@@ -278,6 +298,7 @@ class TrajectoryService(Observation):
             task.event_hashes[eid] = digest
 
     def _load(self, identifier):
+        """锁外冷读取，锁内去重提交；同一 generation 固定使用 API 或 raw 模式。"""
         with self.lock:
             if identifier in self.tasks:
                 self.tasks[identifier].last_access = time.monotonic()
@@ -290,8 +311,7 @@ class TrajectoryService(Observation):
             page = self.history.read_history(identifier, max_items=PAGE_SIZE)
             items, turns, cursor, mode = list(reversed(page["items"])), list(reversed(page["turns"])), page.get("nextCursor"), "api"
         except Exception:
-            # A single source mode is fixed for this task generation, never mixed
-            # in reaction to a transient later failure.
+            # 后续短暂故障不能触发混合模式，否则事件身份和完成状态的证据会漂移。
             items, turns, cursor, mode = [], [], None, "raw"
             api_error = "历史 API 不可用，当前使用可读取的原始记录。"
         projection = self.project(identifier, raw.records, items, turns, mode=mode)
@@ -313,8 +333,7 @@ class TrajectoryService(Observation):
             task.projection = self._compose(identifier, projection)
             self._stamp_events(task)
         self._observe_wakeup.set()
-        # Persist summaries and source references; details remain independently
-        # readable and are not duplicated into a large serialized cache blob.
+        # 索引只保存摘要和来源引用；详情独立读取，避免重复序列化大段任务内容。
         try:
             self.store.save_projection(identifier, task.generation, PARSER_VERSION,
                                        {key: value for key, value in projection.items() if key != "details"})
@@ -323,6 +342,7 @@ class TrajectoryService(Observation):
         return task
 
     def _cursor(self, kind, binding, task, **values):
+        """签发进程内不透明游标，绑定完整页面选择和来源 generation。"""
         if len(self.cursors) >= 10000:
             raise ServiceError('resourceLimit', '当前阅读位置缓存已达上限，请重新打开此观察页面。', True)
         token = str(uuid4())
@@ -336,6 +356,7 @@ class TrajectoryService(Observation):
         return value
 
     def _coverage(self, view, task, cursor=None):
+        """分别报告已加载范围与来源完整性；索引完成不等于原始来源完整。"""
         raw = task.raw_coverage or task.raw
         sources = raw.sources
         partial = bool(raw.issues) or any(s["state"] != "readable" for s in sources)
@@ -346,6 +367,7 @@ class TrajectoryService(Observation):
                 "searchTextCoverage": "fullLoadedContent", "explanation": ("本地索引暂不可保存；当前已读取内容保留。" if task.index_error else "") + "搜索仅覆盖已加载且已识别记录；原始导出独立于此范围。"}
 
     def _freshness(self, task):
+        """读取健康度与任务执行状态独立；保留每个来源的观察和成功读取时间。"""
         state = "stale" if task.error or task.api_error else "current"
         raw = task.raw_coverage or task.raw
         sources = [{"sourceId": s["sourceId"], "state": "current" if s["state"] in ("readable", "partial") and (task.raw_coverage is not None or not task.error) else "unavailable",
@@ -361,8 +383,7 @@ class TrajectoryService(Observation):
 
     @staticmethod
     def _timeline_origin(metadata):
-        # Official Thread.createdAt is whole Unix seconds. It is a fixed axis
-        # reference, not evidence of execution starting or elapsed duration.
+        # Thread.createdAt 为整秒 Unix 时间，仅作共同坐标基准，不证明执行开始或耗时。
         created = metadata.get('createdAt')
         if type(created) is int and 0 <= created <= 9007199254740:
             return {'timestampMs': created * 1000, 'basis': 'threadCreatedAt', 'precision': 'second',
@@ -371,6 +392,7 @@ class TrajectoryService(Observation):
                 'explanation': '未记录可靠的主任务创建时间；使用绝对时间，不从已加载事件或子任务推断起点。'}
 
     def _snapshot(self, binding, view, task, events, cursor):
+        """生成当前页面的快照；统计只覆盖已加载事件，返回值与共享缓存脱离。"""
         projection = task.projection
         from .domain.projection import statistics
         loaded = [event for event in projection["events"] if event["eventId"] in view.loaded]
@@ -394,14 +416,11 @@ class TrajectoryService(Observation):
         return deepcopy(snapshot)
 
     def _read_earlier_history(self, identifier, task, *, anchor=None, needed=PAGE_SIZE):
-        """Advance exact upstream cursors until enough *recognized* rows exist.
+        """沿上游原游标翻页，直到获得足够的已识别事件或找到阅读锚点。
 
-        Project each new page independently only to locate stable IDs; rebuild
-        the complete projection once per batch. This avoids projecting and
-        copying the increasingly large history after every one of 50 pages for
-        a 10k-event anchor. Old duplicate items/turns cannot overwrite a newer
-        version already present in the task cache. Loaded scope is changed only
-        when read_trajectory actually returns rows to that observer.
+        每页只投影稳定 ID，整批结束后再重建完整投影，避免寻找远端锚点时反复
+        复制增长中的历史。旧页的重复条目不能覆盖缓存中的新版本；只有真正向页面
+        返回的事件才计入 loaded。触限或失败保留可重试的位置，不跳过未接受的页。
         """
         generation = task.generation
         if task.mode != "api" or task.api_cursor is None:
@@ -438,7 +457,7 @@ class TrajectoryService(Observation):
                         known_items.add(key)
                 if len(known_items) > HISTORY_ITEM_LIMIT:
                     limited = True
-                    break  # This page's upstream cursor is retried, not skipped.
+                    break  # 此页未提交；下次重试同一上游游标。
                 turns = []
                 for turn in page["turns"]:
                     if turn.get("id") not in known_turns:
@@ -465,8 +484,7 @@ class TrajectoryService(Observation):
             with self.lock:
                 if task.generation != generation:
                     raise ServiceError("resetRequired", "来源已重建，请重新加载。", True)
-                # Raw commits may run while history I/O is pending. Merge with
-                # the current cache only now, under the short commit lock.
+                # 历史 I/O 期间 raw 投影可能已更新；此时才在短锁内合并当前缓存。
                 current_keys = {(r.get("turnId"), r["item"].get("id")) for r in task.api_items}
                 earlier = [row for chunk in reversed(chunks) for row in chunk
                            if (row.get("turnId"), row["item"].get("id")) not in current_keys]
@@ -485,6 +503,7 @@ class TrajectoryService(Observation):
         return limited
 
     def read_trajectory(self, request):
+        """读取选定分组的一页事件；只允许访问已确认 spawn 关系下的子任务。"""
         binding = request["binding"]
         self._select(binding)
         root = self._load(binding["threadId"])
@@ -500,8 +519,7 @@ class TrajectoryService(Observation):
                 if not edge or edge["type"] != "spawned-by" or edge["resolution"] != "confirmed":
                     raise ServiceError("identityMismatch", "子任务关系未经确认。")
         task = root if identifier == binding["threadId"] else self._load(identifier)
-        # Only this task's history requests serialize; raw reads and unrelated
-        # task updates are never held behind cold API pagination.
+        # 仅串行化同一任务的历史请求，冷分页不会阻塞 raw 读取或其他任务更新。
         with task.io_lock:
             with self.lock:
                 view = self._binding(binding)
@@ -559,6 +577,7 @@ class TrajectoryService(Observation):
                 return snapshot
 
     def read_event(self, request):
+        """分块读取当前 loaded 范围的详情；事件更新会使旧版本详情游标失效。"""
         with self.lock:
             binding = request["binding"]
             view = self._binding(binding)
@@ -591,6 +610,7 @@ class TrajectoryService(Observation):
                     "explanation": "原始关联未记录" if part == "raw" and not text else "当前块为已读取内容。"}
 
     def query_loaded_events(self, request):
+        """搜索指定 loadedSetId/scopeRevision，避免把范围变化后的结果当成同一查询。"""
         with self.lock:
             binding = request["binding"]
             view = self._binding(binding)
@@ -645,6 +665,7 @@ class TrajectoryService(Observation):
                     "untimedExcludedCount": untimed, "searchTextCoverage": "fullLoadedContent", "explanation": "仅搜索已加载的已识别内容。"}
 
     def read_view_state(self, request):
+        """恢复任务级阅读偏好，并为已展开子任务续上观察需求。"""
         with self.lock:
             view = self._binding(request["binding"])
             saved = self.store.load_view(request["binding"]["threadId"])
@@ -657,6 +678,7 @@ class TrajectoryService(Observation):
             return {"binding": dict(request["binding"]), "preferenceRevision": saved["preferenceRevision"], "state": saved["state"] or default_view()}
 
     def save_view_state(self, request):
+        """按偏好版本比较并保存，防止多个页面静默覆盖彼此的阅读位置。"""
         with self.lock:
             view = self._binding(request["binding"])
             saved = self.store.save_view(request["binding"]["threadId"], request["expectedPreferenceRevision"], request["state"])
@@ -669,6 +691,7 @@ class TrajectoryService(Observation):
             return {"binding": dict(request["binding"]), **saved}
 
     def close(self):
+        """停止本插件持有的观察资源；不会控制被观察任务的执行进程。"""
         self._stop_observation()
         if self.exports is not None:
             self.exports.close()
@@ -676,6 +699,7 @@ class TrajectoryService(Observation):
         self.store.close()
 
     def download_records(self, request):
+        """校验选择后委派独立导出；耗时 I/O 后再次拒绝已经过期的页面响应。"""
         from .exports import ExportManager, ExportError
         from .raw_export import RawExportCollector
         with self.lock:
@@ -688,5 +712,6 @@ class TrajectoryService(Observation):
         except ExportError as error:
             raise ServiceError(error.code, str(error), error.retryable) from None
         with self.lock:
+            # 此检查仅隔离响应路由；切换页面不能取消已接受的持久保存请求。
             self._binding(request['binding'])
         return result
