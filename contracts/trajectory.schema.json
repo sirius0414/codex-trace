@@ -2168,58 +2168,86 @@
       "additionalProperties": false
     },
     "AgentScope": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": [
-            "all",
-            "main",
-            "group"
+      "description": "Selected scopes contain exact Agent group IDs, including an empty selection. Legacy all/main/group scopes remain readable; group includes descendants.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "all",
+                "main",
+                "group"
+              ]
+            },
+            "groupId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "groupId"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "group"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "groupId": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "groupId": {
+                    "type": "null"
+                  }
+                }
+              }
+            }
           ]
         },
-        "groupId": {
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 512
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "kind",
-        "groupId"
-      ],
-      "additionalProperties": false,
-      "allOf": [
         {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "group"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "groupId": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "selected"
+            },
+            "groupIds": {
+              "type": "array",
+              "items": {
                 "type": "string",
-                "minLength": 1
-              }
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "uniqueItems": true,
+              "maxItems": 10000
             }
           },
-          "else": {
-            "properties": {
-              "groupId": {
-                "type": "null"
-              }
-            }
-          }
+          "required": [
+            "kind",
+            "groupIds"
+          ],
+          "additionalProperties": false
         }
       ]
     },

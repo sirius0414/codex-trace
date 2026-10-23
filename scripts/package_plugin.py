@@ -95,6 +95,10 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
     runtime = verify_runtime(python, versions)
     codex_version = subprocess.run([str(codex), "--version"], capture_output=True, text=True, timeout=15, check=True).stdout.strip()
     html = offline_html(assets)
+    build_info_path = assets / "build-info.json"
+    frontend_build = json.loads(build_info_path.read_text()) if build_info_path.is_file() else None
+    if frontend_build and frontend_build.get("version") != json.loads((ROOT / "plugin/.codex-plugin/plugin.json").read_text())["version"]:
+        raise ValueError("UI build version does not match plugin version; rebuild the frontend first")
     if output.exists():
         raise ValueError(f"Output already exists; select a new output or remove this generated package first: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -120,6 +124,8 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
                     "runtimeBundled": False, "startupNetworkInstallation": False,
                     "minimumPython": "3.14", "entrypoint": "codex_display.app",
                     "limitations": ["This local package binds to an existing absolute Python runtime and Codex executable on this machine.", "Keep those paths installed. Rebuild/reinstall after relocating them; the cache copy contains UI/backend code, not the interpreter."]}
+        if frontend_build:
+            metadata["frontendBuild"] = frontend_build
         (staged / "runtime.json").write_text(json.dumps(metadata, indent=2) + "\n")
         (staged / "INSTALL.txt").write_text("Codex Display 0.1.0 local package\n\nUI, contracts and backend code are included in this cacheable package.\nThe MCP cwd is relative to the installed package; runtime executables are absolute.\nPython >=3.14 with compression.zstd is required. No dependencies are installed at startup.\nKeep runtime.json paths installed; rebuild and reinstall after relocating them.\nOpen Execution Trace from a chat's New Tab menu. The global entry asks you to select a task.\nReload/restart Codex when convenient after an update to refresh plugin resources.\nUninstalling the plugin does not remove ZIPs in ~/Downloads/Codex Display/.\n")
         staged.rename(output)

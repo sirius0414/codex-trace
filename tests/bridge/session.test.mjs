@@ -71,6 +71,17 @@ test('saved collapse and reading state survives restoration while first use expa
   assert.deepEqual(restoredView(defaultView(),0,fixture).expandedTurnIds,fixture.turns.map(turn=>turn.turnId));
 });
 
+test('restoration and queued preference writes preserve exact, empty and legacy Agent scopes',()=>{
+  for (const agentScope of [{kind:'selected',groupIds:['main','nested']},{kind:'selected',groupIds:[]},
+    {kind:'all',groupId:null},{kind:'main',groupId:null},{kind:'group',groupId:'child'}]) {
+    const state={...defaultView(),agentScope};
+    const restored=restoredView(JSON.parse(JSON.stringify(state)),3,fixture);
+    assert.deepEqual(restored.agentScope,agentScope);
+    const gate=new PreferenceGate();gate.restored(3);gate.edit(restored);
+    assert.deepEqual(gate.take().state.agentScope,agentScope);
+  }
+});
+
 test('timeline selection opens collapsed child ancestors and parent creation turn',()=>{
   const snapshot=structuredClone(fixture);
   snapshot.events=[{eventId:'create',turnId:'parent-turn',groupId:'main'}, {eventId:'child-event',turnId:'child-turn',groupId:'child'}];

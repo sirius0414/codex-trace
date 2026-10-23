@@ -99,6 +99,31 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(len(result["eventIds"]), 200)
         self.read(tail["coverage"]["nextCursor"])
         with self.assertRaises(ServiceError): self.service.query_loaded_events(request)
+    def test_loaded_search_respects_exact_agent_selection_including_none(self):
+        tail = self.read()
+        projection = self.service.tasks[A].projection
+        root = projection["groups"][0]
+        projection["groups"] = [root,
+            {**root, "groupId": "child", "parentGroupId": root["groupId"]},
+            {**root, "groupId": "nested", "parentGroupId": "child"},
+            {**root, "groupId": "sibling", "parentGroupId": root["groupId"]}]
+        ids_by_group = {group["groupId"]: [] for group in projection["groups"]}
+        loaded = {event["eventId"] for event in tail["events"]}
+        for index, event in enumerate(projection["events"]):
+            event["groupId"] = list(ids_by_group)[index % 4]
+            if event["eventId"] in loaded:
+                ids_by_group[event["groupId"]].append(event["eventId"])
+        filters = {**default_view()["filters"], "text": "needle-outside-preview"}
+        request = {"binding": self.binding, "loadedSetId": tail["coverage"]["loadedSetId"],
+                   "scopeRevision": tail["coverage"]["scopeRevision"], "filters": filters}
+        for group_ids in ([root["groupId"], "nested"], ["child"], []):
+            query = {**request, "agentScope": {"kind": "selected", "groupIds": group_ids}}
+            validate("QueryLoadedEventsRequest", query)
+            result = self.service.query_loaded_events(query)
+            self.assertEqual(set(result["eventIds"]), {identifier for group_id in group_ids for identifier in ids_by_group[group_id]})
+        legacy = self.service.query_loaded_events({**request, "agentScope": {"kind": "group", "groupId": "child"}})
+        self.assertEqual(set(legacy["eventIds"]), set(ids_by_group["child"] + ids_by_group["nested"]))
+
     def test_detail_chunks_preserve_utf8_and_binding(self):
         tail = self.read()
         request = {"binding": self.binding, "generation": tail["generation"], "eventId": tail["events"][0]["eventId"], "part": "input", "chunkCursor": None}

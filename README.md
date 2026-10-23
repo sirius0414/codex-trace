@@ -57,7 +57,21 @@ PYTHONPATH=backend:tests .venv/bin/python -m unittest discover -s tests -v
 
 ## 安装、更新与卸载
 
-生成可检查的本地市场：
+已有安装和前端依赖时，可以在仓库目录执行一键更新：
+
+```sh
+npm run plugin:update
+```
+
+脚本 `scripts/update_plugin.py` 自动复用已安装插件记录的 Python 环境和 Codex 可执行文件，依次构建、检查契约、打包、隔离验证、生成本地市场、切换注册并重新安装。每次输出到独立的 `build/update-时间戳-随机后缀/`；安装后逐文件比对缓存，并核对本插件的 MCP 启动配置。安装结果保存在该目录的 `installed.json`。保留当前注册的市场目录及其引用的 Python 环境。
+
+界面右下角常驻显示发布版本和 8 位源码指纹，例如 `v0.1.0 · 12ab34cd`；悬浮可查看完整指纹及构建时间。指纹包含当前前后端、契约和构建配置的实际内容，包括未提交的修改。同一源码重复构建保持相同指纹，构建时间单独记录；安装包的 `runtime.json` 中保留对应的 `frontendBuild` 元数据。
+
+可用 `npm run plugin:update -- --python /absolute/path/to/python --codex /absolute/path/to/codex` 覆盖自动查找的路径。脚本不会安装依赖、创建运行环境或自动重启桌面应用；首次安装仍需完成上面的环境准备。默认操作当前 `CODEX_HOME`，未设置时使用 `~/.codex`。
+
+只准备安装包时运行 `npm run plugin:update -- --prepare-only`，随后用 `npm run plugin:update -- --install-prepared /absolute/path/to/build/update-...` 安装该目录。准备和安装必须使用相同的 `CODEX_HOME`。安装阶段失败会尝试恢复原市场注册，并写入 `install-failed.json`；这不代表插件缓存已经回滚，修复后可重新运行更新。更新不删除任务记录、索引或已导出的 ZIP。
+
+也可以分步生成可检查的本地市场：
 
 ```sh
 .venv/bin/python scripts/prepare_marketplace.py \

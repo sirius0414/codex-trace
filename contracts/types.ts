@@ -339,10 +339,13 @@ export type Filters = {
   "timeRange": (TimeRange) | (null);
 };
 
-export type AgentScope = {
+export type AgentScope = ({
   "kind": "all" | "main" | "group";
   "groupId": (string) | (null);
-};
+}) | ({
+  "kind": "selected";
+  "groupIds": Array<string>;
+});
 
 export type ViewState = {
   "filters": Filters;

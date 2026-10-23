@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EventKind } from '../../../contracts/types';
 import type { TraceUIProps } from '../ui-types';
+import { versionDescription, versionLabel } from '../build-info';
 import EventList from './EventList';
 import Inspector, { UsageFacts } from './Inspector';
 import Overview from './Overview';
 import Icon from './icons';
-import { clockTime, kindLabels, statusLabels, visibleEvents } from './model';
+import { clockTime, kindLabels, latestUsage, metric, statusLabels, visibleEvents } from './model';
 
 export default function TraceUI(props: TraceUIProps) {
   const { snapshot, view, onView } = props;
@@ -17,6 +18,7 @@ export default function TraceUI(props: TraceUIProps) {
   const taskInput = useRef<HTMLInputElement>(null);
   const previousThread = useRef(snapshot?.binding.threadId);
   const visible = useMemo(() => snapshot ? visibleEvents(snapshot, view, props.matchedIds) : [], [snapshot, view.filters, view.agentScope, props.matchedIds]);
+  const usage = latestUsage(snapshot?.mainUsage ?? []);
   const done = snapshot?.status.value === 'completed' || snapshot?.status.value === 'stopped' || snapshot?.status.value === 'failed';
   const filter = (patch: Partial<typeof view.filters>) => onView({ follow: 'paused', filters: { ...view.filters, ...patch } });
   useEffect(() => {
@@ -68,7 +70,7 @@ export default function TraceUI(props: TraceUIProps) {
       <span className={`cx-task-status ${snapshot?.status.value ?? 'unknown'}`} title={snapshot?.status.explanation}><span className="cx-status-dot" />{snapshot ? statusLabels[snapshot.status.value] : '未选择'}</span>
       <button className="cx-button cx-download" disabled={!snapshot || props.exporting} aria-label="导出记录" title="导出所选任务可读取的全部原始记录，不受搜索、筛选、分页和折叠影响" onClick={props.onExport}><Icon name="download" /><span>{props.exporting ? '正在导出…' : '导出记录'}</span></button>
     </header>
-    <Overview key={snapshot?.binding.threadId ?? 'empty'} {...props} onUsage={() => setPopover(value => value === 'usage' ? null : 'usage')} usageOpen={popover === 'usage'} />
+    <Overview key={snapshot?.binding.threadId ?? 'empty'} {...props} />
     <div className="cx-filterbar"><label className="cx-search"><Icon name="search" /><input aria-label="搜索已加载记录" value={view.filters.text} placeholder="搜索已加载记录…" onChange={event => filter({ text: event.target.value })} /></label>
       <select className="cx-type" aria-label="事件类型或工具" value={typeValue} onChange={event => filter(event.target.value.startsWith('tool:') ? { kinds: [], toolName: event.target.value.slice(5) } : { kinds: event.target.value === 'all' ? [] : [event.target.value as EventKind], toolName: null })}>
         <option value="all">全部类型</option>{Object.entries(kindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}{tools.length > 0 && <optgroup label="工具名称">{tools.map(tool => <option key={tool} value={`tool:${tool}`}>{tool}</option>)}</optgroup>}
@@ -78,16 +80,23 @@ export default function TraceUI(props: TraceUIProps) {
       <EventList {...props} visible={visible} onCount={setRowCount} />
       {view.selectedEventId && <Inspector {...props} overlay={narrow} />}
     </div>
+    <aside className="cx-usage-bar" aria-label="主任务 token 用量，不受 Agent 筛选影响">
+      <span className="cx-usage-label"><Icon name="usage" />主任务 <small>tokens</small></span>
+      <dl className="cx-usage-metrics"><div><dt>输入</dt><dd>{metric(usage?.input, '未记录')}</dd></div><div><dt>输出</dt><dd>{metric(usage?.output, '未记录')}</dd></div><div><dt>缓存</dt><dd>{metric(usage?.cachedInput, '未记录')}</dd></div></dl>
+      <span className="cx-usage-note">{usage?.cacheSemantics === 'includedInInput' ? '缓存已含在输入中' : usage?.cacheSemantics === 'separate' ? '缓存单独记录' : '缓存归属未记录'}</span>
+      <button className="cx-icon cx-usage-trigger" aria-expanded={popover === 'usage'} aria-label="查看用量范围与说明" title="查看用量范围与说明" onClick={() => setPopover(value => value === 'usage' ? null : 'usage')}><Icon name="info" /></button>
+    </aside>
     <footer className="cx-footer"><span className="cx-count" title={`当前显示 ${rowCount} 行；已加载 ${snapshot?.coverage.loadedEventCount ?? 0} 条已识别记录，包含折叠子任务内容`}>{rowCount} 行 / {snapshot?.coverage.loadedEventCount ?? 0} 条已读</span>
       <button className={`cx-read-status ${props.error || snapshot?.freshness.state === 'stale' || snapshot?.groups.some(group => group.readIssue) ? 'problem' : ''}`} aria-label="查看记录读取状态" onClick={() => setPopover(value => value === 'reading' ? null : 'reading')}><Icon name={props.error ? 'alert' : 'database'} /><span>{props.searching && !props.error ? '正在检索已加载正文…' : readText}</span></button>
       {props.loading && <span className="cx-loading">读取中…</span>}
       {snapshot?.coverage.searchTextCoverage === 'partialLoadedContent' && <span className="cx-partial-search" title={snapshot.coverage.explanation}>搜索范围不完整</span>}
+      <span className="cx-version" title={versionDescription} aria-label={versionDescription}>{versionLabel}</span>
     </footer>
     {popover === 'tasks' && <section className="cx-task-picker" role="dialog" aria-label="选择任务"><div className="cx-picker-search"><label className="cx-search"><Icon name="search" /><input ref={taskInput} value={taskQuery} placeholder="搜索任务…" aria-label="搜索任务" onChange={event => { setTaskQuery(event.target.value); props.onTaskSearch(event.target.value); }} /></label><button className="cx-icon" aria-label="关闭任务选择" onClick={() => setPopover(null)}><Icon name="close" /></button></div>
       <div className="cx-task-scopes" aria-label="任务来源范围"><button aria-pressed={props.threadScope === 'user'} onClick={() => props.onThreadScope('user')}>聊天</button><button aria-pressed={props.threadScope === 'all'} onClick={() => props.onThreadScope('all')}>全部来源</button></div>
       <div className="cx-task-options" role="listbox" aria-label="任务列表">{props.threads.map(thread => <button key={thread.threadId} role="option" aria-selected={thread.threadId === snapshot?.binding.threadId} title={thread.threadId} onClick={() => { props.onTask(thread.threadId); setPopover(null); }}><span>{thread.title || thread.threadId}</span>{props.threadScope === 'all' && <small>{sourceLabel[thread.source]}</small>}</button>)}{!props.threads.length && <p className="cx-note">当前范围没有匹配任务。</p>}{props.threadsMore && <button className="cx-load" onClick={props.onMoreThreads}>加载更多任务</button>}</div>
     </section>}
-    {(popover === 'usage' || popover === 'reading') && <section className="cx-popover" role="dialog" aria-label={popover === 'usage' ? '主任务 token 用量' : '记录读取状态'}><div className="cx-popover-head">{popover === 'usage' ? '主任务 · token 用量' : '记录读取状态'}<button className="cx-icon" aria-label={popover === 'usage' ? '关闭用量' : '关闭读取状态'} onClick={() => setPopover(null)}><Icon name="close" /></button></div>
+    {(popover === 'usage' || popover === 'reading') && <section className={`cx-popover ${popover === 'usage' ? 'cx-usage-popover' : ''}`} role="dialog" aria-label={popover === 'usage' ? '主任务 token 用量' : '记录读取状态'}><div className="cx-popover-head">{popover === 'usage' ? '主任务 · token 用量' : '记录读取状态'}<button className="cx-icon" aria-label={popover === 'usage' ? '关闭用量' : '关闭读取状态'} onClick={() => setPopover(null)}><Icon name="close" /></button></div>
       {popover === 'usage' ? <UsageFacts values={snapshot?.mainUsage ?? []} label="主任务；不受列表筛选影响" /> : <><dl className="cx-facts"><dt>最近成功读取</dt><dd>{clockTime(snapshot?.freshness.lastSuccessfulReadAt)}</dd><dt>最近已知进展</dt><dd>{clockTime(snapshot?.freshness.lastProgressAt)}</dd></dl><p>{props.error || snapshot?.freshness.limitation || '读取成功本身不表示任务有新的进展。'}</p><p>{snapshot?.coverage.explanation}</p>{snapshot?.freshness.sources.filter(source => source.reason).map(source => <p key={source.sourceId}>{source.sourceId}：{source.reason}</p>)}<p>跟随只影响滚动。部分工具输出结束后保存，任务状态由已有证据独立判断。</p>{props.error && <button className="cx-button" onClick={props.onRetry}>重试读取</button>}</>}
     </section>}
     {props.exportMessage && <div className="cx-export-message" role="status" tabIndex={0} aria-label="导出结果">{props.exportMessage}</div>}

@@ -86,6 +86,7 @@ export function latestUsage(values: UsageSnapshot[]) {
 export function groupScope(snapshot: ThreadSnapshot, view: ViewState) {
   if (view.agentScope.kind === 'all') return null;
   if (view.agentScope.kind === 'main') return new Set([snapshot.rootGroupId]);
+  if (view.agentScope.kind === 'selected') return new Set(view.agentScope.groupIds);
   const result = new Set<string>();
   const add = (id: string) => {
     if (result.has(id)) return;
@@ -94,6 +95,10 @@ export function groupScope(snapshot: ThreadSnapshot, view: ViewState) {
   };
   if (view.agentScope.groupId) add(view.agentScope.groupId);
   return result;
+}
+/** Resolve old saved scopes for the buttons without changing their meaning. */
+export function selectedAgentIds(snapshot: ThreadSnapshot, view: ViewState): Set<string> {
+  return groupScope(snapshot, view) ?? new Set(snapshot.groups.map(group => group.groupId));
 }
 export function scopedEvents(snapshot: ThreadSnapshot, view: ViewState) {
   const groups = groupScope(snapshot, view);
@@ -139,6 +144,42 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
   const expandedGroups = new Set(view.expandedGroupIds);
   const unfiltered = !view.filters.text && !view.filters.kinds.length && !view.filters.toolName && !view.filters.failedOnly && !view.filters.timeRange;
   const allowedGroups = groupScope(snapshot, view);
+  if (view.agentScope.kind === 'selected') {
+    // Explicit Agent selections are independent sections. An unselected parent,
+    // or its collapsed turn, must never hide a selected descendant.
+    const selected = selectedAgentIds(snapshot, view);
+    const appendEvents = (groupId: string, child: boolean) => {
+      const events = visible.filter(event => event.groupId === groupId);
+      const counts = new Map<string | null, number>();
+      for (const event of events) counts.set(event.turnId, (counts.get(event.turnId) ?? 0) + 1);
+      let turn: string | null | undefined;
+      for (const event of events) {
+        if (event.turnId !== turn) {
+          turn = event.turnId;
+          const expanded = turn == null || expandedTurns.has(turn);
+          append({ key: `turn:${groupId}:${turn ?? 'context'}`, type: 'turn', id: turn ?? '__context__',
+            label: turn == null ? '任务上下文 · 位置未记录' : `${child ? '子任务 · ' : ''}第 ${allTurns.get(turn) ?? '—'} 轮`,
+            count: counts.get(turn) ?? 0, expanded, height: 23 });
+        }
+        if (event.turnId && !expandedTurns.has(event.turnId)) continue;
+        append({ key: `event:${event.eventId}`, type: 'event', event, child, height: 28 });
+      }
+    };
+    if (selected.has(snapshot.rootGroupId)) {
+      if (snapshot.coverage.hasEarlier) append({ key: 'earlier', type: 'earlier', height: 23 });
+      appendEvents(snapshot.rootGroupId, false);
+    }
+    for (const group of children) {
+      if (!selected.has(group.groupId) || !unfiltered && !visible.some(event => event.groupId === group.groupId)) continue;
+      const expanded = expandedGroups.has(group.groupId);
+      append({ key: `group:${group.groupId}`, type: 'group', group, expanded, height: 28 });
+      if (group.readIssue) append({ key: `warning:${group.groupId}`, type: 'warning', group, height: 25 });
+      if (!expanded) continue;
+      if (group.hasEarlier && group.nextCursor) append({ key: `earlier:${group.groupId}`, type: 'earlier', group, height: 23 });
+      appendEvents(group.groupId, true);
+    }
+    return rows;
+  }
   if (snapshot.coverage.hasEarlier) append({ key: 'earlier', type: 'earlier', height: 23 });
   const hasVisibleGroup = (group: Group, seen = new Set<string>()): boolean => {
     if (seen.has(group.groupId)) return false;

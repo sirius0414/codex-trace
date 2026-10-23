@@ -3,6 +3,7 @@ import type { TraceUIProps } from '../ui-types';
 import type { TraceEvent } from '../../../contracts/types';
 import Icon, { type IconName } from './icons';
 import { clockTime, duration, kindLabels, makeRows, readingAnchor, statusLabels, virtualWindow, type ListRow } from './model';
+import { bulkExpansion } from './expansion';
 
 export function eventIcon(event: TraceEvent): IconName {
   if (event.status.value === 'failed') return 'alert';
@@ -19,6 +20,12 @@ export function eventColor(event: TraceEvent) {
 export default function EventList(props: TraceUIProps & { visible: TraceEvent[]; onCount: (count: number) => void }) {
   const { snapshot, view, visible } = props;
   const rows = useMemo(() => snapshot ? makeRows(snapshot, view, visible) : [], [snapshot, visible, view.expandedTurnIds, view.expandedGroupIds, view.agentScope]);
+  const bulk = useMemo(() => snapshot ? {
+    expanded: bulkExpansion(snapshot, view, visible, true),
+    collapsed: bulkExpansion(snapshot, view, visible, false),
+  } : null, [snapshot, visible, view.expandedTurnIds, view.expandedGroupIds, view.agentScope]);
+  const canExpand = bulk && (bulk.expanded.expandedTurnIds.length > view.expandedTurnIds.length || bulk.expanded.expandedGroupIds.length > view.expandedGroupIds.length);
+  const canCollapse = bulk && bulk.collapsed.expandedTurnIds.length < view.expandedTurnIds.length;
   const scroll = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 300 });
   const automatic = useRef(false);
@@ -146,19 +153,23 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
       {row.group.creationEventId && <button className="cx-icon cx-group-detail" aria-label={`查看 ${row.group.name} 创建与来源`} onClick={() => props.onSelect(row.group.creationEventId)}><Icon name="info" /></button>}
     </div>;
     const event = row.event;
-    return <button key={row.key} style={style} className={`cx-row ${row.child ? 'child' : ''} ${event.eventId === view.selectedEventId ? 'selected' : ''}`} data-event-id={event.eventId} aria-pressed={event.eventId === view.selectedEventId} aria-label={`${event.toolName ?? kindLabels[event.kind]}：${event.preview}，${statusLabels[event.status.value]}`}
+    return <button key={row.key} style={style} className={`cx-row kind-${event.kind} ${event.status.value === 'failed' ? 'is-error' : ''} ${row.child ? 'child' : ''} ${event.eventId === view.selectedEventId ? 'selected' : ''}`} data-event-id={event.eventId} aria-pressed={event.eventId === view.selectedEventId} aria-label={`${kindLabels[event.kind]}${event.toolName ? ` ${event.toolName}` : ''}：${event.preview}，${statusLabels[event.status.value]}`}
       onClick={() => props.onSelect(event.eventId)} onKeyDown={key => rowKey(key, event.eventId)}>
-      <span className="cx-operation"><span className={`cx-event-icon ${eventColor(event)}`}><Icon name={eventIcon(event)} /></span><span className="cx-preview" title={event.preview}>{event.toolName ? <code>{event.toolName}</code> : <b>{kindLabels[event.kind]}</b>}{event.preview.replace(/\s+/g, ' ')}</span></span>
+      <span className="cx-operation"><span className={`cx-event-icon ${eventColor(event)}`}><Icon name={eventIcon(event)} /></span><span className="cx-preview" title={event.preview}>{event.toolName ? <>{(event.kind === 'toolCall' || event.kind === 'toolResult') && <span className="cx-kind-label">{event.kind === 'toolCall' ? '调用' : '结果'}</span>}<code>{event.toolName}</code></> : <b>{kindLabels[event.kind]}</b>}{event.preview.replace(/\s+/g, ' ')}</span></span>
       <span className="cx-time">{clockTime(event.timing.startMs)}</span><span className="cx-duration" title={event.timing.basis}>{event.status.value === 'running' && event.timing.durationMs == null ? '…' : duration(event.timing.durationMs)}</span><span className={`cx-state ${event.status.value}`}>{event.status.value === 'failed' ? '× 失败' : event.status.value === 'running' ? '● 执行中' : statusLabels[event.status.value]}</span>
     </button>;
   }
   const selectedHidden = view.selectedEventId && !rows.some(row => rowId(row) === view.selectedEventId);
+  const noAgentsSelected = view.agentScope.kind === 'selected' && view.agentScope.groupIds.length === 0;
   return <section className="cx-ledger" aria-label="操作记录">
-    <div className="cx-column-head"><span>操作</span><span className="cx-time">时间</span><span className="cx-duration">耗时</span><span>状态</span></div>
+    <div className="cx-column-head"><div className="cx-list-actions"><span>操作</span><div className="cx-expand-actions" role="group" aria-label="批量展开和折叠轮次">
+      <button type="button" disabled={!canExpand} title="展开当前筛选结果中的全部已加载轮次" onClick={() => bulk && props.onView(bulk.expanded)}><Icon name="down" />展开全部</button>
+      <button type="button" disabled={!canCollapse} title="折叠当前筛选结果中的全部已加载轮次" onClick={() => bulk && props.onView(bulk.collapsed)}><Icon name="right" />折叠全部</button>
+    </div></div><span className="cx-time">时间</span><span className="cx-duration">耗时</span><span>状态</span></div>
     {selectedHidden && <div className="cx-selection-note" role="status">选中记录不在当前列表中，详情已保留。</div>}
     <div ref={scroll} className="cx-scroll" aria-label="可滚动的操作列表" onScroll={onScroll} tabIndex={rows.length ? -1 : 0}>
       <div className="cx-virtual-content" style={{ height: window.totalHeight }}>{rows.slice(window.start, window.end).map(renderRow)}</div>
-      {!visible.length && <div className="cx-empty"><Icon name="context" /><strong>{props.loading ? '正在读取轨迹…' : props.searching ? '正在检索已加载正文…' : !snapshot ? '选择一个任务查看执行轨迹' : snapshot.events.length ? '已加载记录中无匹配结果' : '暂无可展示事件'}</strong><p>{props.searching ? '检索完成后显示当前条件的匹配记录。' : snapshot?.events.length ? '搜索和筛选只覆盖当前已加载的可读内容。' : snapshot?.coverage.explanation ?? '选择任务后，只读展示已有记录。'}{snapshot && !snapshot.events.length && ' 可从顶部导出可读取的原始记录。'}</p>{props.error && <button className="cx-button" onClick={props.onRetry}>重试读取</button>}</div>}
+      {!visible.length && <div className="cx-empty"><Icon name="context" /><strong>{noAgentsSelected ? '尚未选择 Agent' : props.loading ? '正在读取轨迹…' : props.searching ? '正在检索已加载正文…' : !snapshot ? '选择一个任务查看执行轨迹' : snapshot.events.length ? '已加载记录中无匹配结果' : '暂无可展示事件'}</strong><p>{noAgentsSelected ? '点击上方 Agent 按钮选择要展示的记录。' : props.searching ? '检索完成后显示当前条件的匹配记录。' : snapshot?.events.length ? '搜索和筛选只覆盖当前已加载的可读内容。' : snapshot?.coverage.explanation ?? '选择任务后，只读展示已有记录。'}{!noAgentsSelected && snapshot && !snapshot.events.length && ' 可从顶部导出可读取的原始记录。'}</p>{props.error && <button className="cx-button" onClick={props.onRetry}>重试读取</button>}</div>}
     </div>
   </section>;
 }

@@ -76,6 +76,12 @@ class StorageTests(unittest.TestCase):
                     self.store.save_view("A", 0, value)
         self.assertEqual(self.store.load_view("A")["preferenceRevision"], 0)
 
+    def test_selected_agent_preferences_survive_restart_including_no_agents(self):
+        for revision, group_ids in enumerate((["main", "nested"], [])):
+            state = {**STATE, "agentScope": {"kind": "selected", "groupIds": group_ids}}
+            self.assertTrue(self.store.save_view("A", revision, state)["saved"])
+            self.assertEqual(self.reopen().load_view("A")["state"]["agentScope"], state["agentScope"])
+
     def test_returned_payloads_do_not_alias_caller_mutations(self):
         state = copy.deepcopy(STATE)
         returned = self.store.save_view("A", 0, state)

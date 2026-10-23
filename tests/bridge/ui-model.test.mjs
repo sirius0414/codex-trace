@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { makeRows, virtualWindow, visibleEvents, latestUsage, metric, overviewFrame, overviewMarks, recordedEnd, relativeTime, relationshipEndpoints, readingAnchor } from '../../frontend/src/components/model.ts';
+import { makeRows, virtualWindow, visibleEvents, latestUsage, metric, overviewFrame, overviewMarks, recordedEnd, relativeTime, relationshipEndpoints, readingAnchor, selectedAgentIds } from '../../frontend/src/components/model.ts';
 
 const base = JSON.parse(readFileSync(new URL('../fixtures/contracts/snapshot-running.json', import.meta.url)));
 // Each test adds its own explicit children, including empty/unloaded groups.
@@ -52,6 +52,56 @@ test('child scope retains creation group while main scope excludes child rows', 
   assert.ok(rows.some(row => row.type === 'group'));
   assert.ok(rows.some(row => row.type === 'event' && row.event.eventId === 'child'));
   assert.deepEqual(visibleEvents(data, { ...view, agentScope: { kind: 'main', groupId: null } }, null).map(row => row.eventId), ['create']);
+});
+
+test('Agent buttons select exact groups, including none, while legacy scopes retain their meaning', () => {
+  const groups = [base.groups[0],
+    { ...base.groups[0], groupId: 'child', parentGroupId: base.rootGroupId, creationEventId: 'create-child', kind: 'subtask' },
+    { ...base.groups[0], groupId: 'nested', parentGroupId: 'child', creationEventId: 'create-nested', kind: 'subtask' },
+    { ...base.groups[0], groupId: 'sibling', parentGroupId: base.rootGroupId, creationEventId: 'create-sibling', kind: 'subtask' }];
+  const data = snapshot([event('main'), event('child-event', { groupId: 'child' }), event('nested-event', { groupId: 'nested' }), event('sibling-event', { groupId: 'sibling' })], { groups });
+  const selected = { ...view, agentScope: { kind: 'selected', groupIds: [base.rootGroupId, 'child'] } };
+  assert.deepEqual(visibleEvents(data, selected, null).map(item => item.eventId), ['main', 'child-event']);
+  assert.deepEqual([...selectedAgentIds(data, selected)], [base.rootGroupId, 'child']);
+  const none = { ...selected, agentScope: { kind: 'selected', groupIds: [] } };
+  assert.deepEqual(visibleEvents(data, none, null), []);
+  assert.deepEqual(makeRows({ ...data, coverage: { ...data.coverage, hasEarlier: true } }, none, []), []);
+  assert.deepEqual([...selectedAgentIds(data, view)], groups.map(group => group.groupId));
+  assert.deepEqual([...selectedAgentIds(data, { ...view, agentScope: { kind: 'main', groupId: null } })], [base.rootGroupId]);
+  assert.deepEqual([...selectedAgentIds(data, { ...view, agentScope: { kind: 'group', groupId: 'child' } })], ['child', 'nested']);
+});
+
+test('selected descendants render independently of hidden or collapsed ancestors without their headers', () => {
+  const groups = [base.groups[0],
+    { ...base.groups[0], groupId: 'child', parentGroupId: base.rootGroupId, creationEventId: 'create-child', kind: 'subtask' },
+    { ...base.groups[0], groupId: 'nested', parentGroupId: 'child', creationEventId: 'create-nested', kind: 'subtask' }];
+  const data = snapshot([event('create-child'), event('create-nested', { groupId: 'child', turnId: 'child-turn' }),
+    event('nested-event', { groupId: 'nested', turnId: 'nested-turn' })], { groups });
+  for (const groupIds of [['nested'], [base.rootGroupId, 'nested'], ['child', 'nested']]) {
+    const selected = { ...view, agentScope: { kind: 'selected', groupIds }, expandedTurnIds: ['nested-turn'], expandedGroupIds: ['nested'] };
+    const rows = makeRows(data, selected, visibleEvents(data, selected, null));
+    assert.deepEqual(rows.filter(row => row.type === 'event').map(row => row.event.eventId), ['nested-event']);
+    assert.deepEqual(rows.filter(row => row.type === 'group').map(row => row.group.groupId), groupIds.filter(id => id !== base.rootGroupId));
+    assert.deepEqual(rows.filter(row => row.type === 'turn').map(row => row.id), groupIds.includes(base.rootGroupId) ? ['turn-1', 'nested-turn'] : ['nested-turn']);
+    assert.equal(new Set(rows.map(row => row.key)).size, rows.length);
+  }
+});
+
+test('selected Agent rows preserve creation events, per-Agent paging and active filters', () => {
+  const group = { ...base.groups[0], groupId: 'child', parentGroupId: base.rootGroupId, creationEventId: 'create', kind: 'subtask', hasEarlier: true, nextCursor: 'child-page' };
+  const data = snapshot([event('create', { kind: 'collaboration' }), event('child-event', { groupId: 'child', turnId: 'child-turn' })],
+    { groups: [...base.groups, group], coverage: { ...base.coverage, hasEarlier: true } });
+  const selected = { ...view, agentScope: { kind: 'selected', groupIds: [base.rootGroupId, 'child'] }, expandedGroupIds: ['child'] };
+  const rows = makeRows(data, selected, visibleEvents(data, selected, null));
+  assert.deepEqual(rows.filter(row => row.type === 'event').map(row => row.event.eventId), ['create', 'child-event']);
+  assert.deepEqual(rows.filter(row => row.type === 'earlier').map(row => row.group?.groupId), [undefined, 'child']);
+  const filtered = { ...selected, filters: { ...selected.filters, text: 'only the child body' } };
+  const matched = visibleEvents(data, filtered, new Set(['child-event']));
+  assert.deepEqual(matched.map(item => item.eventId), ['child-event']);
+  const filteredRows = makeRows(data, filtered, matched);
+  assert.deepEqual(filteredRows.filter(row => row.type === 'event').map(row => row.event.eventId), ['child-event']);
+  assert.deepEqual(filteredRows.filter(row => row.type === 'group').map(row => row.group.groupId), ['child']);
+  assert.ok(!makeRows(data, filtered, []).some(row => row.type === 'group'));
 });
 
 test('server matched IDs support body matches absent from previews', () => {

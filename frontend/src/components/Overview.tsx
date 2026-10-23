@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TraceUIProps } from '../ui-types';
 import Icon from './icons';
-import { clockTime, kindLabels, latestUsage, metric, overviewFrame, overviewMarks, recordedEnd, relativeTime, scopedEvents, type OverviewMark } from './model';
+import { clockTime, kindLabels, overviewFrame, overviewMarks, recordedEnd, relativeTime, scopedEvents, selectedAgentIds, type OverviewMark } from './model';
 
-export default function Overview(props: TraceUIProps & { onUsage: () => void; usageOpen: boolean }) {
+export default function Overview(props: TraceUIProps) {
   const { snapshot, view, onView } = props;
   const [zoomWindow, setZoomWindow] = useState<{ min: number; max: number } | null>(null);
   const [drag, setDrag] = useState<[number, number] | null>(null);
@@ -19,14 +19,24 @@ export default function Overview(props: TraceUIProps & { onUsage: () => void; us
   const marks = useMemo(() => overviewMarks(events, { min, max, mode: ordered ? 'order' : 'time', selectedEventId: view.selectedEventId, bins: Math.floor(width / 24) }), [events, min, max, ordered, view.selectedEventId, width]);
   const selectedCluster = cluster ? marks.find(mark => mark.key === cluster.key) : null;
   const clusterPage = Math.min(cluster?.page ?? 0, Math.max(0, Math.ceil((selectedCluster?.events.length ?? 0) / 20) - 1));
-  const usage = latestUsage(snapshot?.mainUsage ?? []);
+  const agents = snapshot ? [
+    { groupId: snapshot.rootGroupId, name: '主 Agent' },
+    ...snapshot.groups.filter(group => group.groupId !== snapshot.rootGroupId),
+  ] : [];
+  const selectedAgents = snapshot ? selectedAgentIds(snapshot, view) : new Set<string>();
+  function toggleAgent(groupId: string) {
+    const next = new Set(selectedAgents);
+    if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
+    onView({ follow: 'paused', agentScope: { kind: 'selected', groupIds: [...next] },
+      expandedGroupIds: next.has(groupId) ? [...new Set([...view.expandedGroupIds, groupId])] : view.expandedGroupIds });
+  }
   useEffect(() => {
     if (!svg.current) return;
     const observer = new ResizeObserver(entries => setWidth(Math.max(1, entries[0].contentRect.width)));
     observer.observe(svg.current);
     return () => observer.disconnect();
   }, [view.overviewMode]);
-  useEffect(() => { setZoomWindow(null); setCluster(null); }, [view.agentScope.kind, view.agentScope.groupId, ordered, origin]);
+  useEffect(() => { setZoomWindow(null); setCluster(null); }, [view.agentScope, ordered, origin]);
   useEffect(() => { if (cluster) chooser.current?.querySelector<HTMLButtonElement>('button')?.focus(); }, [cluster?.key]);
   useEffect(() => {
     if (!cluster) return;
@@ -81,44 +91,45 @@ export default function Overview(props: TraceUIProps & { onUsage: () => void; us
   const turnRows = snapshot?.turns.filter(turn => turnItems.has(`${turn.threadId}:${turn.turnId}`)) ?? [];
   const requestKeys = new Set(events.map(event => event.modelRequestKey).filter(Boolean));
   return <section className="cx-overview" aria-label="执行概览">
+    <div className="cx-agent-bar">
+      <span className="cx-agent-label">Agent <small>多选</small></span>
+      <div className="cx-agent-buttons" role="group" aria-label="Agent 查看范围，可多选">
+        {agents.map(agent => <button key={agent.groupId} className="cx-agent-button" aria-pressed={selectedAgents.has(agent.groupId)} title={agent.name} onClick={() => toggleAgent(agent.groupId)}>
+          <Icon name={selectedAgents.has(agent.groupId) ? 'check' : agent.groupId === snapshot?.rootGroupId ? 'model' : 'branch'} /><span>{agent.name}</span>
+        </button>)}
+        {!snapshot && <span className="cx-muted">选择任务后显示 Agent</span>}
+      </div>
+    </div>
     <div className="cx-overview-toolbar">
       <div className="cx-modes" aria-label="概览方式">{([['duration', '时长'], ['turns', '轮次'], ['calls', '调用']] as const).map(([mode, label]) =>
         <button key={mode} aria-pressed={view.overviewMode === mode} onClick={() => { onView({ overviewMode: mode }); setCluster(null); }}>{label}</button>)}</div>
-      <select className="cx-agent-scope" aria-label="Agent 查看范围" value={view.agentScope.kind === 'group' ? view.agentScope.groupId ?? 'all' : view.agentScope.kind}
-        onChange={event => onView({ follow: 'paused', agentScope: event.target.value === 'all' || event.target.value === 'main' ? { kind: event.target.value, groupId: null } : { kind: 'group', groupId: event.target.value } })}>
-        <option value="all">整个任务</option><option value="main">主 Agent</option>
-        {snapshot?.groups.filter(group => group.kind !== 'main').map(group => <option key={group.groupId} value={group.groupId}>{group.name}</option>)}
-      </select>
       <div className="cx-range">{range && <><span title={`当前时间区间；${frame.explanation}`}>{ordered ? '时间筛选' : `${axisTime(range.startMs)}–${axisTime(range.endMs)}`}</span><button className="cx-icon" aria-label="取消区间筛选" onClick={() => onView({ filters: { ...view.filters, timeRange: null } })}><Icon name="close" /></button></>}</div>
-      <button className="cx-usage-trigger" aria-expanded={props.usageOpen} aria-label="查看主任务 token 用量" onClick={props.onUsage}>
-        <span className="cx-usage-wide">主任务 · 输入 <b>{metric(usage?.input)}</b> / 输出 <b>{metric(usage?.output)}</b> / 缓存 <b>{metric(usage?.cachedInput)}</b></span>
-        <span className="cx-usage-short"><Icon name="usage" />用量</span>
-      </button>
       {view.overviewMode === 'duration' && <button className="cx-icon cx-zoom" aria-label={zoomWindow ? '恢复全部概览范围' : ordered ? '放大记录顺序' : '放大时间范围'} disabled={!events.length} onClick={() => { setCluster(null); setZoomWindow(zoomWindow ? null : !ordered && range ? { min: range.startMs, max: Math.max(range.startMs + 1, range.endMs) } : { min: fullMin + (fullMax - fullMin) / 2, max: fullMax }); }}><Icon name={zoomWindow ? 'zoomOut' : 'zoomIn'} /></button>}
     </div>
     {view.overviewMode === 'duration' ? <div className="cx-chart">
       <div className="cx-lane-labels"><span>输入</span><span>模型</span><span>工具</span></div>
-      <svg ref={svg} className={`cx-timeline ${ordered ? 'ordered' : ''}`} viewBox="0 0 1000 36" preserveAspectRatio="none" role="group" aria-label={`${frame.explanation}${ordered ? '' : '拖动选择区间，无准确时长只标起点。'}`}
+      <svg ref={svg} className={`cx-timeline ${ordered ? 'ordered' : ''}`} viewBox="0 0 1000 90" preserveAspectRatio="none" role="group" aria-label={`${frame.explanation}${ordered ? '' : '拖动选择区间，无准确时长只标起点。'}`}
         onPointerDown={startDrag} onPointerMove={event => drag && setDrag([drag[0], x(event)])} onPointerUp={endDrag} onPointerCancel={() => setDrag(null)}>
-        {[0, 250, 500, 750, 1000].map(position => <line key={position} x1={position} x2={position} y1="0" y2="36" className="cx-gridline" />)}
-        {brush && <rect x={Math.max(0, coordinate(brush.startMs))} width={Math.max(0, Math.min(1000, coordinate(brush.endMs)) - Math.max(0, coordinate(brush.startMs)))} y="0" height="36" className="cx-range-brush" />}
+        {[0, 250, 500, 750, 1000].map(position => <line key={position} x1={position} x2={position} y1="0" y2="90" className="cx-gridline" />)}
+        {brush && <rect x={Math.max(0, coordinate(brush.startMs))} width={Math.max(0, Math.min(1000, coordinate(brush.endMs)) - Math.max(0, coordinate(brush.startMs)))} y="0" height="90" className="cx-range-brush" />}
         {marks.map(mark => {
           const event = mark.events[0], count = mark.events.length, grouped = count > 1;
           const position = Math.max(0, coordinate(mark.start));
           // A cluster extent denotes a range of records, never one operation's duration.
           const extent = Math.max(3, Math.min(1000, coordinate(mark.end)) - position);
           const isChild = !grouped && event.groupId !== snapshot?.rootGroupId;
-          const y = mark.lane * 12 + (mark.lane === 2 && isChild ? 7 : 3);
+          const y = mark.lane * 30 + (mark.lane === 2 && isChild ? 17 : 7);
           const label = grouped ? `${count} 条记录的聚合簇，点击选择具体记录` : `${event.toolName ?? kindLabels[event.kind]}：${event.preview}`;
           return <g key={mark.key} role="button" tabIndex={0} data-overview-key={mark.key} data-event-id={grouped ? undefined : event.eventId} aria-label={label} aria-haspopup={grouped ? 'dialog' : undefined} aria-expanded={grouped ? cluster?.key === mark.key : undefined} className={`cx-svg-mark lane-${mark.lane} ${grouped ? 'cluster' : event.status.value} ${isChild ? 'child' : ''} ${mark.selected ? 'selected' : ''}`}
             onClick={() => openMark(mark)} onKeyDown={key => { if (key.key === 'Enter' || key.key === ' ') { key.preventDefault(); openMark(mark); } }}>
             <title>{grouped ? `${count} 条记录；可能包含主任务与子任务，范围不表示单次操作时长` : `${event.preview} · ${ordered ? '时间未记录，仅显示顺序' : event.timing.durationMs == null ? '时长未记录' : `${event.timing.durationMs} ms`}`}</title>
-            <rect x={position - 1} y={mark.lane * 12} width={Math.max(7, extent + 2)} height="12" fill="transparent" stroke="none" />
-            <rect className="cx-visible-mark" x={position} y={y} width={extent} height={grouped ? 8 : mark.lane === 2 ? 4 : 6} rx="1" />
-            {grouped && <text transform={`translate(${Math.min(990, position + 3)} ${mark.lane * 12 + 10}) scale(${1000 / width} 1)`} style={{ fontSize: '9px' }}>{count}</text>}
+            <rect x={position - 1} y={mark.lane * 30} width={Math.max(7, extent + 2)} height="30" fill="transparent" stroke="none" />
+            <rect className="cx-visible-mark" x={position} y={y} width={extent} height={grouped ? 16 : mark.lane === 2 ? 9 : 14} rx="2" />
+            {grouped && <text transform={`translate(${Math.min(990, position + 3)} ${mark.lane * 30 + 19}) scale(${1000 / width} 1)`}>{count}</text>}
           </g>;
         })}
       </svg>
+      {!events.length && <span className="cx-chart-empty">{snapshot ? selectedAgents.size ? '暂无可展示的记录' : '选择上方 Agent 查看轨迹' : '选择任务查看轨迹'}</span>}
       <div className={`cx-axis ${ordered ? 'ordered' : ''}`} title={frame.explanation}>{ordered ? <><span>记录顺序 · 时间未记录</span><span>{events.length ? `#${Math.ceil(min)}–#${Math.ceil(max)}` : '无记录'}</span></> : origin == null ? <><span>绝对时间 · 创建时间未记录</span><span title={`${new Date(min).toLocaleString()}–${new Date(max).toLocaleString()}`}>{clockTime(min)}–{clockTime(max)}</span></> : [0, .25, .5, .75, 1].map(fraction => <span key={fraction}>{fraction === 0 ? '创建后 ' : ''}{axisTime(min + (max - min) * fraction)}</span>)}</div>
     </div> : view.overviewMode === 'turns' ? <div className="cx-turns" aria-label="已加载轮次">{turnRows.length ? turnRows.map(turn => {
       const items = turnItems.get(`${turn.threadId}:${turn.turnId}`)!;

@@ -600,13 +600,25 @@ class TrajectoryService(Observation):
             if request["loadedSetId"] != view.loaded_set_id or request["scopeRevision"] != view.scope_revision:
                 raise ServiceError("revisionConflict", "已加载范围发生变化，请重新搜索。", True)
             f, scope = request["filters"], request["agentScope"]
+            selected_groups = None
+            if scope["kind"] == "selected":
+                selected_groups = set(scope["groupIds"])
+            elif scope["kind"] == "group":
+                selected_groups = {scope["groupId"]}
+                pending = [scope["groupId"]]
+                while pending:
+                    parent = pending.pop()
+                    for group in task.projection["groups"]:
+                        if group["parentGroupId"] == parent and group["groupId"] not in selected_groups:
+                            selected_groups.add(group["groupId"])
+                            pending.append(group["groupId"])
             found, untimed = [], 0
             for event in task.projection["events"]:
                 if event["eventId"] not in view.loaded:
                     continue
                 if scope["kind"] == "main" and event["threadId"] != binding["threadId"]:
                     continue
-                if scope["kind"] == "group" and event["groupId"] != scope["groupId"]:
+                if selected_groups is not None and event["groupId"] not in selected_groups:
                     continue
                 if f["kinds"] and event["kind"] not in f["kinds"] or f["toolName"] and event["toolName"] != f["toolName"]:
                     continue

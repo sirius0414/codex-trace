@@ -259,6 +259,18 @@ class ContractTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 validate("AgentScope", invalid)
 
+    def test_selected_agent_scope_accepts_exact_ids_or_none_and_rejects_ambiguous_shapes(self):
+        for scope in ({"kind": "selected", "groupIds": ["main", "nested"]}, {"kind": "selected", "groupIds": []},
+                      {"kind": "all", "groupId": None}, {"kind": "main", "groupId": None}, {"kind": "group", "groupId": "child"}):
+            validate("AgentScope", scope)
+            validate("ViewState", {**read("view-state.json"), "agentScope": scope})
+        for invalid in ({"kind": "selected"}, {"kind": "selected", "groupIds": ["child", "child"]},
+                        {"kind": "selected", "groupIds": [""]}, {"kind": "selected", "groupIds": ["x" * 513]},
+                        {"kind": "selected", "groupIds": None}, {"kind": "selected", "groupIds": [], "groupId": None},
+                        {"kind": "main", "groupId": None, "groupIds": []}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
+                validate("AgentScope", invalid)
+
     def test_view_state_rejects_body_payload(self):
         state = read("view-state.json")
         state["eventContent"] = "private task body"
