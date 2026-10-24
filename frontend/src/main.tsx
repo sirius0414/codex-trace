@@ -4,18 +4,26 @@ import type { ChangeBatch, ContentPart, DownloadResult, EventDetail, ListThreads
   SaveViewStateResult, ThreadSnapshot, ThreadSummary, ViewState } from '../../contracts/types';
 import { TrajectoryClient } from './bridge/client';
 import { defaultView, eventLocation, mergeDetail, mergeSnapshot, partsForTab, readAnchorPage, readSelectionPage, restoredView, searchKeys, searchVisibility, selectedView, PreferenceGate, SessionGate, type EventLocation, type SearchMatches } from './state/session';
-import { ChangeReader, mergeChanges, recordChangeTiming, type ChangeTiming } from './state/changes';
+import { ChangeProtocolError, ChangeReader, mergeChanges, recordChangeTiming, type ChangeTiming } from './state/changes';
 import { readDetailWindow } from './state/detail';
+import { rebuildLoadedSnapshot } from './state/rebuild';
 import { ExportCoordinator } from './state/export';
 import { GroupReader } from './state/groups';
 import TraceUI from './components/TraceUI';
 import type { DetailData } from './ui-types';
+import { PreferencesProvider, usePreferences } from './preferences';
+import { localizeClientError } from './ui-preferences';
 import './style.css';
 
 type Token = ReturnType<SessionGate['capture']>;
+// 保留双语提示，在渲染时选取语言，避免切换语言重建连接或丢失已有反馈。
+type AppMessage = string | { zh: string; en: string };
+const translated = (zh: string, en: string): AppMessage => ({ zh, en });
+const displayMessage = (message: AppMessage, language: 'zh' | 'en') => typeof message === 'string' ? localizeClientError(message, language) : message[language];
 
 /** 连接宿主、读取状态和展示组件；异步结果写入界面前核对对应会话、选择及请求代次。 */
 function TrajectoryApp() {
+  const { language } = usePreferences();
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [view, setView] = useState<ViewState>(defaultView);
   const [detail, setDetail] = useState<DetailData | null>(null);
@@ -26,8 +34,8 @@ function TrajectoryApp() {
   const [searchResult, setSearchResult] = useState<SearchMatches | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [exportMessage, setExportMessage] = useState('');
+  const [error, setError] = useState<AppMessage>('');
+  const [exportMessage, setExportMessage] = useState<AppMessage>('');
   const [exporting, setExporting] = useState(false);
   const exports = useRef<ExportCoordinator | null>(null);
   const client = useRef<TrajectoryClient | null>(null);
@@ -56,11 +64,11 @@ function TrajectoryApp() {
   const removedEvents = useRef(new Map<string, number>());
   const selectionAbort = useRef(new AbortController());
   const partRequests = useRef(new Map<ContentPart, { revision: number; controller: AbortController }>());
-  const transportError = useRef('');
+  const transportError = useRef<AppMessage>('');
   const pendingTiming = useRef<ChangeTiming | null>(null);
 
   function showError(value: unknown, token?: Token) {
-    if (mounted.current && (!token || gate.current.accepts(token))) setError(value instanceof Error ? value.message : '本地读取未完成，请重试。');
+    if (mounted.current && (!token || gate.current.accepts(token))) setError(value instanceof Error ? value.message : translated('本地读取未完成，请重试。', 'The local read did not complete. Please retry.'));
   }
   function applyView(next: ViewState) { currentView.current = next; setView(next); }
   function applySnapshot(next: ThreadSnapshot) {
@@ -109,7 +117,7 @@ function TrajectoryApp() {
       if (!gate.current.accepts(token, result.binding) || owner !== preferences.current) return;
       owner.finish(result);
       succeeded = result.saved;
-      if (!result.saved) setError('另一窗口已更新阅读状态；已保留本窗口当前视图，点击重试可重新读取。');
+      if (!result.saved) setError(translated('另一窗口已更新阅读状态；已保留本窗口当前视图，点击重试可重新读取。', 'Another window updated the reading state. This window’s current view is preserved. Click Retry to reload it.'));
     } catch (failure) {
       owner.saving = false;
       // 保留保存期间产生的最新编辑，交给后续编辑或显式重试，避免盲目重试 CAS。
@@ -145,7 +153,9 @@ function TrajectoryApp() {
     const adapter = client.current;
     const signal = selectionAbort.current.signal;
     const previousConfirmed = confirmedRevision.current;
-    if (restore) { changes.current?.pause(); confirmedRevision.current = null; }
+    // 分页也会改变服务端增量范围；先取消进行中的重建，避免它随后覆盖新加载的历史。
+    changes.current?.pause();
+    if (restore) confirmedRevision.current = null;
     setLoading(true);
     const owner = preferences.current;
     const edited = owner.editVersion;
@@ -194,8 +204,8 @@ function TrajectoryApp() {
           }
         }
       }
-      applySnapshot(first); setError(missingSelection ? '未找到所选记录；已保留选择和阅读状态，可选择其他记录。'
-        : missingAnchor ? '未找到原阅读锚点；已显示最近记录并保留筛选和跟随状态。' : '');
+      applySnapshot(first); setError(missingSelection ? translated('未找到所选记录；已保留选择和阅读状态，可选择其他记录。', 'The selected record was not found. Your selection and reading state are preserved; you can choose another record.')
+        : missingAnchor ? translated('未找到原阅读锚点；已显示最近记录并保留筛选和跟随状态。', 'The previous reading position was not found. Recent records are shown, with filters and follow state preserved.') : '');
       if (restore && owner.pending) void flushPreferences(token, owner);
     } catch (failure) {
       if (!signal.aborted && first && gate.current.accepts(token)) {
@@ -212,7 +222,7 @@ function TrajectoryApp() {
           confirmedRevision.current = initialRevision ?? first.revision; changes.current?.start();
         } else if (restore && !first && previousConfirmed !== null && currentSnapshot.current) {
           confirmedRevision.current = previousConfirmed; changes.current?.start();
-        }
+        } else if (confirmedRevision.current !== null && currentSnapshot.current) changes.current?.start();
       }
     }
   }
@@ -257,7 +267,7 @@ function TrajectoryApp() {
     if (!token.binding || !state || !selected || !client.current) return;
     const event = state.events.find(row => row.eventId === selected);
     if (!event) {
-      setError('所选记录不在当前加载范围中；可加载较早记录。'); return;
+      setError(translated('所选记录不在当前加载范围中；可加载较早记录。', 'The selected record is outside the loaded range. You can load earlier records.')); return;
     }
     const previous = currentDetail.current?.eventId === selected ? currentDetail.current.parts[part] : undefined;
     const versionKey = `${selected}:${part}`;
@@ -318,40 +328,41 @@ function TrajectoryApp() {
         const recoveredError = transportError.current;
         setError(previous => previous === recoveredError ? '' : previous); transportError.current = '';
         if (currentView.current.selectedEventId && batch.removeEventIds.includes(currentView.current.selectedEventId)) {
-          invalidateDetails(); setError('所选记录已从当前来源移除；保留阅读位置，可选择其他记录。');
+          invalidateDetails(); setError(translated('所选记录已从当前来源移除；保留阅读位置，可选择其他记录。', 'The selected record was removed from the current source. Your reading position is preserved; you can choose another record.'));
         }
       },
       reset: async (_batch, signal) => {
-        // reset 不清空用户阅读意图：先补回锚点页，再单独补回可能在另一页的选择。
+        // 单个锚点页不能代表完整已加载范围，尤其子任务锚点页不包含主任务记录。
+        // 全部新页及增量追赶成功后才替换界面；中途失败保留原内容和阅读意图。
         const token = gate.current.capture(), before = currentSnapshot.current;
         if (!token.binding || !before) return;
-        const location = eventLocation(currentView.current, before), anchor = location.anchorEventId;
-        const readLocated = async (target: EventLocation) => {
-          const result = await adapter.call<ThreadSnapshot>('read_trajectory', { binding: token.binding, cursor: null, ...target }, { signal });
+        const rebuilt = await rebuildLoadedSnapshot(before, currentView.current, async target => {
+          const result = await adapter.call<ThreadSnapshot>('read_trajectory', { binding: token.binding, ...target }, { signal });
           if (signal.aborted || !gate.current.accepts(token, result.binding)) throw new DOMException('Cancelled', 'AbortError');
           return result;
-        };
-        const located = await readAnchorPage(readLocated, location);
-        let rebuilt = located.snapshot;
-        if (signal.aborted || !gate.current.accepts(token, rebuilt.binding)) return;
-        let acknowledged = rebuilt.revision;
-        const selected = currentView.current.selectedEventId;
-        if (selected && selected !== anchor && !rebuilt.events.some(event => event.eventId === selected)) {
-          const selectedPage = await readSelectionPage(readLocated, eventLocation(currentView.current, before, selected), rebuilt);
-          if (selectedPage.snapshot.generation > rebuilt.generation) acknowledged = selectedPage.snapshot.revision;
-          rebuilt = selectedPage.snapshot;
+        }, async request => {
+          const result = await adapter.call<ChangeBatch>('read_changes', { ...request }, { signal });
+          if (signal.aborted || !gate.current.accepts(token, result.binding)) throw new DOMException('Cancelled', 'AbortError');
+          return result;
+        });
+        if (signal.aborted || !gate.current.accepts(token, rebuilt.snapshot.binding)) return;
+        if (currentSnapshot.current !== before) {
+          // 已在途的分组/历史页可能先提交；以扩展后的范围重试，不能用旧范围重建结果覆盖它。
+          changes.current?.retry(); throw new ChangeProtocolError();
         }
-        invalidateDetails(); removedEvents.current.clear(); confirmedRevision.current = acknowledged;
-        currentSnapshot.current = rebuilt; setSnapshot(rebuilt);
-        const missing = selected && !rebuilt.events.some(event => event.eventId === selected);
-        const missingAnchor = located.missing || anchor && !rebuilt.events.some(event => event.eventId === anchor);
-        setError(missing ? '重建后未找到所选记录；保留选择和阅读状态，可选择其他记录。'
-          : missingAnchor ? '重建后未找到原阅读锚点；已保留筛选、详情选择和跟随状态。' : '');
+        const selected = currentView.current.selectedEventId;
+        const anchor = currentView.current.anchor?.eventId;
+        invalidateDetails(); removedEvents.current.clear(); confirmedRevision.current = rebuilt.confirmedRevision;
+        currentSnapshot.current = rebuilt.snapshot; setSnapshot(rebuilt.snapshot);
+        const missing = selected && !rebuilt.snapshot.events.some(event => event.eventId === selected);
+        const missingAnchor = anchor && !rebuilt.snapshot.events.some(event => event.eventId === anchor);
+        setError(missing ? translated('重建后未找到所选记录；保留选择和阅读状态，可选择其他记录。', 'The selected record was not found after rebuilding. Your selection and reading state are preserved; you can choose another record.')
+          : missingAnchor ? translated('重建后未找到原阅读锚点；已保留筛选、详情选择和跟随状态。', 'The previous reading position was not found after rebuilding. Filters, detail selection and follow state are preserved.') : '');
       },
       failed: failure => {
-        const message = failure instanceof Error ? failure.message : '增量读取中断，已保留当前内容并等待重试。';
+        const message = failure instanceof Error ? failure.message : translated('增量读取中断，已保留当前内容并等待重试。', 'Incremental reading stopped. Current content is preserved while waiting to retry.');
         const identityRequired = failure && typeof failure === 'object' && 'code' in failure && failure.code === 'identityRequired';
-        transportError.current = identityRequired ? '观察会话已失效；请从当前聊天的 New Tab 重新打开“执行轨迹”。' : message;
+        transportError.current = identityRequired ? translated('观察会话已失效；请从当前聊天的 New Tab 重新打开“执行轨迹”。', 'The observation session has expired. Reopen “Execution trace” from New Tab in the current chat.') : message;
         setError(transportError.current);
         const state = currentSnapshot.current;
         if (state) {
@@ -406,12 +417,12 @@ function TrajectoryApp() {
     groupReads.current = groups; groups.setVisible(document.visibilityState !== 'hidden');
     const exporter = new ExportCoordinator({
       call: (request, signal) => adapter.call<DownloadResult>('download_records', { ...request }, { signal }),
-      onChange: feedback => { if (mounted.current) { setExportMessage(feedback.message); setExporting(feedback.busy); } },
+      onChange: feedback => { if (mounted.current) { setExportMessage({ zh: feedback.message, en: feedback.messageEn }); setExporting(feedback.busy); } },
     });
     exports.current = exporter; exporter.setVisible(document.visibilityState !== 'hidden');
     void adapter.connect().then(context => {
       document.documentElement.dataset.theme = context.theme === 'dark' ? 'dark' : 'light';
-      if (!gate.current.open) { setLoading(false); setError('宿主已连接，等待执行轨迹入口提供观察会话。'); }
+      if (!gate.current.open) { setLoading(false); setError(translated('宿主已连接，等待执行轨迹入口提供观察会话。', 'Connected to the host. Waiting for the execution trace entry to provide an observation session.')); }
     }).catch(showError);
     return () => {
       mounted.current = false; gate.current.invalidate(); client.current = null;
@@ -471,7 +482,7 @@ function TrajectoryApp() {
   }, [view.selectedEventId, view.detailTab, snapshot?.revision, snapshot?.generation, snapshot?.binding.viewSessionId, snapshot?.binding.selectionEpoch]);
 
   return <TraceUI threadScope={threadScope} onThreadScope={changeThreadScope} snapshot={snapshot} view={view} detail={detail} threads={threads} threadsMore={threadsMore}
-    matchedIds={searchDisplay.matchedIds} searching={searchDisplay.searching} loading={loading} detailLoading={detailLoading} error={error} exportMessage={exportMessage} exporting={exporting}
+    matchedIds={searchDisplay.matchedIds} searching={searchDisplay.searching} loading={loading} detailLoading={detailLoading} error={displayMessage(error, language)} exportMessage={displayMessage(exportMessage, language)} exporting={exporting}
     onTask={id => { void selectTask(id); }} onTaskSearch={searchTasks} onMoreThreads={() => { void listThreads(true); }}
     onView={patchView} onSelect={selectEvent} onLoadEarlier={groupId => {
       const current = currentSnapshot.current;
@@ -484,4 +495,4 @@ function TrajectoryApp() {
       void readSnapshot(gate.current.capture(), null, true).then(() => groupReads.current?.retry()); void listThreads(); }}/ >;
 }
 
-createRoot(document.getElementById('root')!).render(<TrajectoryApp/>);
+createRoot(document.getElementById('root')!).render(<PreferencesProvider><TrajectoryApp/></PreferencesProvider>);

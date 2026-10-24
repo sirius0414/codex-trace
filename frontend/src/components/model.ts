@@ -3,16 +3,29 @@ import type { EventKind, Group, Relationship, ThreadSnapshot, TraceEvent, UsageM
 export const kindLabels: Record<EventKind, string> = {
   userMessage: '用户', assistantMessage: '助手', reasoningSummary: '思考摘要', systemContext: '系统说明',
   developerContext: '开发者说明', environment: '运行环境', toolCall: '工具调用', toolResult: '工具结果',
-  compaction: '上下文压缩', collaboration: '协作操作',
+  compaction: '上下文压缩', collaboration: '协作操作', modelUsage: '模型用量',
 };
 export const statusLabels = { running: '执行中', completed: '完成', failed: '失败', stopped: '已停止', unknown: '未知' };
-export function relationshipEndpoints(relation: Relationship): Array<[string, string]> {
-  return relation.type === 'spawned-by' ? [['父任务', relation.toThreadId], ['子任务', relation.fromThreadId]]
-    : relation.type === 'forked-from' ? [['来源任务', relation.toThreadId], ['分叉任务', relation.fromThreadId]]
-      : [['发起任务', relation.fromThreadId], ['通信对象', relation.toThreadId]];
+type Language = 'zh' | 'en';
+const englishKindLabels: Record<EventKind, string> = {
+  userMessage: 'User', assistantMessage: 'Assistant', reasoningSummary: 'Reasoning summary', systemContext: 'System context',
+  developerContext: 'Developer context', environment: 'Environment', toolCall: 'Tool call', toolResult: 'Tool result',
+  compaction: 'Compaction', collaboration: 'Collaboration', modelUsage: 'Model usage',
+};
+const englishStatusLabels: typeof statusLabels = { running: 'Running', completed: 'Completed', failed: 'Failed', stopped: 'Stopped', unknown: 'Unknown' };
+export function localizedKindLabels(language: Language = 'zh') {
+  return language === 'en' ? englishKindLabels : kindLabels;
 }
-export function clockTime(value: number | null | undefined) {
-  return value == null ? '—' : new Date(value).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+export function localizedStatusLabels(language: Language = 'zh') {
+  return language === 'en' ? englishStatusLabels : statusLabels;
+}
+export function relationshipEndpoints(relation: Relationship, language: Language = 'zh'): Array<[string, string]> {
+  return relation.type === 'spawned-by' ? [[language === 'en' ? 'Parent task' : '父任务', relation.toThreadId], [language === 'en' ? 'Child task' : '子任务', relation.fromThreadId]]
+    : relation.type === 'forked-from' ? [[language === 'en' ? 'Source task' : '来源任务', relation.toThreadId], [language === 'en' ? 'Forked task' : '分叉任务', relation.fromThreadId]]
+      : [[language === 'en' ? 'Initiating task' : '发起任务', relation.fromThreadId], [language === 'en' ? 'Recipient' : '通信对象', relation.toThreadId]];
+}
+export function clockTime(value: number | null | undefined, language: Language = 'zh') {
+  return value == null ? '—' : new Date(value).toLocaleTimeString(language === 'en' ? 'en-US' : 'zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 export function duration(value: number | null) {
   if (value == null) return '—';
@@ -31,7 +44,7 @@ export function recordedEnd(event: TraceEvent): number | null {
   return startMs;
 }
 /** 时间轴原点只认主任务创建证据；无事件时间时退为顺序轴，不把位置解释为时长。 */
-export function overviewFrame(snapshot: Pick<ThreadSnapshot, 'timelineOrigin'> | null, events: TraceEvent[]) {
+export function overviewFrame(snapshot: Pick<ThreadSnapshot, 'timelineOrigin'> | null, events: TraceEvent[], language: Language = 'zh') {
   const evidence = snapshot?.timelineOrigin;
   const origin = evidence?.basis === 'threadCreatedAt' && evidence.precision === 'second'
     && Number.isSafeInteger(evidence.timestampMs) && evidence.timestampMs >= 0 && evidence.timestampMs % 1000 === 0
@@ -45,12 +58,12 @@ export function overviewFrame(snapshot: Pick<ThreadSnapshot, 'timelineOrigin'> |
   const ordered = first === Infinity;
   const min = ordered ? 1 : origin == null ? first : Math.min(origin, first);
   return { origin, ordered, min, max: ordered ? Math.max(2, events.length) : Math.max(min + 1000, last, origin ?? -Infinity),
-    explanation: ordered ? '记录顺序：没有准确事件时间，位置不表示时长。'
-      : origin == null ? '主任务创建时间未记录；按事件的绝对时间显示，不把子任务或已加载记录起点当作主任务开始。'
-        : `相对主任务创建时间；依据 thread/read.createdAt，秒精度。创建时间不是本次执行开始或执行耗时，继承记录可能早于创建时间。${evidence?.explanation ?? ''}` };
+    explanation: ordered ? language === 'en' ? 'Record order: exact event times are unavailable; position does not indicate duration.' : '记录顺序：没有准确事件时间，位置不表示时长。'
+      : origin == null ? language === 'en' ? 'The main task creation time was not recorded. Events use absolute time; child task or loaded record start times do not indicate the main task start.' : '主任务创建时间未记录；按事件的绝对时间显示，不把子任务或已加载记录起点当作主任务开始。'
+        : `${language === 'en' ? 'Relative to main task creation, based on thread/read.createdAt at second precision. Creation time does not indicate this execution’s start or elapsed time; inherited records may predate creation. ' : '相对主任务创建时间；依据 thread/read.createdAt，秒精度。创建时间不是本次执行开始或执行耗时，继承记录可能早于创建时间。'}${evidence?.explanation ?? ''}` };
 }
 export function overviewLane(event: TraceEvent) {
-  return ['toolCall', 'toolResult', 'collaboration'].includes(event.kind) ? 2 : ['assistantMessage', 'reasoningSummary'].includes(event.kind) ? 1 : 0;
+  return ['toolCall', 'toolResult', 'collaboration'].includes(event.kind) ? 2 : ['assistantMessage', 'reasoningSummary', 'modelUsage'].includes(event.kind) ? 1 : 0;
 }
 export type OverviewMark = {
   key: string; lane: number; start: number; end: number; events: TraceEvent[]; selected: boolean;
@@ -76,8 +89,8 @@ export function overviewMarks(events: TraceEvent[], options: { min: number; max:
   // 选中标记最后绘制，避免被聚合簇遮住，也保留可访问的键盘目标。
   return [...groups.values()].sort((a, b) => Number(a.selected) - Number(b.selected) || a.start - b.start || a.lane - b.lane);
 }
-export function metric(value: UsageMetric | undefined, missing = '—') {
-  return value?.availability === 'recorded' ? value.value.toLocaleString('zh-CN') : missing;
+export function metric(value: UsageMetric | undefined, missing = '—', language: Language = 'zh') {
+  return value?.availability === 'recorded' ? value.value.toLocaleString(language === 'en' ? 'en-US' : 'zh-CN') : missing;
 }
 export function latestUsage(values: UsageSnapshot[]) {
   // 优先选任务范围内最新的用量记录，不叠加累计快照或子任务用量。
@@ -123,7 +136,7 @@ export function visibleEvents(snapshot: ThreadSnapshot, view: ViewState, matched
 }
 export type ListRow = { key: string; height: number; top: number } & (
   { type: 'event'; event: TraceEvent; child: boolean } |
-  { type: 'turn'; id: string; label: string; count: number; expanded: boolean } |
+  { type: 'turn'; id: string; label: string; count: number; expanded: boolean; usage: UsageSnapshot[] } |
   { type: 'group'; group: Group; expanded: boolean } |
   { type: 'warning'; group: Group } |
   { type: 'earlier'; group?: Group }
@@ -134,7 +147,7 @@ export function readingAnchor(rows: ListRow[], scrollTop: number): ViewState['an
   return first?.type === 'event' ? { eventId: first.event.eventId, groupId: first.event.groupId, offsetPx: scrollTop - first.top } : null;
 }
 /** 将分组/轮次折叠树展平为带绝对 top 的行；行高必须与 EventList/CSS 一致。 */
-export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: TraceEvent[]): ListRow[] {
+export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: TraceEvent[], language: Language = 'zh'): ListRow[] {
   const rows: ListRow[] = [];
   let top = 0;
   const add = (row: Omit<ListRow, 'top'>) => { rows.push({ ...row, top } as ListRow); top += row.height; };
@@ -143,7 +156,13 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
   const main = snapshot.events.filter(event => event.groupId === snapshot.rootGroupId);
   const children = snapshot.groups.filter(group => group.groupId !== snapshot.rootGroupId);
   const rendered = new Set<string>();
-  const allTurns = new Map(snapshot.turns.map(turn => [turn.turnId, turn.order + 1]));
+  // 轮次身份同时包含所属任务，子任务即使复用 turnId 也不能串用计数。
+  const allTurns = new Map(snapshot.turns.map(turn => [JSON.stringify([turn.threadId, turn.turnId]), turn]));
+  const turnData = (threadId: string, turnId: string | null) => allTurns.get(JSON.stringify([threadId, turnId]));
+  const turnNumber = (threadId: string, turnId: string) => {
+    const turn = turnData(threadId, turnId);
+    return turn ? turn.order + 1 : '—';
+  };
   const expandedTurns = new Set(view.expandedTurnIds);
   const expandedGroups = new Set(view.expandedGroupIds);
   const unfiltered = !view.filters.text && !view.filters.kinds.length && !view.filters.toolName && !view.filters.failedOnly && !view.filters.timeRange;
@@ -161,8 +180,8 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
           turn = event.turnId;
           const expanded = turn == null || expandedTurns.has(turn);
           append({ key: `turn:${groupId}:${turn ?? 'context'}`, type: 'turn', id: turn ?? '__context__',
-            label: turn == null ? '任务上下文 · 位置未记录' : `${child ? '子任务 · ' : ''}第 ${allTurns.get(turn) ?? '—'} 轮`,
-            count: counts.get(turn) ?? 0, expanded, height: 23 });
+            label: turn == null ? language === 'en' ? 'Task context · position not recorded' : '任务上下文 · 位置未记录' : language === 'en' ? `${child ? 'Child task · ' : ''}Turn ${turnNumber(event.threadId, turn)}` : `${child ? '子任务 · ' : ''}第 ${turnNumber(event.threadId, turn)} 轮`,
+            count: counts.get(turn) ?? 0, expanded, height: 23, usage: turnData(event.threadId, turn)?.usage ?? [] });
         }
         if (event.turnId && !expandedTurns.has(event.turnId)) continue;
         append({ key: `event:${event.eventId}`, type: 'event', event, child, height: 28 });
@@ -207,8 +226,8 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
       if (event.turnId !== turn && event.turnId != null) {
         turn = event.turnId;
         append({ key: `turn:${group.groupId}:${turn}`, type: 'turn', id: turn,
-          label: `子任务 · 第 ${allTurns.get(turn) ?? '—'} 轮`, count: visible.filter(item => item.turnId === turn && item.groupId === group.groupId).length,
-          expanded: expandedTurns.has(turn), height: 23 });
+          label: language === 'en' ? `Child task · Turn ${turnNumber(event.threadId, turn)}` : `子任务 · 第 ${turnNumber(event.threadId, turn)} 轮`, count: visible.filter(item => item.turnId === turn && item.groupId === group.groupId).length,
+          expanded: expandedTurns.has(turn), height: 23, usage: turnData(event.threadId, turn)?.usage ?? [] });
       }
       if (event.turnId && !expandedTurns.has(event.turnId)) continue;
       if (nested.length) nested.forEach(appendGroup);
@@ -224,8 +243,8 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
       turn = event.turnId;
       const expanded = turn == null || expandedTurns.has(turn);
       append({ key: `turn:main:${turn ?? 'context'}`, type: 'turn', id: turn ?? '__context__',
-        label: turn == null ? '任务上下文 · 位置未记录' : `第 ${allTurns.get(turn) ?? '—'} 轮`,
-        count: visible.filter(item => item.turnId === turn && item.groupId === snapshot.rootGroupId).length, expanded, height: 23 });
+        label: turn == null ? language === 'en' ? 'Task context · position not recorded' : '任务上下文 · 位置未记录' : language === 'en' ? `Turn ${turnNumber(event.threadId, turn)}` : `第 ${turnNumber(event.threadId, turn)} 轮`,
+        count: visible.filter(item => item.turnId === turn && item.groupId === snapshot.rootGroupId).length, expanded, height: 23, usage: turnData(event.threadId, turn)?.usage ?? [] });
     }
     if (event.turnId && !expandedTurns.has(event.turnId)) continue;
     if (created.length) created.forEach(appendGroup);

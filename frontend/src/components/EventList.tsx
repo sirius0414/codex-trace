@@ -2,25 +2,30 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TraceUIProps } from '../ui-types';
 import type { TraceEvent } from '../../../contracts/types';
 import Icon, { type IconName } from './icons';
-import { clockTime, duration, kindLabels, makeRows, readingAnchor, statusLabels, virtualWindow, type ListRow } from './model';
+import { clockTime, duration, localizedKindLabels, makeRows, readingAnchor, localizedStatusLabels, virtualWindow, type ListRow } from './model';
 import { bulkExpansion } from './expansion';
+import { usePreferences } from '../preferences';
+import UsageBadge from './UsageBadge';
 
 export function eventIcon(event: TraceEvent): IconName {
   if (event.status.value === 'failed') return 'alert';
   if (event.kind === 'userMessage') return 'user';
-  if (event.kind === 'assistantMessage' || event.kind === 'reasoningSummary') return 'model';
+  if (event.kind === 'assistantMessage' || event.kind === 'reasoningSummary' || event.kind === 'modelUsage') return 'model';
   if (event.kind === 'compaction') return 'compaction';
   if (event.kind === 'collaboration') return 'branch';
   if (event.kind === 'toolCall' || event.kind === 'toolResult') return 'tool';
   return 'context';
 }
 export function eventColor(event: TraceEvent) {
-  return event.status.value === 'failed' ? 'error' : ['assistantMessage', 'reasoningSummary', 'compaction'].includes(event.kind) ? 'model' : ['toolCall', 'toolResult', 'collaboration'].includes(event.kind) ? 'tool' : event.kind === 'userMessage' ? 'input' : 'context';
+  return event.status.value === 'failed' ? 'error' : ['assistantMessage', 'reasoningSummary', 'compaction', 'modelUsage'].includes(event.kind) ? 'model' : ['toolCall', 'toolResult', 'collaboration'].includes(event.kind) ? 'tool' : event.kind === 'userMessage' ? 'input' : 'context';
 }
 /** 虚拟列表只挂载可见行；阅读位置以事件 ID 和行内偏移保存，分页/更新后再定位。 */
 export default function EventList(props: TraceUIProps & { visible: TraceEvent[]; onCount: (count: number) => void }) {
   const { snapshot, view, visible } = props;
-  const rows = useMemo(() => snapshot ? makeRows(snapshot, view, visible) : [], [snapshot, visible, view.expandedTurnIds, view.expandedGroupIds, view.agentScope]);
+  const { language, t } = usePreferences();
+  const kindLabels = localizedKindLabels(language);
+  const statusLabels = localizedStatusLabels(language);
+  const rows = useMemo(() => snapshot ? makeRows(snapshot, view, visible, language) : [], [snapshot, visible, view.expandedTurnIds, view.expandedGroupIds, view.agentScope, language]);
   const bulk = useMemo(() => snapshot ? {
     expanded: bulkExpansion(snapshot, view, visible, true),
     collapsed: bulkExpansion(snapshot, view, visible, false),
@@ -140,36 +145,36 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
   }
   function renderRow(row: ListRow) {
     const style = { position: 'absolute' as const, top: row.top, height: row.height, left: 0, right: 0 };
-    if (row.type === 'earlier') return <button key={row.key} style={style} className="cx-load" disabled={props.loading} aria-label={row.group ? `加载 ${row.group.name} 的较早记录` : '加载更早记录'} onClick={() => {
+    if (row.type === 'earlier') return <button key={row.key} style={style} className="cx-load" disabled={props.loading} aria-label={row.group ? t(`加载 ${row.group.name} 的较早记录`, `Load earlier records for ${row.group.name}`) : t('加载更早记录', 'Load earlier records')} onClick={() => {
       const saved = captureAnchor(); anchor.current = saved;
       props.onView({ follow: 'paused', anchor: saved });
       props.onLoadEarlier(row.group?.groupId);
-    }}><Icon name="up" />{props.loading ? '正在加载较早记录…' : row.group ? '加载子任务较早记录' : '加载更早记录'}</button>;
-    if (row.type === 'turn') return <button key={row.key} style={style} className="cx-turn" aria-expanded={row.expanded} disabled={row.id === '__context__'} onClick={() => props.onView({ follow: 'paused', expandedTurnIds: row.expanded ? view.expandedTurnIds.filter(id => id !== row.id) : [...view.expandedTurnIds, row.id] })}><Icon name={row.expanded ? 'down' : 'right'} />{row.label}<small>{row.count} 条匹配</small></button>;
-    if (row.type === 'warning') return <div key={row.key} style={style} className="cx-group-warning"><Icon name="alert" /><span title={row.group.readIssue ?? ''}>{row.group.readIssue} · 保留 {row.group.loadedEventCount} 条已读记录</span></div>;
+    }}><Icon name="up" />{props.loading ? t('正在加载较早记录…', 'Loading earlier records…') : row.group ? t('加载子任务较早记录', 'Load earlier subtask records') : t('加载更早记录', 'Load earlier records')}</button>;
+    if (row.type === 'turn') return <button key={row.key} style={style} className="cx-turn" aria-expanded={row.expanded} disabled={row.id === '__context__'} onClick={() => props.onView({ follow: 'paused', expandedTurnIds: row.expanded ? view.expandedTurnIds.filter(id => id !== row.id) : [...view.expandedTurnIds, row.id] })}><Icon name={row.expanded ? 'down' : 'right'} /><span className="cx-turn-label">{row.label}</span>{row.id !== '__context__' && <UsageBadge values={row.usage} turn />}<small>{t(`${row.count} 条匹配`, `${row.count} matches`)}</small></button>;
+    if (row.type === 'warning') return <div key={row.key} style={style} className="cx-group-warning"><Icon name="alert" /><span title={row.group.readIssue ?? ''}>{row.group.readIssue} · {t(`保留 ${row.group.loadedEventCount} 条已读记录`, `${row.group.loadedEventCount} loaded records retained`)}</span></div>;
     if (row.type === 'group') return <div key={row.key} style={style} className={`cx-subtask ${view.selectedEventId === row.group.creationEventId ? 'selected' : ''}`}>
       <button className="cx-group-toggle" aria-expanded={row.expanded} onClick={() => props.onView({ follow: 'paused', expandedGroupIds: row.expanded ? view.expandedGroupIds.filter(id => id !== row.group.groupId) : [...view.expandedGroupIds, row.group.groupId] })}><Icon name={row.expanded ? 'down' : 'right'} /><Icon name="branch" /><span>{row.group.name}</span></button>
-      <span className="cx-group-count" title="当前已读取范围">{row.group.loadedEventCount} 条 · {row.group.loadedToolCallCount} 调用</span><span className={`cx-state ${row.group.status.value}`}>{statusLabels[row.group.status.value]}</span>
-      {row.group.creationEventId && <button className="cx-icon cx-group-detail" aria-label={`查看 ${row.group.name} 创建与来源`} onClick={() => props.onSelect(row.group.creationEventId)}><Icon name="info" /></button>}
+      <span className="cx-group-count" title={t('当前已读取范围', 'Currently loaded records')}>{t(`${row.group.loadedEventCount} 条 · ${row.group.loadedToolCallCount} 调用`, `${row.group.loadedEventCount} records · ${row.group.loadedToolCallCount} calls`)}</span><span className={`cx-state ${row.group.status.value}`}>{statusLabels[row.group.status.value]}</span>
+      {row.group.creationEventId && <button className="cx-icon cx-group-detail" aria-label={t(`查看 ${row.group.name} 创建与来源`, `View creation and source for ${row.group.name}`)} onClick={() => props.onSelect(row.group.creationEventId)}><Icon name="info" /></button>}
     </div>;
     const event = row.event;
     return <button key={row.key} style={style} className={`cx-row kind-${event.kind} ${event.status.value === 'failed' ? 'is-error' : ''} ${row.child ? 'child' : ''} ${event.eventId === view.selectedEventId ? 'selected' : ''}`} data-event-id={event.eventId} aria-pressed={event.eventId === view.selectedEventId} aria-label={`${kindLabels[event.kind]}${event.toolName ? ` ${event.toolName}` : ''}：${event.preview}，${statusLabels[event.status.value]}`}
       onClick={() => props.onSelect(event.eventId)} onKeyDown={key => rowKey(key, event.eventId)}>
-      <span className="cx-operation"><span className={`cx-event-icon ${eventColor(event)}`}><Icon name={eventIcon(event)} /></span><span className="cx-preview" title={event.preview}>{event.toolName ? <>{(event.kind === 'toolCall' || event.kind === 'toolResult') && <span className="cx-kind-label">{event.kind === 'toolCall' ? '调用' : '结果'}</span>}<code>{event.toolName}</code></> : <b>{kindLabels[event.kind]}</b>}{event.preview.replace(/\s+/g, ' ')}</span></span>
-      <span className="cx-time">{clockTime(event.timing.startMs)}</span><span className="cx-duration" title={event.timing.basis}>{event.status.value === 'running' && event.timing.durationMs == null ? '…' : duration(event.timing.durationMs)}</span><span className={`cx-state ${event.status.value}`}>{event.status.value === 'failed' ? '× 失败' : event.status.value === 'running' ? '● 执行中' : statusLabels[event.status.value]}</span>
+      <span className="cx-operation"><span className={`cx-event-icon ${eventColor(event)}`}><Icon name={eventIcon(event)} /></span><span className="cx-preview" title={event.preview}>{event.toolName ? <>{(event.kind === 'toolCall' || event.kind === 'toolResult') && <span className="cx-kind-label">{event.kind === 'toolCall' ? t('调用', 'Call') : t('结果', 'Result')}</span>}<code>{event.toolName}</code></> : <b>{kindLabels[event.kind]}</b>}{event.preview.replace(/\s+/g, ' ')}</span></span>
+      <UsageBadge values={event.usage} /><span className="cx-time">{clockTime(event.timing.startMs, language)}</span><span className="cx-duration" title={event.timing.basis}>{event.status.value === 'running' && event.timing.durationMs == null ? '…' : duration(event.timing.durationMs)}</span><span className={`cx-state ${event.status.value}`}>{event.status.value === 'failed' ? `× ${statusLabels.failed}` : event.status.value === 'running' ? `● ${statusLabels.running}` : statusLabels[event.status.value]}</span>
     </button>;
   }
   const selectedHidden = view.selectedEventId && !rows.some(row => rowId(row) === view.selectedEventId);
   const noAgentsSelected = view.agentScope.kind === 'selected' && view.agentScope.groupIds.length === 0;
-  return <section className="cx-ledger" aria-label="操作记录">
-    <div className="cx-column-head"><div className="cx-list-actions"><span>操作</span><div className="cx-expand-actions" role="group" aria-label="批量展开和折叠轮次">
-      <button type="button" disabled={!canExpand} title="展开当前筛选结果中的全部已加载轮次" onClick={() => bulk && props.onView(bulk.expanded)}><Icon name="down" />展开全部</button>
-      <button type="button" disabled={!canCollapse} title="折叠当前筛选结果中的全部已加载轮次" onClick={() => bulk && props.onView(bulk.collapsed)}><Icon name="right" />折叠全部</button>
-    </div></div><span className="cx-time">时间</span><span className="cx-duration">耗时</span><span>状态</span></div>
-    {selectedHidden && <div className="cx-selection-note" role="status">选中记录不在当前列表中，详情已保留。</div>}
-    <div ref={scroll} className="cx-scroll" aria-label="可滚动的操作列表" onScroll={onScroll} tabIndex={rows.length ? -1 : 0}>
+  return <section className="cx-ledger" aria-label={t('操作记录', 'Operation records')}>
+    <div className="cx-column-head"><div className="cx-list-actions"><span>{t('操作', 'Operation')}</span><div className="cx-expand-actions" role="group" aria-label={t('批量展开和折叠轮次', 'Expand and collapse all turns')}>
+      <button type="button" disabled={!canExpand} title={t('展开当前筛选结果中的全部已加载轮次', 'Expand all loaded turns in the current results')} onClick={() => bulk && props.onView(bulk.expanded)}><Icon name="down" />{t('展开全部', 'Expand all')}</button>
+      <button type="button" disabled={!canCollapse} title={t('折叠当前筛选结果中的全部已加载轮次', 'Collapse all loaded turns in the current results')} onClick={() => bulk && props.onView(bulk.collapsed)}><Icon name="right" />{t('折叠全部', 'Collapse all')}</button>
+    </div></div><span className="cx-entry-usage" title={t('输入 / 输出 token；悬浮查看缓存和精确值', 'Input / output tokens; hover for cached tokens and exact values')}>{t('Token 入 / 出', 'Tokens In / Out')}</span><span className="cx-time">{t('时间', 'Time')}</span><span className="cx-duration">{t('耗时', 'Duration')}</span><span>{t('状态', 'Status')}</span></div>
+    {selectedHidden && <div className="cx-selection-note" role="status">{t('选中记录不在当前列表中，详情已保留。', 'The selected record is outside the current list. Its details are preserved.')}</div>}
+    <div ref={scroll} className="cx-scroll" aria-label={t('可滚动的操作列表', 'Scrollable operation list')} onScroll={onScroll} tabIndex={rows.length ? -1 : 0}>
       <div className="cx-virtual-content" style={{ height: window.totalHeight }}>{rows.slice(window.start, window.end).map(renderRow)}</div>
-      {!visible.length && <div className="cx-empty"><Icon name="context" /><strong>{noAgentsSelected ? '尚未选择 Agent' : props.loading ? '正在读取轨迹…' : props.searching ? '正在检索已加载正文…' : !snapshot ? '选择一个任务查看执行轨迹' : snapshot.events.length ? '已加载记录中无匹配结果' : '暂无可展示事件'}</strong><p>{noAgentsSelected ? '点击上方 Agent 按钮选择要展示的记录。' : props.searching ? '检索完成后显示当前条件的匹配记录。' : snapshot?.events.length ? '搜索和筛选只覆盖当前已加载的可读内容。' : snapshot?.coverage.explanation ?? '选择任务后，只读展示已有记录。'}{!noAgentsSelected && snapshot && !snapshot.events.length && ' 可从顶部导出可读取的原始记录。'}</p>{props.error && <button className="cx-button" onClick={props.onRetry}>重试读取</button>}</div>}
+      {!visible.length && <div className="cx-empty"><Icon name="context" /><strong>{noAgentsSelected ? t('尚未选择 Agent', 'No agents selected') : props.loading ? t('正在读取轨迹…', 'Loading trace…') : props.searching ? t('正在检索已加载正文…', 'Searching loaded content…') : !snapshot ? t('选择一个任务查看执行轨迹', 'Select a task to view its trace') : snapshot.events.length ? t('已加载记录中无匹配结果', 'No matches in loaded records') : t('暂无可展示事件', 'No events to display')}</strong><p>{noAgentsSelected ? t('点击上方 Agent 按钮选择要展示的记录。', 'Use the Agent buttons above to choose records to display.') : props.searching ? t('检索完成后显示当前条件的匹配记录。', 'Matching records will appear when the search is complete.') : snapshot?.events.length ? t('搜索和筛选只覆盖当前已加载的可读内容。', 'Search and filters cover only the readable content currently loaded.') : snapshot?.coverage.explanation ?? t('选择任务后，只读展示已有记录。', 'Select a task to view its saved records.')}{!noAgentsSelected && snapshot && !snapshot.events.length && t(' 可从顶部导出可读取的原始记录。', ' Export readable raw records from the top toolbar.')}</p>{props.error && <button className="cx-button" onClick={props.onRetry}>{t('重试读取', 'Retry loading')}</button>}</div>}
     </div>
   </section>;
 }

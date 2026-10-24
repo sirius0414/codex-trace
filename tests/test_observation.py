@@ -401,6 +401,52 @@ class ObservationTests(unittest.TestCase):
         result = self.changes(cursor=page["continuationCursor"], binding=other)
         self.assertEqual(result["resetReason"], "expiredCursor")
 
+    def test_expired_changes_drop_deleted_loaded_ids_before_fresh_rebuild(self):
+        self.raw.put(rows=[raw_item(index) for index in range(251)])
+        self.service.refresh_raw(A, force=True)
+        self.initial = self.read()
+        earlier = self.read(cursor=self.initial["coverage"]["nextCursor"])
+        self.assertEqual(earlier["coverage"]["loadedEventCount"], 251)
+        view = self.service.views[self.binding["viewSessionId"]]
+        scope, loaded_set = view.scope_revision, view.loaded_set_id
+        self.raw.put(rows=[raw_item(index) for index in range(250)])
+        self.service.refresh_raw(A, force=True)
+        self.assertEqual(self.service.tasks[A].generation, self.initial["generation"])
+        for _ in range(129):
+            self.service._touch(self.service.tasks[A])
+        reset = self.changes()
+        validate("ChangeBatch", reset)
+        self.assertEqual(reset["resetReason"], "expiredCursor")
+        self.assertEqual(reset["removeEventIds"], [])
+        self.assertNotIn(self.eid(250), view.loaded)
+        self.assertEqual(reset["coverage"]["loadedEventCount"], 250)
+        self.assertEqual(reset["coverage"]["scopeRevision"], scope + 1)
+        self.assertEqual(reset["coverage"]["loadedSetId"], loaded_set)
+        self.assertEqual(self.changes()["coverage"]["scopeRevision"], scope + 1)
+        rebuilt = self.read()
+        events = {event["eventId"] for event in rebuilt["events"]}
+        while rebuilt["coverage"]["nextCursor"]:
+            rebuilt = self.read(cursor=rebuilt["coverage"]["nextCursor"])
+            events.update(event["eventId"] for event in rebuilt["events"])
+        self.assertEqual(len(events), 250)
+        self.assertEqual(rebuilt["coverage"]["loadedEventCount"], len(events))
+
+    def test_regular_snapshot_preserves_pending_incremental_removal(self):
+        self.raw.put(rows=[raw_item(index) for index in range(3)])
+        self.service.refresh_raw(A, force=True)
+        self.initial = self.read()
+        self.raw.put(rows=[raw_item(index) for index in range(2)])
+        self.service.refresh_raw(A, force=True)
+        current = self.read()
+        self.assertEqual(len(current["events"]), 2)
+        self.assertEqual(current["coverage"]["loadedEventCount"], 3)
+        batch = self.changes()
+        validate("ChangeBatch", batch)
+        self.assertFalse(batch["resetRequired"])
+        self.assertEqual(batch["removeEventIds"], [self.eid(2)])
+        self.assertEqual(batch["coverage"]["loadedEventCount"], 2)
+        self.assertEqual(len(self.service.views[self.binding["viewSessionId"]].loaded), 2)
+
     def test_same_operation_updates_original_id_and_revision_without_duplicate(self):
         before = self.initial["events"][0]
         self.raw.put(rows=[raw_item(0, output="synthetic newer result")])

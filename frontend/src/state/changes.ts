@@ -97,6 +97,7 @@ export class ChangeReader {
   private failures = 0;
   private timer: unknown = null;
   private controller: AbortController | null = null;
+  private pendingReset: { batch: ChangeBatch; isCurrent: () => boolean } | null = null;
   private now: () => number;
   private setTimer: (callback: () => void, delay: number) => unknown;
   private clearTimer: (timer: unknown) => void;
@@ -115,7 +116,7 @@ export class ChangeReader {
     if (!visible) this.cancel(); else if (this.active) this.schedule(0);
   }
   retry() { this.failures = 0; if (this.active) this.schedule(0); }
-  dispose() { this.disposed = true; this.active = false; this.cancel(); }
+  dispose() { this.disposed = true; this.active = false; this.pendingReset = null; this.cancel(); }
   private cancel() {
     // abort 用于尽快停止请求，代次检查用于拒收来不及取消的旧响应，两者缺一不可。
     this.generation++; this.wakeRequested = false;
@@ -131,6 +132,7 @@ export class ChangeReader {
   }
   private async tick() {
     if (this.busy || this.disposed || !this.active || !this.visible) return;
+    if (this.pendingReset && !this.pendingReset.isCurrent()) this.pendingReset = null;
     const context = this.options.capture();
     if (!context) return;
     this.busy = true;
@@ -143,13 +145,27 @@ export class ChangeReader {
       afterRevision: context.afterRevision ?? context.snapshot.revision, continuationCursor: null };
     const assembly = new ChangeAssembly(request);
     let firstReceivedAt: number | null = null;
+    const rebuild = async (pending: NonNullable<ChangeReader['pendingReset']>) => {
+      await this.options.reset(pending.batch, controller.signal);
+      if (!valid()) return false;
+      if (this.pendingReset === pending) this.pendingReset = null;
+      return true;
+    };
     try {
-      for (;;) {
+      // 服务端发出重建信号后可能已清理旧 loaded ID；重建失败时普通增量无法
+      // 保证再次送达这些删除。保持重建需求，暂停或隐藏后仍先完成同一身份的重建。
+      if (this.pendingReset) {
+        if (!await rebuild(this.pendingReset)) return;
+      } else for (;;) {
         const response = await this.options.read({ ...request }, controller.signal);
         if (!valid()) return;
         firstReceivedAt ??= this.now();
         const state = assembly.append(response);
-        if (state === 'reset') { await this.options.reset(response, controller.signal); if (!valid()) return; break; }
+        if (state === 'reset') {
+          const pending = this.pendingReset = { batch: response, isCurrent: context.isCurrent };
+          if (!await rebuild(pending)) return;
+          break;
+        }
         if (state === 'more') { request.continuationCursor = response.continuationCursor; continue; }
         const batch = assembly.finish();
         const timing = { requestStartedAt, receivedAt: firstReceivedAt, generation: batch.generation, revision: batch.revision, upsertCount: batch.upsertEvents.length };

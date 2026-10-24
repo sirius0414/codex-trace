@@ -31,6 +31,10 @@ bounds); payloads still require runtime validation at the service boundary.
 - `UsageSnapshot` retains ownership, scope, epoch, ordering, aggregation mode,
   cache semantics and inherited/child attribution. It does not imply a model
   request count, and the contract does not sum snapshots.
+- `Turn.usage` and `TraceEvent.usage` optionally carry scoped snapshots (older
+  payloads may omit them). A `modelUsage` event represents one explicit response
+  identity, independent of tool/message entries. Compaction checkpoints can
+  restore turn snapshots but never create new request events.
 - Group relationships retain their type and evidence. Communication and fork
   relations exist independently of the child hierarchy.
 - Downloads have one discriminated request (`create/status/read/release/commit/result`) with

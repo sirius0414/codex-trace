@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { ChangeAssembly, ChangeReader, mergeChanges } from '../../frontend/src/state/changes.ts';
-import { mergeSnapshot } from '../../frontend/src/state/session.ts';
+import { mergeSnapshot, sameBinding } from '../../frontend/src/state/session.ts';
 import { readDetailWindow } from '../../frontend/src/state/detail.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('../fixtures/contracts/snapshot-running.json', import.meta.url)));
@@ -14,12 +14,14 @@ function batch(state, extra={}) {
 }
 function deferred() { let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject}; }
 async function settle() { for(let i=0;i<12;i++) await Promise.resolve(); }
-function setup(read) {
+function setup(read, options={}) {
   let time=0,id=0,active=true,state=snapshot(),confirmed=state.revision;
   const timers=new Map(),commits=[],failures=[],received=[],resets=[];
-  const reader=new ChangeReader({capture:()=>({snapshot:state,afterRevision:confirmed,isCurrent:()=>active}),read,
+  const reader=new ChangeReader({capture:()=>{const captured=state;return {snapshot:state,afterRevision:confirmed,
+    isCurrent:()=>active&&sameBinding(captured.binding,state.binding)&&captured.generation===state.generation};},read,
     commit:(value,timing)=>{commits.push(value);state=mergeChanges(state,value);confirmed=value.revision;},
-    reset:async value=>{resets.push(value);state={...state,generation:value.generation,revision:value.revision};confirmed=value.revision;},
+    reset:async (value,signal)=>{resets.push(value);await options.reset?.(value,signal);
+      if(signal.aborted)return;state={...state,generation:value.generation,revision:value.revision};confirmed=value.revision;},
     failed:value=>failures.push(value),received:value=>received.push(value),
     now:()=>time,setTimer:(callback,delay)=>{const key=++id;timers.set(key,{at:time+delay,callback});return key;},clearTimer:key=>timers.delete(key)});
   return {reader,commits,failures,received,resets,timers,get state(){return state;},set state(value){state=value;},
@@ -124,6 +126,59 @@ test('reset rebuild is serialized before the next read and paging revision does 
   harness.reader.start();await harness.advance();assert.equal(calls[0].afterRevision,fixture.revision);
   assert.equal(harness.resets.length,1);assert.equal(harness.commits.length,0);
   await harness.advance(750);assert.equal(calls[1].generation,fixture.generation+1);assert.equal(calls[1].afterRevision,3);harness.reader.dispose();
+});
+
+test('a failed reset retries rebuilding before reading ordinary changes that may omit past removals',async()=>{
+  const order=[];let attempts=0;
+  const harness=setup(async()=>{order.push('read');return order.length===1
+    ?batch(harness.state,{resetRequired:true,resetReason:'expiredCursor',revision:harness.state.revision+1})
+    :batch(harness.state);},{reset:async()=>{order.push('reset');if(++attempts===1)throw new Error('rebuild unavailable');}});
+  const original=harness.state;
+  harness.reader.start();await harness.advance();
+  assert.deepEqual(order,['read','reset']);assert.equal(harness.state,original);assert.equal(harness.failures.length,1);
+  await harness.advance(1000);
+  assert.deepEqual(order,['read','reset','reset']);assert.equal(harness.state.revision,original.revision+1);
+  assert.equal(harness.commits.length,0);
+  await harness.advance(750);assert.deepEqual(order,['read','reset','reset','read']);
+  assert.equal(harness.commits.length,1);harness.reader.dispose();
+});
+
+test('hiding during a reset aborts its attempt and visibility resumes the pending rebuild first',async()=>{
+  const pending=deferred(),signals=[];let reads=0;
+  const harness=setup(async()=>{reads++;return batch(harness.state,{resetRequired:true,resetReason:'expiredCursor'});},
+    {reset:async(_value,signal)=>{signals.push(signal);if(signals.length===1)await pending.promise;}});
+  harness.reader.start();await harness.advance();assert.equal(reads,1);assert.equal(signals.length,1);
+  harness.reader.setVisible(false);assert.equal(signals[0].aborted,true);
+  await harness.advance(10000);assert.equal(reads,1);
+  harness.reader.setVisible(true);await harness.advance();assert.equal(signals.length,1);
+  pending.resolve();await settle();assert.equal(harness.nextDelay,0);
+  await harness.advance();assert.equal(signals.length,2);assert.equal(reads,1);assert.equal(harness.failures.length,0);
+  harness.reader.dispose();
+});
+
+test('pausing and restarting the same identity preserves a failed reset',async()=>{
+  let reads=0,attempts=0;
+  const harness=setup(async()=>{reads++;return batch(harness.state,{resetRequired:true,resetReason:'expiredCursor'});},
+    {reset:async()=>{if(++attempts===1)throw new Error('offline');}});
+  harness.reader.start();await harness.advance();harness.reader.pause();
+  await harness.advance(10000);assert.equal(attempts,1);assert.equal(reads,1);
+  harness.reader.start();await harness.advance();assert.equal(attempts,2);assert.equal(reads,1);
+  harness.reader.dispose();
+});
+
+test('a different binding or source generation discards a pending reset from the previous context',async()=>{
+  for(const change of ['binding','generation']) {
+    let reads=0;
+    const harness=setup(async()=>{reads++;return reads===1
+      ?batch(harness.state,{resetRequired:true,resetReason:'expiredCursor'})
+      :batch(harness.state);},{reset:async()=>{throw new Error('rebuild interrupted');}});
+    harness.reader.start();await harness.advance();assert.equal(harness.resets.length,1);
+    harness.reader.pause();harness.state={...harness.state,...(change==='binding'
+      ?{binding:{...harness.state.binding,selectionEpoch:harness.state.binding.selectionEpoch+1}}
+      :{generation:harness.state.generation+1})};
+    harness.reader.start();await harness.advance();assert.equal(reads,2);assert.equal(harness.resets.length,1);
+    assert.equal(harness.commits.length,1);harness.reader.dispose();
+  }
 });
 
 test('detail refresh fills the previously loaded UTF8 byte window before replacing text',async()=>{

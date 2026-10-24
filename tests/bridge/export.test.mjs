@@ -252,3 +252,32 @@ test('storage denial is explicit and does not break same-page idempotent recover
   const h=harness((request,{reply})=>reply(request),{storage});await h.manager.run();await flush();
   assert.match(h.latest.message,/无法持久保存恢复标识/);assert.match(h.latest.message,/已校验/);h.manager.dispose();
 });
+
+test('verified reports retain bilingual coverage and receipt details when revisiting a task',async()=>{
+  const h=harness((request,{reply})=>reply(request));await h.manager.run();await flush();
+  const report=h.latest;
+  assert.match(report.message,/本地导出已校验/);
+  assert.match(report.messageEn,/Local export verified/);assert.match(report.messageEn,/Source coverage is incomplete/);
+  assert.match(report.messageEn,/not a simultaneous snapshot across files/);
+  assert.match(report.messageEn,/Downloads\/Codex Display/);assert.match(report.messageEn,/SHA-256 [a-f0-9]{64}/);
+  h.manager.bind({...binding,threadId:'other-task',selectionEpoch:2});
+  h.manager.bind({...binding,selectionEpoch:3});
+  assert.equal(h.latest.messageEn,report.messageEn);assert.equal(h.latest.message,report.message);
+  assert.equal(h.calls.filter(call=>call.action==='create').length,1);
+  assert.equal(h.calls.filter(call=>call.action==='commit').length,1);
+  for(const feedback of h.feedback)assert.doesNotMatch(feedback.messageEn,/[\u3400-\u9fff]/);
+  h.manager.dispose();
+});
+
+test('English uncertainty and storage feedback preserve unconfirmed-save semantics',async()=>{
+  const storage={getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');}};
+  const h=harness((request,{reply})=>request.action==='commit'?{...reply(request),status:'unknown',exportId:null,
+    createRequestId:null,filename:null,totalBytes:null,manifest:null,
+    save:{status:'unknown',requestId:request.requestId,reason:'verificationUnavailable'}}:reply(request),{storage});
+  await h.manager.run();await flush();
+  assert.match(h.latest.messageEn,/file may already be saved/);assert.match(h.latest.messageEn,/same request/);
+  assert.match(h.latest.messageEn,/cannot persist recovery identifiers/);assert.doesNotMatch(h.latest.messageEn,/Local export verified/);
+  assert.equal(h.latest.busy,false);assert.deepEqual(h.calls.map(call=>call.action),['create','commit']);
+  assert.match(exportScopeMessage(null,'en'),/completeness cannot be confirmed/);
+  h.manager.dispose();
+});

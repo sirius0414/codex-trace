@@ -45,7 +45,8 @@
         "toolCall",
         "toolResult",
         "compaction",
-        "collaboration"
+        "collaboration",
+        "modelUsage"
       ]
     },
     "Scope": {
@@ -717,6 +718,12 @@
               "type": "null"
             }
           ]
+        },
+        "usage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageSnapshot"
+          }
         }
       },
       "required": [
@@ -760,6 +767,12 @@
         },
         "status": {
           "$ref": "#/$defs/ExecutionState"
+        },
+        "usage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UsageSnapshot"
+          }
         }
       },
       "required": [

@@ -9,9 +9,11 @@ const HASH = /^[0-9a-f]{64}$/;
 const phases = ['creating', 'collecting', 'ready', 'committing', 'pending', 'createUnknown', 'saveUnknown', 'verified', 'failed', 'released'] as const;
 export type ExportPhase = typeof phases[number];
 export type ExportIntent = { sourceInstanceId: string; threadId: string; createRequestId: string; commitRequestId: string; exportId: string | null; phase: ExportPhase };
-export type ExportFeedback = { busy: boolean; message: string };
+export type ExportFeedback = { busy: boolean; message: string; messageEn: string };
+type ExportMessage = { zh: string; en: string };
+const translated = (zh: string, en: string): ExportMessage => ({ zh, en });
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
-type KnownExport = { filename: string | null; totalBytes: number | null; manifest: ExportManifest | null; report?: string };
+type KnownExport = { filename: string | null; totalBytes: number | null; manifest: ExportManifest | null; report?: ExportMessage };
 type Options = {
   call: (request: DownloadRequest, signal: AbortSignal) => Promise<DownloadResult>;
   onChange: (feedback: ExportFeedback) => void;
@@ -83,11 +85,17 @@ export function validateExportResult(value: unknown, binding: Binding, intent: E
 }
 
 /** 保存成功与来源完整性分别报告，ZIP 已校验不代表所有原始来源都已读到。 */
-export function exportScopeMessage(manifest: ExportManifest | null) {
-  if (!manifest) return '来源范围以 ZIP 清单为准，当前未取得清单，不能确认来源完整性。';
+export function exportScopeMessage(manifest: ExportManifest | null, language: 'zh' | 'en' = 'zh') {
+  if (!manifest) return language === 'zh' ? '来源范围以 ZIP 清单为准，当前未取得清单，不能确认来源完整性。'
+    : 'The ZIP manifest defines source coverage. The manifest is unavailable, so source completeness cannot be confirmed.';
   const copied = manifest.sources.filter(source => source.state === 'copied').length;
   const incomplete = !manifest.enumerationComplete || manifest.unresolvedRanges.length > 0 || copied !== manifest.sources.length;
-  const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
+  const date = (value: number) => new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', { hour12: false });
+  if (language === 'en') {
+    const interval = manifest.collectionEndedAt == null ? `collection started at ${date(manifest.collectionStartedAt)}`
+      : `collected ${date(manifest.collectionStartedAt)}–${date(manifest.collectionEndedAt)}`;
+    return `Main task and confirmed subtasks; ${interval}. ${incomplete ? `Source coverage is incomplete (${copied}/${manifest.sources.length} sources copied in full); see the manifest for unread ranges.` : `${copied} sources copied.`} Source cutoffs are listed in the manifest; this is not a simultaneous snapshot across files.`;
+  }
   const interval = manifest.collectionEndedAt == null ? `开始采集于 ${date(manifest.collectionStartedAt)}`
     : `采集于 ${date(manifest.collectionStartedAt)}–${date(manifest.collectionEndedAt)}`;
   return `主任务及已确认子任务；${interval}。${incomplete ? `来源范围不完整（完整复制 ${copied}/${manifest.sources.length} 个来源），未读取范围见清单。` : `${copied} 个来源已复制。`}各来源截止位置见清单，并非跨文件同一时刻快照。`;
@@ -144,9 +152,12 @@ export class ExportCoordinator {
     try { if (this.storage) this.storage.setItem(STORAGE_KEY, JSON.stringify([...this.intents.values()])); }
     catch { this.storageUnavailable = true; }
   }
-  private feedback(busy: boolean, message: string) {
-    if (!this.disposed) this.options.onChange({ busy, message: message && this.storageUnavailable
-      ? `${message} 当前容器无法持久保存恢复标识，请保持本页面以便核对同一次请求。` : message });
+  private feedback(busy: boolean, message: ExportMessage) {
+    if (!this.disposed) this.options.onChange({ busy,
+      message: message.zh && this.storageUnavailable
+        ? `${message.zh} 当前容器无法持久保存恢复标识，请保持本页面以便核对同一次请求。` : message.zh,
+      messageEn: message.en && this.storageUnavailable
+        ? `${message.en} This container cannot persist recovery identifiers. Keep this page open to verify the same request.` : message.en });
   }
   bind(binding: Binding | null) {
     if (sameBinding(this.binding, binding) || !this.binding && !binding) return;
@@ -157,10 +168,10 @@ export class ExportCoordinator {
     if (previous && previousIntent?.exportId) this.release(previous, previousIntent);
     const intent = binding ? this.intents.get(operationKey(binding)) : undefined;
     const known = intent ? this.known.get(intent.createRequestId) : undefined;
-    this.feedback(false, known?.report ?? (!intent ? '' : terminalPhase(intent.phase)
-      ? '上次导出流程已结束；点击“导出记录”可采集新的快照。'
-      : savedPhase(intent.phase) ? '上次保存结果尚待核对；点击“导出记录”核对同一次请求。'
-        : '上次导出尚未提交保存；点击“导出记录”继续核对。'));
+    this.feedback(false, known?.report ?? (!intent ? translated('', '') : terminalPhase(intent.phase)
+      ? translated('上次导出流程已结束；点击“导出记录”可采集新的快照。', 'The previous export has ended. Click “Export records” to collect a new snapshot.')
+      : savedPhase(intent.phase) ? translated('上次保存结果尚待核对；点击“导出记录”核对同一次请求。', 'The previous save still needs verification. Click “Export records” to check the same request.')
+        : translated('上次导出尚未提交保存；点击“导出记录”继续核对。', 'The previous export has not been submitted for saving. Click “Export records” to continue checking it.')));
   }
   setVisible(visible: boolean) {
     this.visible = visible;
@@ -219,11 +230,11 @@ export class ExportCoordinator {
           if (this.intents.size < 128) break;
         }
       }
-      if (!intent && this.intents.size >= 128) { this.feedback(false, '待核对导出意图数量已达上限，请先核对已有请求。'); return Promise.resolve(); }
+      if (!intent && this.intents.size >= 128) { this.feedback(false, translated('待核对导出意图数量已达上限，请先核对已有请求。', 'The limit for unverified exports has been reached. Verify existing requests first.')); return Promise.resolve(); }
       const random = this.options.randomId ?? (() => crypto.randomUUID());
       const createRequestId = random(), commitRequestId = random();
       if (!KEY.test(createRequestId) || !KEY.test(commitRequestId) || createRequestId === commitRequestId) {
-        this.feedback(false, '无法生成独立导出请求标识，尚未提交。'); return Promise.resolve();
+        this.feedback(false, translated('无法生成独立导出请求标识，尚未提交。', 'Unable to generate distinct export request identifiers. Nothing has been submitted.')); return Promise.resolve();
       }
       if (intent) this.known.delete(intent.createRequestId);
       intent = { sourceInstanceId: binding.sourceInstanceId, threadId: binding.threadId, createRequestId, commitRequestId, exportId: null, phase: 'creating' };
@@ -236,7 +247,7 @@ export class ExportCoordinator {
       // 取消后的旧流程不再写界面；本地异常只解除忙碌态，不推断保存已失败。
       if (!controller.signal.aborted && !this.disposed && this.generation === generation && sameBinding(this.binding, binding)) {
         intent.phase = savedPhase(intent.phase) ? 'saveUnknown' : 'createUnknown'; this.persist();
-        this.feedback(false, '导出结果未确认；再次点击“导出记录”将核对同一次请求。');
+        this.feedback(false, translated('导出结果未确认；再次点击“导出记录”将核对同一次请求。', 'The export result is unconfirmed. Click “Export records” again to check the same request.'));
       }
     });
     this.running = pending;
@@ -252,7 +263,7 @@ export class ExportCoordinator {
       const pausedAt = this.now(); await this.waitVisible(signal); paused += this.now() - pausedAt;
       if (!valid()) return;
       if (count >= (this.options.pollLimit ?? 60) || this.now() - started - paused >= (this.options.activeTimeLimitMs ?? 120000)) {
-        this.feedback(false, '等待已达到本次核对时限，结果未确认；再次点击“导出记录”将继续同一次请求。'); return;
+        this.feedback(false, translated('等待已达到本次核对时限，结果未确认；再次点击“导出记录”将继续同一次请求。', 'The verification time limit has been reached, and the result is unconfirmed. Click “Export records” again to continue the same request.')); return;
       }
       let request: DownloadRequest;
       const known = this.known.get(intent.createRequestId);
@@ -263,8 +274,8 @@ export class ExportCoordinator {
         request = { action: 'commit', binding, exportId: intent.exportId!, requestId: intent.commitRequestId };
       } else if (intent.exportId) request = { action: 'status', binding, exportId: intent.exportId };
       else request = { action: 'create', binding, requestId: intent.createRequestId };
-      this.feedback(true, request.action === 'create' ? '正在冻结所选任务及已确认子任务的可读原始记录…'
-        : request.action === 'commit' ? '正在保存并核验本地 ZIP…' : request.action === 'result' ? '正在核对同一次本地保存结果…' : '正在采集已冻结来源；尚未提交本地保存。');
+      this.feedback(true, request.action === 'create' ? translated('正在冻结所选任务及已确认子任务的可读原始记录…', 'Freezing readable original records for the selected task and confirmed subtasks…')
+        : request.action === 'commit' ? translated('正在保存并核验本地 ZIP…', 'Saving and verifying the local ZIP…') : request.action === 'result' ? translated('正在核对同一次本地保存结果…', 'Checking the result of the same local save request…') : translated('正在采集已冻结来源；尚未提交本地保存。', 'Collecting frozen sources. Local saving has not been submitted.'));
       count++;
       try {
         const response = await this.rpc(request, signal, request.action === 'commit' ? () => {
@@ -282,24 +293,34 @@ export class ExportCoordinator {
         failures = 0;
         if (result.save.status === 'verified') {
           intent.phase = 'verified'; this.persist();
-          const report = `本地导出已校验：${result.save.path}（${result.save.bytes.toLocaleString()} 字节，SHA-256 ${result.save.sha256}）。${exportScopeMessage(result.manifest ?? known?.manifest ?? null)}`;
+          const manifest = result.manifest ?? known?.manifest ?? null;
+          const report = translated(
+            `本地导出已校验：${result.save.path}（${result.save.bytes.toLocaleString('zh-CN')} 字节，SHA-256 ${result.save.sha256}）。${exportScopeMessage(manifest)}`,
+            `Local export verified: ${result.save.path} (${result.save.bytes.toLocaleString('en-US')} bytes, SHA-256 ${result.save.sha256}). ${exportScopeMessage(manifest, 'en')}`,
+          );
           this.known.set(intent.createRequestId, { filename: result.filename, totalBytes: result.totalBytes, manifest: result.manifest ?? known?.manifest ?? null, report });
           this.feedback(false, report); this.release(binding, intent); return;
         }
         if (result.save.status === 'failed') {
           intent.phase = 'failed'; this.persist();
-          const reason = { destinationUnavailable: '保存目录不可用', permissionDenied: '没有保存权限', resourceLimit: '资源不足', writeFailed: '写入未完成' }[result.save.code];
-          this.feedback(false, `本次保存未发布最终文件：${reason}。再次点击可重新采集并导出。`); this.release(binding, intent); return;
+          const reason = {
+            destinationUnavailable: translated('保存目录不可用', 'the save directory is unavailable'),
+            permissionDenied: translated('没有保存权限', 'permission to save was denied'),
+            resourceLimit: translated('资源不足', 'resources are insufficient'),
+            writeFailed: translated('写入未完成', 'writing did not complete'),
+          }[result.save.code];
+          this.feedback(false, translated(`本次保存未发布最终文件：${reason.zh}。再次点击可重新采集并导出。`,
+            `This save did not publish a final file: ${reason.en}. Click again to collect and export a new snapshot.`)); this.release(binding, intent); return;
         }
         if (result.save.status === 'pending') intent.phase = 'pending';
         else if (result.save.status === 'unknown' || result.status === 'unknown') {
           intent.phase = savedPhase(intent.phase) ? 'saveUnknown' : 'createUnknown'; this.persist();
           if (explicitRecovery && request.action === 'commit') { await this.sleep(1000, signal); continue; }
-          this.feedback(false, '导出结果未确认，文件可能已保存；再次点击将恢复或核对同一次请求，请勿据此判断文件不存在。'); return;
+          this.feedback(false, translated('导出结果未确认，文件可能已保存；再次点击将恢复或核对同一次请求，请勿据此判断文件不存在。', 'The export result is unconfirmed; the file may already be saved. Click again to recover or verify the same request. This does not mean the file is missing.')); return;
         } else if (result.status === 'failed' || result.status === 'released') {
           intent.phase = result.status; this.persist();
-          this.feedback(false, result.status === 'released' ? '上次未提交的导出快照已释放；再次点击可采集新的快照。'
-            : '未能取得可导出的原始记录；尚未提交本地保存。再次点击可重新采集。'); return;
+          this.feedback(false, result.status === 'released' ? translated('上次未提交的导出快照已释放；再次点击可采集新的快照。', 'The previous snapshot was released before saving. Click again to collect a new snapshot.')
+            : translated('未能取得可导出的原始记录；尚未提交本地保存。再次点击可重新采集。', 'No exportable original records could be collected. Local saving has not been submitted. Click again to retry collection.')); return;
         } else if (result.status === 'ready') intent.phase = 'ready';
         else intent.phase = 'collecting';
         this.persist();
@@ -310,14 +331,14 @@ export class ExportCoordinator {
         // 服务只在接受 commit 键之前返回 exportExpired；已接受的保存返回持久化结论。
         if (code === 'exportExpired') {
           intent.phase = 'released'; this.persist();
-          this.feedback(false, '上次未提交的导出快照已释放；再次点击可采集新的快照。'); return;
+          this.feedback(false, translated('上次未提交的导出快照已释放；再次点击可采集新的快照。', 'The previous snapshot was released before saving. Click again to collect a new snapshot.')); return;
         }
         intent.phase = savedPhase(intent.phase) ? 'saveUnknown' : 'createUnknown'; this.persist();
         if (failure instanceof ExportResponseError || code === 'identityRequired' || code === 'idempotencyConflict') {
-          this.feedback(false, code === 'identityRequired' ? '观察会话已失效；请重新打开本任务的执行轨迹，再核对原导出请求。'
-            : '导出响应无法核对，结果未确认；再次点击将核对同一次请求。'); return;
+          this.feedback(false, code === 'identityRequired' ? translated('观察会话已失效；请重新打开本任务的执行轨迹，再核对原导出请求。', 'The observation session has expired. Reopen this task’s execution trace, then verify the original export request.')
+            : translated('导出响应无法核对，结果未确认；再次点击将核对同一次请求。', 'The export response could not be verified, and the result is unconfirmed. Click again to check the same request.')); return;
         }
-        this.feedback(true, '本地请求未返回确定结果，正在等待核对同一次导出；不会创建另一份保存请求。');
+        this.feedback(true, translated('本地请求未返回确定结果，正在等待核对同一次导出；不会创建另一份保存请求。', 'The local request returned no definitive result. Waiting to verify the same export without creating another save request.'));
         await this.sleep([1000, 2000, 5000, 10000][Math.min(failures++, 3)], signal);
       }
     }

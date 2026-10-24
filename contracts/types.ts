@@ -8,7 +8,7 @@ export type UpdateStatus = "connecting" | "current" | "stale" | "unavailable";
 
 export type OutputCompleteness = "notRecorded" | "fragment" | "complete" | "unknown";
 
-export type EventKind = "userMessage" | "assistantMessage" | "reasoningSummary" | "systemContext" | "developerContext" | "environment" | "toolCall" | "toolResult" | "compaction" | "collaboration";
+export type EventKind = "userMessage" | "assistantMessage" | "reasoningSummary" | "systemContext" | "developerContext" | "environment" | "toolCall" | "toolResult" | "compaction" | "collaboration" | "modelUsage";
 
 export type Scope = "thread" | "turn" | "event" | "group";
 
@@ -103,6 +103,7 @@ export type TraceEvent = {
   "eventRevision": number;
   "callKey": (string) | (null);
   "modelRequestKey": (string) | (null);
+  "usage"?: Array<UsageSnapshot>;
 };
 
 export type Turn = {
@@ -110,6 +111,7 @@ export type Turn = {
   "turnId": string;
   "order": number;
   "status": ExecutionState;
+  "usage"?: Array<UsageSnapshot>;
 };
 
 export type UsageMetric = ({

@@ -94,3 +94,69 @@ def usage_snapshots(thread_id, records):
     if requests:
         return sorted(requests.values(), key=lambda item: item['order'])
     return [fallback] if fallback else []
+
+
+def scoped_usage_snapshots(thread_id, records):
+    """保留明确 turn/session 的轮次快照和 response 身份的单次用量。
+
+    与任务总量独立归约：轮次累计只替换，同一请求重复记录只保留最新值。
+    token_count 也会因配额更新或重算产生，不能按相邻条目分摊成步骤用量。
+    checkpoint 可恢复轮次快照，但不会创建一次新的模型请求。
+    """
+    turns, requests = {}, {}
+    inherited = False
+    for row in sorted(records, key=lambda row: row['ordinal']):
+        record = row.get('record', {})
+        payload = record.get('payload', {})
+        if not isinstance(payload, dict):
+            continue
+        outer = record.get('type')
+        if outer == 'session_meta' and payload.get('id') == thread_id:
+            inherited = inherited or bool(payload.get('forked_from_id'))
+        checkpoint = outer == 'compacted' and 'latest_token_usage_record' in payload
+        if row.get('inherited') and (outer == 'token_usage_record' or checkpoint and isinstance(payload.get('latest_token_usage_record'), dict)):
+            inherited = True
+        if row.get('projectionExcluded') or row.get('inherited'):
+            continue
+        if checkpoint:
+            payload = payload['latest_token_usage_record']
+            if payload is None:
+                # 清空恢复基线不会撤销历史轮次或已完成请求的独立用量证据。
+                inherited = False
+            if not isinstance(payload, dict):
+                continue
+        elif outer != 'token_usage_record':
+            continue
+        if payload.get('thread_id') != thread_id:
+            continue
+        turn_id = payload.get('turn_id')
+        if not isinstance(turn_id, str) or not turn_id:
+            continue
+        values = payload.get('turn_token_usage')
+        if isinstance(values, dict):
+            item = _snapshot(thread_id, row, payload, values, family='token_usage_record', scope='turn', scope_id=turn_id,
+                             attribution='includesInherited' if inherited else 'unseparated',
+                             coverage='此轮已记录累计用量；最新快照替换旧值，不与任务总量或单次请求相加。'
+                                      + ('包含继承基线。' if inherited else '仅按来源明确的轮次归属展示。')
+                                      + ('来自压缩 checkpoint，不是新增消费。' if checkpoint else ''))
+            key = (turn_id, item['epoch'])
+            previous = turns.get(key)
+            if previous and any(item[name]['value'] is not None and previous[name]['value'] is not None
+                                and item[name]['value'] < previous[name]['value'] for name in ('input', 'output', 'cachedInput')):
+                item['coverage'] += '计数下降，保留最新快照，不推定新 session。'
+            turns[key] = item
+        response = payload.get('response_id')
+        if not checkpoint and isinstance(payload.get('usage'), dict) and isinstance(response, str) and response:
+            item = _snapshot(thread_id, row, payload, payload['usage'], family='token_usage_record',
+                             scope='request', scope_id=response, mode='perRequest', attribution='selfOnly',
+                             coverage='此 response_id 的单次模型请求用量；不分摊到工具或消息，不代表当前上下文占用。')
+            key = (item['epoch'], response)
+            requests[key] = (turn_id, item, row)
+    by_turn = {}
+    for (turn_id, _), item in sorted(turns.items(), key=lambda entry: entry[1]['order']):
+        by_turn.setdefault(turn_id, []).append(item)
+    for values in by_turn.values():
+        if len(values) > 1:
+            for item in values:
+                item['coverage'] += '此轮存在多个 session 范围，展示最新范围，彼此未求和。'
+    return by_turn, sorted(requests.values(), key=lambda entry: entry[1]['order'])

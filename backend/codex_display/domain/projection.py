@@ -13,10 +13,10 @@ import math
 from typing import Any, Iterable
 
 from .lifecycle import turn_states, thread_explanation
-from .usage import usage_snapshots
+from .usage import usage_snapshots, scoped_usage_snapshots
 from .relationships import project_relationships, resolve_relationships
 
-PARSER_VERSION = '1.1.0'
+PARSER_VERSION = '1.2.0'
 _PREVIEW_LENGTH = 280
 _ITEM_TYPES = {
     'UserMessage': 'userMessage', 'AgentMessage': 'agentMessage',
@@ -30,7 +30,7 @@ _LABELS = {'userMessage': '用户输入', 'assistantMessage': '助手输出',
            'reasoningSummary': '思考摘要', 'systemContext': '系统说明',
            'developerContext': '开发者说明', 'environment': '运行环境',
            'toolCall': '工具调用', 'toolResult': '工具结果',
-           'compaction': '上下文压缩', 'collaboration': '协作操作'}
+           'compaction': '上下文压缩', 'collaboration': '协作操作', 'modelUsage': '模型用量'}
 
 
 def _json(value: Any) -> str:
@@ -489,6 +489,26 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             event_id = add(pair)
             _attach(events[event_id], details[event_id], row)
             raw_positions[event_id] = row['ordinal']
+    turn_usage, request_usage = scoped_usage_snapshots(thread_id, all_records)
+    # 用量属于整个响应，不能按相邻时间绑定到某条工具或消息。独立条目保留明确的请求身份。
+    for turn_id, usage, row in request_usage:
+        turn_order.setdefault(turn_id, len(turn_order))
+        raw_turn_order.setdefault(turn_id, row['ordinal'])
+        event_id = 'event:' + _identity('usage', usage['sourceIdentity'])
+        pair = _event(thread_id, event_id, turn_id, 'modelUsage',
+                      {'summary': usage['coverage'], 'output': _json(usage)},
+                      _raw_source(row), row['ordinal'],
+                      timing=_timing(usage['recordedAt'], source=_raw_source(row), basis='用量记录保存时间；不表示模型请求开始时间'),
+                      status=unknown_status('用量已记录；不据此推定任务或工具的执行状态。'))
+        pair[0]['usage'] = [usage]
+        pair[0]['modelRequestKey'] = usage['sourceIdentity']
+        pair[0]['preview'] = usage['requestKey']
+        add(pair)
+        _attach(events[event_id], details[event_id], row, association='physicalRecord')
+        raw_positions[event_id] = row['ordinal']
+    for turn_id, values in turn_usage.items():
+        turn_order.setdefault(turn_id, len(turn_order))
+        raw_turn_order.setdefault(turn_id, values[0]['order'])
     # 以共享精确身份的官方 item 为排序锚点；无可比锚点的 raw 补充项放入上下文区。
     anchors = sorted((raw_positions[eid], ordinal) for eid, ordinal in official_order.items() if eid in raw_positions)
     anchor_positions = [position for position, _ in anchors]
@@ -538,7 +558,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             official_turn_set.add(event['turnId'])
     # 先按锚点收集插入项，再一次展开，避免大量轮次下反复 list.index/insert 的平方开销。
     insertions, pending = {}, []
-    for turn_id in raw_turn_order:
+    for turn_id in sorted(raw_turn_order, key=raw_turn_order.get):
         if turn_id in official_turn_set:
             insertions[turn_id] = pending
             pending = []
@@ -552,7 +572,8 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
     included_turns = set(turn_ids)
     turn_ids.extend(tid for tid in turn_order if tid not in included_turns)
     turn_order = {tid: index for index, tid in enumerate(turn_ids)}
-    turns = [{'threadId': thread_id, 'turnId': tid, 'order': order, 'status': lifecycle.get(tid, unknown_status('冷读取轮次状态不能独自证明实际执行状态。'))} for tid, order in turn_order.items()]
+    turns = [{'threadId': thread_id, 'turnId': tid, 'order': order, 'status': lifecycle.get(tid, unknown_status('冷读取轮次状态不能独自证明实际执行状态。')),
+              'usage': turn_usage.get(tid, [])} for tid, order in turn_order.items()]
     usage = usage_snapshots(thread_id, all_records)
     child_groups, relationships, relationship_issues = project_relationships(thread_id, all_records, api_items, ordered, mode)
     state = unknown_status(thread_explanation(turns))

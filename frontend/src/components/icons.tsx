@@ -1,5 +1,6 @@
-type IconName = 'pause' | 'play' | 'down' | 'right' | 'up' | 'download' | 'close' | 'search' | 'alert' | 'user' | 'model' | 'tool' | 'context' | 'compaction' | 'branch' | 'copy' | 'info' | 'database' | 'usage' | 'zoomIn' | 'zoomOut' | 'check';
+type IconName = 'pause' | 'play' | 'down' | 'right' | 'up' | 'download' | 'close' | 'search' | 'alert' | 'user' | 'model' | 'tool' | 'context' | 'compaction' | 'branch' | 'copy' | 'info' | 'database' | 'usage' | 'zoomIn' | 'zoomOut' | 'check' | 'palette';
 const paths: Record<IconName, string> = {
+  palette: 'M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-3.7 1.5 1.5 0 0 1 .8-2.8H17a4 4 0 0 0 4-4c0-4.4-4-7.5-9-7.5zM7 10h.01M10 6.5h.01M15 6.5h.01M18 10h.01',
   pause: 'M7 3H4v18h3z M17 3h3v18h-3z',
   play: 'M6 3l15 9-15 9z', down: 'M5 9l7 7 7-7', right: 'M9 5l7 7-7 7', up: 'M5 15l7-7 7 7',
   download: 'M12 3v12m-5-5 5 5 5-5 M4 15v5h16v-5', close: 'M6 6l12 12M6 18 18 6',

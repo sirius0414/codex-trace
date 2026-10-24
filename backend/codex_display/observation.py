@@ -424,6 +424,13 @@ class Observation:
             task.io_lock.release()
 
     def _change_result(self, binding, view, task, after, *, reset=None):
+        if reset == "expiredCursor":
+            # 旧差异已不可回放，重建前移除无法再交付删除通知的旧 ID。
+            # 常规读取仍须保留这些 ID，直到增量批次交付 removeEventIds。
+            previous_size = len(view.loaded)
+            view.loaded.intersection_update(event["eventId"] for event in task.projection["events"])
+            if len(view.loaded) != previous_size:
+                view.scope_revision += 1
         snapshot = self._snapshot(binding, view, task, [], view.page_cursor)
         return {"binding": dict(binding), "generation": task.generation, "baseRevision": after,
                 "revision": task.revision, "resetRequired": reset is not None, "resetReason": reset,
