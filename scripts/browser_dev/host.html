@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>执行轨迹 · 浏览器开发预览</title>
+    <style>
+      :root { color-scheme: light dark; font: 12px/1.45 system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; }
+      body { display: flex; flex-direction: column; background: Canvas; color: CanvasText; }
+      .dev-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 9px 14px; border-bottom: 1px solid color-mix(in srgb, CanvasText 18%, transparent); }
+      .dev-banner strong { font-weight: 650; }
+      .dev-banner p { margin: 0; }
+      .dev-banner .guidance { opacity: .7; }
+      #status { margin-left: auto; }
+      #status[data-state="error"] { color: light-dark(#a22c22, #ffaaa2); }
+      button { font: inherit; color: inherit; background: transparent; border: 1px solid color-mix(in srgb, CanvasText 30%, transparent); border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+      button:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+      #surface { min-height: 0; flex: 1; }
+      iframe { display: block; border: 0; width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <header class="dev-banner">
+      <strong>执行轨迹 · 开发预览</strong>
+      <p class="guidance">前端修改后运行 npm run build 并刷新；后端修改后重启服务。</p>
+      <p id="status" role="status" aria-live="polite">正在连接本地服务…</p>
+      <button id="refresh" type="button">刷新</button>
+    </header>
+    <main id="surface">
+      <iframe id="app" title="执行轨迹" referrerpolicy="no-referrer"></iframe>
+    </main>
+    <!-- 令牌由本地服务在每次启动时生成，仅用于本开发页面与本地 API。 -->
+    <script id="dev-token" type="application/json">__CODEX_DISPLAY_DEV_TOKEN__</script>
+    <script src="/host.js" type="module"></script>
+  </body>
+</html>

@@ -35,6 +35,42 @@ Codex 本地任务执行轨迹插件，当前版本 **0.1.0**。正式入口使�
 
 ## 构建与验证
 
+### 独立浏览器调试（仅开发）
+
+已有项目所需的 Python 运行环境和前端依赖时，在仓库目录运行：
+
+```sh
+npm run dev:browser:start
+```
+
+启动命令默认构建当前源码，等待服务就绪后返回。随后访问 [http://localhost:8765/](http://localhost:8765/) 并在界面中选择任务。此入口使用正式 React 界面和正式 MCP 后端，可以调试轨迹、详情、筛选、跟随及导出；任务来源遵循 `CODEX_HOME`，默认读取本机 `~/.codex`。
+
+| 命令 | 作用 |
+| --- | --- |
+| `npm run dev:browser:start` | 在独立会话中后台启动，已运行时直接报告状态。 |
+| `npm run dev:browser:stop` | 停止管理器启动的服务及其后端，已停止时重复执行无影响。 |
+| `npm run dev:browser:restart` | 停止后重新启动，未指定的选项沿用保存的端口、运行环境和 `--skip-build` 设置。 |
+| `npm run dev:browser:status` | 查看服务状态、地址及日志位置。 |
+| `npm run dev:browser` | 在当前终端前台运行，按 `Ctrl+C` 停止。 |
+
+启动器复用已安装插件的 Python／Codex 路径，也会检查仓库 `.venv`，不会安装依赖或更新插件。`start` 和 `restart` 可指定 `--port`、`--python`、`--codex`、`--skip-build`，例如：
+
+```sh
+npm run dev:browser:start -- --port 8766 --python /absolute/path/to/python --codex /absolute/path/to/codex --skip-build
+```
+
+后台运行的 PID、实例信息和日志保存在 `build/dev-browser/`，不设置登录或重启后的自动启动。查看持续日志：
+
+```sh
+tail -f build/dev-browser/server.log
+```
+
+修改前端后执行 `npm run build` 并刷新浏览器，修改后端后执行 `npm run dev:browser:restart` 并刷新。管理器只停止自己启动并核验身份的进程；前台命令启动的服务须在原终端按 `Ctrl+C` 停止，其他进程占用端口时会报告冲突。
+
+调试索引和阅读状态保存在 `build/dev-browser/index/`，调试导出保存在 `build/dev-browser/Downloads/Codex Display/`，与正式插件的数据目录分开。清理该开发目录会丢失其中的调试状态及导出文件。服务仅监听 `127.0.0.1`，不提供局域网访问。
+
+开发宿主位于 `scripts/dev_browser.py`、`scripts/manage_dev_browser.py` 和 `scripts/browser_dev/`，不进入插件包；正式插件的入口、权限及安装流程保持不变。
+
 开发与 CR 请遵循 [代码规范与 CR 指南](CONTRIBUTING.md)，其中列出注释要求、关键约束和分层阅读入口。
 
 运行需要 **Python ≥3.14 且 `compression.zstd` 可用**，用于读取压缩来源；打包会实际检测压缩能力和锁文件中的依赖版本。本地前端开发基线为 Node.js 25。使用本机桌面配套的 Codex app-server 可执行文件。
