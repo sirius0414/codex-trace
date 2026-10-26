@@ -6,6 +6,7 @@ export type DetailData = { eventId: string; summary: string; parts: Partial<Reco
 export type TraceUIProps = {
   snapshot: ThreadSnapshot | null;
   view: ViewState;
+  trackingPaused: boolean;
   detail: DetailData | null;
   threads: ThreadSummary[];
   threadsMore: boolean;
@@ -22,6 +23,7 @@ export type TraceUIProps = {
   onMoreThreads: () => void;
   onThreadScope: (scope: 'user' | 'all') => void;
   onView: (patch: Partial<ViewState>) => void;
+  onTrackingPause: (paused: boolean) => void;
   onSelect: (eventId: string | null) => void;
   onLoadEarlier: (groupId?: string) => void;
   onMoreDetail: (part: ContentPart) => void;

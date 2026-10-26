@@ -166,7 +166,7 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
   }
   function renderRow(row: ListRow) {
     const style = { position: 'absolute' as const, top: row.top, height: row.height, left: 0, right: 0 };
-    if (row.type === 'earlier') return <button key={row.key} style={style} className="cx-load" disabled={props.loading} aria-label={row.group ? t(`加载 ${row.group.name} 的较早记录`, `Load earlier records for ${row.group.name}`) : t('加载更早记录', 'Load earlier records')} onClick={() => {
+    if (row.type === 'earlier') return <button key={row.key} style={style} className="cx-load" disabled={props.loading || props.trackingPaused} title={props.trackingPaused ? t('继续跟踪后可加载较早记录', 'Resume tracking to load earlier records') : undefined} aria-label={row.group ? t(`加载 ${row.group.name} 的较早记录`, `Load earlier records for ${row.group.name}`) : t('加载更早记录', 'Load earlier records')} onClick={() => {
       const saved = captureAnchor(); anchor.current = saved;
       props.onView({ follow: 'paused', anchor: saved });
       props.onLoadEarlier(row.group?.groupId);

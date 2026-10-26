@@ -86,7 +86,7 @@ type ReaderOptions = {
   clearTimer?: (timer: unknown) => void;
 };
 
-/** 前台串行轮询器；读取与跟随滚动独立，暂停跟随后仍应接收任务进展。 */
+/** 前台串行轮询器；阅读滚动与读取独立，工具栏暂停跟踪时由调用方停止读取。 */
 export class ChangeReader {
   private active = false;
   private visible = true;

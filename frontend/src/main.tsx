@@ -9,6 +9,7 @@ import { readDetailWindow } from './state/detail';
 import { rebuildLoadedSnapshot } from './state/rebuild';
 import { ExportCoordinator } from './state/export';
 import { GroupReader } from './state/groups';
+import { TrackingGate } from './state/tracking';
 import TraceUI from './components/TraceUI';
 import type { DetailData } from './ui-types';
 import { PreferencesProvider, usePreferences } from './preferences';
@@ -26,6 +27,8 @@ function TrajectoryApp() {
   const { language } = usePreferences();
   const [snapshot, setSnapshot] = useState<ThreadSnapshot | null>(null);
   const [view, setView] = useState<ViewState>(defaultView);
+  const [trackingPaused, setTrackingPaused] = useState(false);
+  const tracking = useRef(new TrackingGate());
   const [detail, setDetail] = useState<DetailData | null>(null);
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const [threadsMore, setThreadsMore] = useState(false);
@@ -72,6 +75,7 @@ function TrajectoryApp() {
   }
   function applyView(next: ViewState) { currentView.current = next; setView(next); }
   function applySnapshot(next: ThreadSnapshot) {
+    if (tracking.current.paused) return;
     const current = currentSnapshot.current;
     if (current && next.generation > current.generation) {
       // generation 变化代表来源已重建，旧删除标记和详情游标不能跨代沿用。
@@ -100,6 +104,8 @@ function TrajectoryApp() {
     currentDetail.current = null; setDetail(null);
     applyView(defaultView()); setSearchResult(null); setError(''); setExportMessage('');
     invalidateDetails(); removedEvents.current.clear(); transportError.current = ''; pendingTiming.current = null;
+    tracking.current.setPaused(false); setTrackingPaused(false);
+    groupReads.current?.setVisible(document.visibilityState !== 'hidden');
   }
 
   /** 同一个偏好对象串行执行 CAS 保存；切换任务后旧对象不能回写新任务状态。 */
@@ -138,6 +144,22 @@ function TrajectoryApp() {
     const token = gate.current.capture();
     saveTimer.current = setTimeout(() => { void flushPreferences(token); }, 400);
   }
+  function pauseTracking(paused: boolean) {
+    const wasPaused = tracking.current.paused;
+    tracking.current.setPaused(paused); setTrackingPaused(paused);
+    patchView({ follow: paused ? 'paused' : 'following' });
+    if (!paused && !wasPaused) { changes.current?.retry(); return; }
+    // 先同步使在途快照失效，再停调度；只隐藏按钮或等待 effect 会漏收最后一个响应。
+    if (paused) {
+      groupReads.current?.setVisible(false);
+      changes.current?.pause(); invalidateDetails(); setLoading(false);
+    } else {
+      if (currentSnapshot.current && confirmedRevision.current !== null) changes.current?.start();
+      else void readSnapshot(gate.current.capture(), null, true);
+      // 子任务队列若开始补读，会暂停增量读取；不能在其后重新 start 造成并发。
+      groupReads.current?.setVisible(document.visibilityState !== 'hidden');
+    }
+  }
   function selectEvent(eventId: string | null) {
     const wasSelected = currentView.current.selectedEventId === eventId;
     patchView(selectedView(currentView.current, currentSnapshot.current, eventId));
@@ -149,9 +171,9 @@ function TrajectoryApp() {
 
   /** 首屏/重试先恢复偏好与锚点，再开放增量读取；历史分页只扩展当前加载范围。 */
   async function readSnapshot(token: Token, cursor: string | null = null, restore = false, groupId: string | null = null) {
-    if (!token.binding || !client.current) return;
+    if (!token.binding || !client.current || tracking.current.paused) return;
     const adapter = client.current;
-    const signal = selectionAbort.current.signal;
+    const signal = AbortSignal.any([selectionAbort.current.signal, tracking.current.signal]);
     const previousConfirmed = confirmedRevision.current;
     // 分页也会改变服务端增量范围；先取消进行中的重建，避免它随后覆盖新加载的历史。
     changes.current?.pause();
@@ -308,8 +330,9 @@ function TrajectoryApp() {
     mounted.current = true;
     const reader = new ChangeReader({
       capture: () => {
+        // 跟踪暂停由 reader.pause() 取消请求；身份门禁保持有效，才能继续尚未完成的重建。
         const state = currentSnapshot.current, token = gate.current.capture(), signal = selectionAbort.current.signal;
-        if (!state || confirmedRevision.current === null || !token.binding) return null;
+        if (!state || confirmedRevision.current === null || !token.binding || tracking.current.paused) return null;
         return { snapshot: state, afterRevision: confirmedRevision.current,
           isCurrent: () => mounted.current && !signal.aborted && gate.current.accepts(token) && currentSnapshot.current?.generation === state.generation };
       },
@@ -317,7 +340,7 @@ function TrajectoryApp() {
       received: timing => recordChangeTiming('received', timing),
       commit: (batch, timing) => {
         const state = currentSnapshot.current;
-        if (!state) return;
+        if (!state || tracking.current.paused) return;
         const next = mergeChanges(state, batch);
         // 墓碑保留删除发生的 revision，阻止稍晚返回的历史页把已删事件加回来。
         for (const id of batch.removeEventIds) removedEvents.current.set(id, batch.revision);
@@ -374,9 +397,9 @@ function TrajectoryApp() {
     });
     changes.current = reader;
     const visibility = () => {
-      // 页面隐藏时停轮询以释放观察租约；“暂停跟随”只影响滚动，不影响这里的读取。
+      // 可见性恢复不能解除用户的显式暂停；导出保存有独立的生命周期。
       const visible = document.visibilityState !== 'hidden';
-      reader.setVisible(visible); groupReads.current?.setVisible(visible); exports.current?.setVisible(visible);
+      reader.setVisible(visible); groupReads.current?.setVisible(visible && !tracking.current.paused); exports.current?.setVisible(visible);
     };
     visibility(); document.addEventListener('visibilitychange', visibility);
     const adapter = new TrajectoryClient((open: OpenResult) => {
@@ -396,8 +419,9 @@ function TrajectoryApp() {
     client.current = adapter;
     const groups = new GroupReader({
       capture: () => {
-        const state = currentSnapshot.current, token = gate.current.capture(), signal = selectionAbort.current.signal;
-        if (!state || !token.binding || confirmedRevision.current === null) return null;
+        const state = currentSnapshot.current, token = gate.current.capture();
+        const signal = AbortSignal.any([selectionAbort.current.signal, tracking.current.signal]);
+        if (!state || !token.binding || confirmedRevision.current === null || tracking.current.paused) return null;
         return { snapshot: state, view: currentView.current,
           isCurrent: () => mounted.current && !signal.aborted && gate.current.accepts(token)
             && currentSnapshot.current?.generation === state.generation };
@@ -407,14 +431,14 @@ function TrajectoryApp() {
         const token = gate.current.capture(); reader.pause();
         try { return await adapter.call<ThreadSnapshot>('read_trajectory', { ...request }, { signal }); }
         finally {
-          if (mounted.current && confirmedRevision.current !== null && gate.current.accepts(token, request.binding)) reader.start();
+          if (mounted.current && !tracking.current.paused && confirmedRevision.current !== null && gate.current.accepts(token, request.binding)) reader.start();
         }
       },
       commit: applySnapshot,
       failed: showError,
       rebuild: () => changes.current?.retry(),
     });
-    groupReads.current = groups; groups.setVisible(document.visibilityState !== 'hidden');
+    groupReads.current = groups; groups.setVisible(document.visibilityState !== 'hidden' && !tracking.current.paused);
     const exporter = new ExportCoordinator({
       call: (request, signal) => adapter.call<DownloadResult>('download_records', { ...request }, { signal }),
       onChange: feedback => { if (mounted.current) { setExportMessage({ zh: feedback.message, en: feedback.messageEn }); setExporting(feedback.busy); } },
@@ -452,13 +476,13 @@ function TrajectoryApp() {
   const searchDisplay = searchVisibility(view.filters.text, search, searchResult);
   useEffect(() => {
     const state = currentSnapshot.current, token = gate.current.capture();
-    if (!state || !token.binding) return;
+    if (!state || !token.binding || tracking.current.paused) return;
     const serial = ++querySerial.current;
     // 结构化筛选在本地立即生效；正文搜索由服务端查已加载正文，且结果绑定加载范围。
     // 无正文查询时不用旧 ID 集合，避免历史分页新增行被短暂隐藏并扰动阅读锚点。
     if (!currentView.current.filters.text) { setSearchResult(null); return; }
     const controller = new AbortController();
-    const signal = AbortSignal.any([controller.signal, selectionAbort.current.signal]);
+    const signal = AbortSignal.any([controller.signal, selectionAbort.current.signal, tracking.current.signal]);
     const timer = setTimeout(() => {
       void client.current?.call<QueryResult>('query_loaded_events', { binding: token.binding,
         loadedSetId: state.coverage.loadedSetId, scopeRevision: state.coverage.scopeRevision,
@@ -471,7 +495,7 @@ function TrajectoryApp() {
       }).catch(failure => { if (!signal.aborted && serial === querySerial.current) showError(failure, token); });
     }, 180);
     return () => { clearTimeout(timer); controller.abort(); ++querySerial.current; };
-  }, [search.requestKey]);
+  }, [search.requestKey, trackingPaused]);
 
   useEffect(() => {
     const state = currentSnapshot.current, selected = currentView.current.selectedEventId;
@@ -481,10 +505,10 @@ function TrajectoryApp() {
     for (const part of partsForTab(currentView.current.detailTab, event.content.map(value => value.part))) void loadPart(part);
   }, [view.selectedEventId, view.detailTab, snapshot?.revision, snapshot?.generation, snapshot?.binding.viewSessionId, snapshot?.binding.selectionEpoch]);
 
-  return <TraceUI threadScope={threadScope} onThreadScope={changeThreadScope} snapshot={snapshot} view={view} detail={detail} threads={threads} threadsMore={threadsMore}
+  return <TraceUI threadScope={threadScope} onThreadScope={changeThreadScope} snapshot={snapshot} view={view} trackingPaused={trackingPaused} detail={detail} threads={threads} threadsMore={threadsMore}
     matchedIds={searchDisplay.matchedIds} searching={searchDisplay.searching} loading={loading} detailLoading={detailLoading} error={displayMessage(error, language)} exportMessage={displayMessage(exportMessage, language)} exporting={exporting}
     onTask={id => { void selectTask(id); }} onTaskSearch={searchTasks} onMoreThreads={() => { void listThreads(true); }}
-    onView={patchView} onSelect={selectEvent} onLoadEarlier={groupId => {
+    onView={patchView} onTrackingPause={pauseTracking} onSelect={selectEvent} onLoadEarlier={groupId => {
       const current = currentSnapshot.current;
       const cursor = groupId ? current?.groups.find(group => group.groupId === groupId)?.nextCursor : current?.coverage.nextCursor;
       if (cursor) void readSnapshot(gate.current.capture(), cursor, false, groupId ?? null);
