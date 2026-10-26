@@ -13,10 +13,11 @@ import math
 from typing import Any, Iterable
 
 from .lifecycle import turn_states, thread_explanation
+from .execution import execution_intervals
 from .usage import usage_snapshots, scoped_usage_snapshots
 from .relationships import project_relationships, resolve_relationships
 
-PARSER_VERSION = '1.2.0'
+PARSER_VERSION = '1.3.0'
 _PREVIEW_LENGTH = 280
 _ITEM_TYPES = {
     'UserMessage': 'userMessage', 'AgentMessage': 'agentMessage',
@@ -572,8 +573,10 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
     included_turns = set(turn_ids)
     turn_ids.extend(tid for tid in turn_order if tid not in included_turns)
     turn_order = {tid: index for index, tid in enumerate(turn_ids)}
+    intervals = execution_intervals(thread_id, all_records, api_turns)
     turns = [{'threadId': thread_id, 'turnId': tid, 'order': order, 'status': lifecycle.get(tid, unknown_status('冷读取轮次状态不能独自证明实际执行状态。')),
-              'usage': turn_usage.get(tid, [])} for tid, order in turn_order.items()]
+              'usage': turn_usage.get(tid, []), **({'executionIntervals': intervals[tid]} if tid in intervals else {})}
+             for tid, order in turn_order.items()]
     usage = usage_snapshots(thread_id, all_records)
     child_groups, relationships, relationship_issues = project_relationships(thread_id, all_records, api_items, ordered, mode)
     state = unknown_status(thread_explanation(turns))

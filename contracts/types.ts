@@ -112,6 +112,7 @@ export type Turn = {
   "order": number;
   "status": ExecutionState;
   "usage"?: Array<UsageSnapshot>;
+  "executionIntervals"?: Array<Timing>;
 };
 
 export type UsageMetric = ({

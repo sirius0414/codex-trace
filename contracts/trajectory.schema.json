@@ -773,6 +773,14 @@
           "items": {
             "$ref": "#/$defs/UsageSnapshot"
           }
+        },
+        "executionIntervals": {
+          "description": "已记录的轮次执行包络；中断后恢复保留为独立区间，缺失时不从事件或当前时间推造。",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Timing"
+          }
         }
       },
       "required": [

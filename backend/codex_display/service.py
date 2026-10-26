@@ -16,9 +16,9 @@ from types import SimpleNamespace
 
 from .probe import candidate_identity, canonical_uuid, URI
 from .observation import Observation
+from .domain.projection import PARSER_VERSION
 
 SCHEMA_VERSION = "1.0.0"
-PARSER_VERSION = "1.1.0"
 PAGE_SIZE = 200
 # 历史读取受单次页数、缓存条目总数和时间预算约束；触限后保留原游标供继续读取。
 HISTORY_PAGE_BUDGET = 64

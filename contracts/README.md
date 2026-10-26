@@ -35,6 +35,16 @@ bounds); payloads still require runtime validation at the service boundary.
   payloads may omit them). A `modelUsage` event represents one explicit response
   identity, independent of tool/message entries. Compaction checkpoints can
   restore turn snapshots but never create new request events.
+- `Turn.executionIntervals` optionally preserves recorded execution envelopes as
+  `Timing[]`. Raw start/complete/abort boundaries keep resumed episodes separate;
+  API `startedAt`/`completedAt` values are Unix seconds and only fill missing outer
+  boundaries. An aborted episode cannot be extended to a later API completion.
+  An open start retains `endMs: null`; missing starts are never calculated from a
+  duration or the current clock. Without usable evidence the field is omitted.
+  These intervals identify active execution windows, not measured model/tool
+  phases, and do not change lifecycle status or task wall-clock statistics.
+  API turn timings use `source: null` with their field names in `basis`, since an
+  API turn has no item identity representable by the existing `SourceRef`.
 - Group relationships retain their type and evidence. Communication and fork
   relations exist independently of the child hierarchy.
 - Downloads have one discriminated request (`create/status/read/release/commit/result`) with

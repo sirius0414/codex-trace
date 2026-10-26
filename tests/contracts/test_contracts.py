@@ -104,6 +104,19 @@ class ContractTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValidationError):
                 validate("ThreadSnapshot", snapshot)
 
+    def test_execution_intervals_are_optional_turn_metadata_using_timing_contract(self):
+        turn = read("snapshot-running.json")["turns"][0]
+        validate("Turn", turn)
+        timing = {"startMs": 0, "endMs": None, "durationMs": None, "precision": "startOnly",
+                  "originalUnit": "seconds", "basis": "Synthetic recorded turn start", "source": None}
+        validate("Turn", {**turn, "executionIntervals": [timing]})
+        for invalid in (None, [], [True], [{**timing, "startMs": True}], [{**timing, "endMs": 10}]):
+            with self.subTest(intervals=invalid), self.assertRaises(ValidationError):
+                validate("Turn", {**turn, "executionIntervals": invalid})
+        event = read("snapshot-running.json")["events"][0]
+        with self.assertRaises(ValidationError):
+            validate("TraceEvent", {**event, "executionIntervals": [timing]})
+
     def test_client_cannot_supply_source_file_paths(self):
         source = read("snapshot-running.json")["events"][0]["sources"][0]
         source["path"] = "/private/unrelated.txt"
