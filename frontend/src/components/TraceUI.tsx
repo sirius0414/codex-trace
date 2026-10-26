@@ -8,7 +8,7 @@ import EventList from './EventList';
 import Inspector, { UsageFacts } from './Inspector';
 import Overview from './Overview';
 import Icon from './icons';
-import { clockTime, localizedKindLabels, latestUsage, metric, localizedStatusLabels, visibleEvents } from './model';
+import { clockTime, eventRangeIds, localizedKindLabels, latestUsage, metric, localizedStatusLabels, visibleEvents } from './model';
 
 export default function TraceUI(props: TraceUIProps) {
   const { snapshot, view, onView } = props;
@@ -25,7 +25,10 @@ export default function TraceUI(props: TraceUIProps) {
   const root = useRef<HTMLElement>(null);
   const taskInput = useRef<HTMLInputElement>(null);
   const previousThread = useRef(snapshot?.binding.threadId);
+  // 指针只更新高亮；列表结果与数组身份不随选区变化，避免拖动触发重排。
+  const rangeEvents = useMemo(() => snapshot ? eventRangeIds(snapshot, view.turnRange) : null, [snapshot, view.turnRange]);
   const visible = useMemo(() => snapshot ? visibleEvents(snapshot, view, props.matchedIds) : [], [snapshot, view.filters, view.agentScope, props.matchedIds]);
+  const highlightedEvents = useMemo(() => rangeEvents ? new Set(visible.filter(event => rangeEvents.has(event.eventId)).map(event => event.eventId)) : null, [visible, rangeEvents]);
   const usage = latestUsage(snapshot?.mainUsage ?? []);
   // 结束状态只取来源证据；读取中断、没有新增和暂停跟随都不能推断任务已结束。
   const done = snapshot?.status.value === 'completed' || snapshot?.status.value === 'stopped' || snapshot?.status.value === 'failed';
@@ -86,14 +89,14 @@ export default function TraceUI(props: TraceUIProps) {
         <button className="cx-button cx-appearance-trigger" aria-label={t('选择 UI 风格', 'Choose UI style')} title={t('语言与外观', 'Language and appearance')} aria-expanded={popover === 'appearance'} aria-haspopup="dialog" aria-controls="cx-appearance" onClick={() => setPopover(value => value === 'appearance' ? null : 'appearance')}><Icon name="palette" /><span>{styleLabels[uiStyle]}</span></button>
       </div>
     </header>
-    <Overview key={snapshot?.binding.threadId ?? 'empty'} {...props} />
+    <Overview key={snapshot?.binding.threadId ?? 'empty'} {...props} highlightedEvents={highlightedEvents} />
     <div className="cx-filterbar"><label className="cx-search"><Icon name="search" /><input aria-label={t('搜索已加载记录', 'Search loaded records')} value={view.filters.text} placeholder={t('搜索已加载记录…', 'Search loaded records…')} onChange={event => filter({ text: event.target.value })} /></label>
       <select className="cx-type" aria-label={t('事件类型或工具', 'Event type or tool')} value={typeValue} onChange={event => filter(event.target.value.startsWith('tool:') ? { kinds: [], toolName: event.target.value.slice(5) } : { kinds: event.target.value === 'all' ? [] : [event.target.value as EventKind], toolName: null })}>
         <option value="all">{t('全部类型', 'All types')}</option>{Object.entries(kindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}{tools.length > 0 && <optgroup label={t('工具名称', 'Tool name')}>{tools.map(tool => <option key={tool} value={`tool:${tool}`}>{tool}</option>)}</optgroup>}
       </select><button className="cx-button cx-error-filter" aria-pressed={view.filters.failedOnly} onClick={() => filter({ failedOnly: !view.filters.failedOnly })}><Icon name="alert" />{t('仅失败', 'Failed only')}</button>
     </div>
     <div className={`cx-work ${view.selectedEventId ? 'has-detail' : ''}`}>
-      <EventList {...props} visible={visible} onCount={setRowCount} />
+      <EventList {...props} visible={visible} highlightedEvents={highlightedEvents} onCount={setRowCount} />
       {view.selectedEventId && <Inspector {...props} overlay={narrow} />}
     </div>
     <aside className="cx-usage-bar" aria-label={t('主任务 token 用量，不受 Agent 筛选影响', 'Main task token usage, independent of Agent filters')}>

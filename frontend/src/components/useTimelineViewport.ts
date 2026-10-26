@@ -4,10 +4,12 @@ import { clampViewport, panViewport, zoomViewport, type Viewport } from './viewp
 
 type Options = {
   svg: RefObject<SVGSVGElement | null>;
+  wheelTarget?: RefObject<HTMLElement | null>;
   domain: Viewport;
   minimumSpan: number;
   resetKey: unknown;
   enabled: boolean;
+  isSelectionActive?: () => boolean;
   onInteract: () => void;
 };
 type Point = { x: number; y: number };
@@ -69,7 +71,8 @@ export function useTimelineViewport(options: Options) {
   useEffect(() => () => { if (redraw.current != null) cancelAnimationFrame(redraw.current); }, []);
 
   useEffect(() => {
-    const element = options.svg.current;
+    // 指针层与 SVG 共用同一个容器，滚轮在标尺或指针上也继续导航视口。
+    const element = options.wheelTarget?.current ?? options.svg.current;
     if (!element || !options.enabled) return;
     function wheel(event: WheelEvent) {
       const { viewport, domain, minimumSpan, svg } = current.current;
@@ -77,6 +80,8 @@ export function useTimelineViewport(options: Options) {
       if (bounds.width <= 0 || (!event.deltaX && !event.deltaY)) return;
       // 非 passive 监听器阻止触控板捏合缩放整个宿主页；所有坐标只在图内解释。
       event.preventDefault();
+      // 连续指针手势固定起始坐标；直到松手前只允许该手势修改视口或选区。
+      if (pointers.current.size || current.current.isSelectionActive?.()) return;
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.width : 1;
       const horizontal = !event.ctrlKey && !event.metaKey && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY));
       if (horizontal) {
@@ -88,9 +93,10 @@ export function useTimelineViewport(options: Options) {
         commit(zoomViewport(viewport, domain, factor, anchor, minimumSpan));
       }
     }
-    element.addEventListener('wheel', wheel, { passive: false });
-    return () => element.removeEventListener('wheel', wheel);
-  }, [options.enabled, options.svg]);
+    const listener = (event: Event) => wheel(event as WheelEvent);
+    element.addEventListener('wheel', listener, { passive: false });
+    return () => element.removeEventListener('wheel', listener);
+  }, [options.enabled, options.svg, options.wheelTarget]);
 
   function rebaseGesture() {
     const points = [...pointers.current.values()];

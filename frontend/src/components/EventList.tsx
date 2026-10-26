@@ -20,11 +20,32 @@ export function eventColor(event: TraceEvent) {
   return event.status.value === 'failed' ? 'error' : ['assistantMessage', 'reasoningSummary', 'compaction', 'modelUsage'].includes(event.kind) ? 'model' : ['toolCall', 'toolResult', 'collaboration'].includes(event.kind) ? 'tool' : event.kind === 'userMessage' ? 'input' : 'context';
 }
 /** 虚拟列表只挂载可见行；阅读位置以事件 ID 和行内偏移保存，分页/更新后再定位。 */
-export default function EventList(props: TraceUIProps & { visible: TraceEvent[]; onCount: (count: number) => void }) {
+export default function EventList(props: TraceUIProps & { visible: TraceEvent[]; highlightedEvents: ReadonlySet<string> | null; onCount: (count: number) => void }) {
   const { snapshot, view, visible } = props;
   const { language, t } = usePreferences();
   const kindLabels = localizedKindLabels(language);
   const statusLabels = localizedStatusLabels(language);
+  const rangeContext = useMemo(() => {
+    const turns = new Set<string>(), groupsInRange = new Set<string>();
+    if (!snapshot || !props.highlightedEvents) return { turns, groups: groupsInRange };
+    const groups = new Map(snapshot.groups.map(group => [group.groupId, group]));
+    const createdBy = new Map<string, string[]>();
+    for (const group of snapshot.groups) if (group.creationEventId) {
+      const ids = createdBy.get(group.creationEventId);
+      if (ids) ids.push(group.groupId); else createdBy.set(group.creationEventId, [group.groupId]);
+    }
+    const markGroup = (id: string) => {
+      let group = groups.get(id);
+      while (group && !groupsInRange.has(group.groupId)) { groupsInRange.add(group.groupId); group = group.parentGroupId ? groups.get(group.parentGroupId) : undefined; }
+    };
+    for (const event of visible) if (props.highlightedEvents.has(event.eventId)) {
+      if (event.turnId != null) turns.add(JSON.stringify([event.threadId, event.turnId]));
+      // 折叠内容不增删行；在其分组和祖先上保留入口提示，防止范围命中被折叠树藏住。
+      markGroup(event.groupId);
+      for (const id of createdBy.get(event.eventId) ?? []) markGroup(id);
+    }
+    return { turns, groups: groupsInRange };
+  }, [snapshot, visible, props.highlightedEvents]);
   const rows = useMemo(() => snapshot ? makeRows(snapshot, view, visible, language) : [], [snapshot, visible, view.expandedTurnIds, view.expandedGroupIds, view.agentScope, language]);
   const bulk = useMemo(() => snapshot ? {
     expanded: bulkExpansion(snapshot, view, visible, true),
@@ -150,15 +171,19 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
       props.onView({ follow: 'paused', anchor: saved });
       props.onLoadEarlier(row.group?.groupId);
     }}><Icon name="up" />{props.loading ? t('正在加载较早记录…', 'Loading earlier records…') : row.group ? t('加载子任务较早记录', 'Load earlier subtask records') : t('加载更早记录', 'Load earlier records')}</button>;
-    if (row.type === 'turn') return <button key={row.key} style={style} className="cx-turn" aria-expanded={row.expanded} disabled={row.id === '__context__'} onClick={() => props.onView({ follow: 'paused', expandedTurnIds: row.expanded ? view.expandedTurnIds.filter(id => id !== row.id) : [...view.expandedTurnIds, row.id] })}><Icon name={row.expanded ? 'down' : 'right'} /><span className="cx-turn-label">{row.label}</span>{row.id !== '__context__' && <UsageBadge values={row.usage} turn />}<small>{t(`${row.count} 条匹配`, `${row.count} matches`)}</small></button>;
+    if (row.type === 'turn') {
+      const highlighted = row.turnKey != null && rangeContext.turns.has(row.turnKey);
+      return <button key={row.key} style={style} className={`cx-turn ${highlighted ? 'in-range' : ''}`} data-turn-key={row.turnKey ?? undefined} data-range-highlighted={highlighted || undefined} aria-expanded={row.expanded} disabled={row.id === '__context__'} onClick={() => props.onView({ follow: 'paused', expandedTurnIds: row.expanded ? view.expandedTurnIds.filter(id => id !== row.id) : [...view.expandedTurnIds, row.id] })}><Icon name={row.expanded ? 'down' : 'right'} /><span className="cx-turn-label">{row.label}</span>{highlighted && <span className="cx-range-tag">{t('选区', 'Range')}</span>}{row.id !== '__context__' && <UsageBadge values={row.usage} turn />}<small>{t(`${row.count} 条匹配`, `${row.count} matches`)}</small></button>;
+    }
     if (row.type === 'warning') return <div key={row.key} style={style} className="cx-group-warning"><Icon name="alert" /><span title={row.group.readIssue ?? ''}>{row.group.readIssue} · {t(`保留 ${row.group.loadedEventCount} 条已读记录`, `${row.group.loadedEventCount} loaded records retained`)}</span></div>;
-    if (row.type === 'group') return <div key={row.key} style={style} className={`cx-subtask ${view.selectedEventId === row.group.creationEventId ? 'selected' : ''}`}>
-      <button className="cx-group-toggle" aria-expanded={row.expanded} onClick={() => props.onView({ follow: 'paused', expandedGroupIds: row.expanded ? view.expandedGroupIds.filter(id => id !== row.group.groupId) : [...view.expandedGroupIds, row.group.groupId] })}><Icon name={row.expanded ? 'down' : 'right'} /><Icon name="branch" /><span>{row.group.name}</span></button>
+    if (row.type === 'group') return <div key={row.key} style={style} className={`cx-subtask ${rangeContext.groups.has(row.group.groupId) ? 'in-range' : ''} ${view.selectedEventId === row.group.creationEventId ? 'selected' : ''}`} data-range-highlighted={rangeContext.groups.has(row.group.groupId) || undefined}>
+      <button className="cx-group-toggle" aria-expanded={row.expanded} onClick={() => props.onView({ follow: 'paused', expandedGroupIds: row.expanded ? view.expandedGroupIds.filter(id => id !== row.group.groupId) : [...view.expandedGroupIds, row.group.groupId] })}><Icon name={row.expanded ? 'down' : 'right'} /><Icon name="branch" /><span>{row.group.name}</span>{rangeContext.groups.has(row.group.groupId) && <span className="cx-range-tag">{t('选区', 'Range')}</span>}</button>
       <span className="cx-group-count" title={t('当前已读取范围', 'Currently loaded records')}>{t(`${row.group.loadedEventCount} 条 · ${row.group.loadedToolCallCount} 调用`, `${row.group.loadedEventCount} records · ${row.group.loadedToolCallCount} calls`)}</span><span className={`cx-state ${row.group.status.value}`}>{statusLabels[row.group.status.value]}</span>
       {row.group.creationEventId && <button className="cx-icon cx-group-detail" aria-label={t(`查看 ${row.group.name} 创建与来源`, `View creation and source for ${row.group.name}`)} onClick={() => props.onSelect(row.group.creationEventId)}><Icon name="info" /></button>}
     </div>;
     const event = row.event;
-    return <button key={row.key} style={style} className={`cx-row kind-${event.kind} ${event.status.value === 'failed' ? 'is-error' : ''} ${row.child ? 'child' : ''} ${event.eventId === view.selectedEventId ? 'selected' : ''}`} data-event-id={event.eventId} aria-pressed={event.eventId === view.selectedEventId} aria-label={`${kindLabels[event.kind]}${event.toolName ? ` ${event.toolName}` : ''}：${event.preview}，${statusLabels[event.status.value]}`}
+    const highlighted = !!props.highlightedEvents?.has(event.eventId);
+    return <button key={row.key} style={style} className={`cx-row kind-${event.kind} ${highlighted ? 'in-range' : ''} ${event.status.value === 'failed' ? 'is-error' : ''} ${row.child ? 'child' : ''} ${event.eventId === view.selectedEventId ? 'selected' : ''}`} data-event-id={event.eventId} data-range-highlighted={highlighted || undefined} aria-pressed={event.eventId === view.selectedEventId} aria-label={`${highlighted ? t('时间选区命中，', 'In timeline range, ') : ''}${kindLabels[event.kind]}${event.toolName ? ` ${event.toolName}` : ''}：${event.preview}，${statusLabels[event.status.value]}`}
       onClick={() => props.onSelect(event.eventId)} onKeyDown={key => rowKey(key, event.eventId)}>
       <span className="cx-operation"><span className={`cx-event-icon ${eventColor(event)}`}><Icon name={eventIcon(event)} /></span><span className="cx-preview" title={event.preview}>{event.toolName ? <>{(event.kind === 'toolCall' || event.kind === 'toolResult') && <span className="cx-kind-label">{event.kind === 'toolCall' ? t('调用', 'Call') : t('结果', 'Result')}</span>}<code>{event.toolName}</code></> : <b>{kindLabels[event.kind]}</b>}{event.preview.replace(/\s+/g, ' ')}</span></span>
       <UsageBadge values={event.usage} /><span className="cx-time">{clockTime(event.timing.startMs, language)}</span><span className="cx-duration" title={event.timing.basis}>{event.status.value === 'running' && event.timing.durationMs == null ? '…' : duration(event.timing.durationMs)}</span><span className={`cx-state ${event.status.value}`}>{event.status.value === 'failed' ? `× ${statusLabels.failed}` : event.status.value === 'running' ? `● ${statusLabels.running}` : statusLabels[event.status.value]}</span>
