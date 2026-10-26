@@ -1,4 +1,6 @@
-import type { ThreadSnapshot, TraceEvent, ViewState } from '../../../contracts/types';
+/** 列表展开路径与范围定位；只返回视图补丁，原记录集合和详情选择仍由上游持有。 */
+import type { ThreadSnapshot, TimeRange, TraceEvent, ViewState } from '../../../contracts/types';
+import { eventRangeIds } from './model.ts';
 
 export function bulkExpansion(snapshot: ThreadSnapshot, view: ViewState, visible: TraceEvent[], expand: boolean) {
   // 只处理当前筛选的已加载记录；其他 Agent/筛选范围保存的展开偏好不受影响。
@@ -32,4 +34,16 @@ export function bulkExpansion(snapshot: ThreadSnapshot, view: ViewState, visible
   }
 
   return { follow: 'paused' as const, expandedTurnIds: [...expandedTurnIds], expandedGroupIds: [...expandedGroupIds] };
+}
+
+/**
+ * 在原筛选后的可见记录中定位首个真实时间命中项，只打开其必要路径并设置阅读锚点。
+ * 无匹配时不移动；不选择详情、不调整筛选或 Agent 范围，也不删去选区外的记录。
+ */
+export function rangeReveal(snapshot: ThreadSnapshot, view: ViewState, visible: TraceEvent[], range: TimeRange): Partial<ViewState> | null {
+  const matches = eventRangeIds(snapshot, range);
+  const target = visible.find(event => matches?.has(event.eventId));
+  if (!target) return null;
+  return { ...bulkExpansion(snapshot, view, [target], true),
+    anchor: { eventId: target.eventId, groupId: target.groupId, offsetPx: 0 } };
 }

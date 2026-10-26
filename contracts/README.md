@@ -59,7 +59,10 @@ bounds); payloads still require runtime validation at the service boundary.
   intersecting the range. Untimed and unmatched records stay visible without a
   range highlight; turn/group headers indicate contained matches. It never
   filters or reorders the list; existing Agent and event filters independently
-  control visibility.
+  control visibility. An explicit completed range selection reveals its first
+  visible match through the existing reading anchor and expands only the loaded
+  target path when needed, preserving detail selection. Preview, cancellation,
+  clearing, viewport navigation and restoring a saved range do not request a jump.
   Positive intervals use half-open overlap; point records include the left edge
   and exclude an internal right edge, with the final axis endpoint included.
   This field is outside `Filters`: it does not change loaded-text query requests

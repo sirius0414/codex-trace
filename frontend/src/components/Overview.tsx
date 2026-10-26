@@ -19,7 +19,7 @@ function runtimeTime(milliseconds: number, precise = milliseconds > 0 && millise
 }
 
 /** 概览的视口、时间高亮和事件详情各自独立；标尺／框选拥有选区手势，主图默认导航。 */
-export default function Overview(props: TraceUIProps & { highlightedEvents: ReadonlySet<string> | null }) {
+export default function Overview(props: TraceUIProps & { highlightedEvents: ReadonlySet<string> | null; onRangeCommit: (range: TimeRange) => void }) {
   const { snapshot, view, onView } = props;
   const { language, locale, t } = usePreferences();
   const kindLabels = localizedKindLabels(language);
@@ -79,6 +79,10 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
     if (!turnRange) return;
     setCluster(null);
     onView({ follow: 'paused', turnRange });
+  }
+  function commitRange(next: Viewport) {
+    const range = wallRange(next);
+    if (range) props.onRangeCommit(range);
   }
   const positions = useMemo(() => new Map<string, OverviewPosition>(events.flatMap<[string, OverviewPosition]>(event => {
     const start = event.timing.startMs, end = recordedEnd(event);
@@ -236,7 +240,7 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
           else if (range) selectRange(range);
           else onView({ turnRange: null });
         }}
-        onNavigate={navigation.show} formatValue={value => runtimeTime(value, true)} />}
+        onCommit={commitRange} onNavigate={navigation.show} formatValue={value => runtimeTime(value, true)} />}
       </div>
       {!events.length && <span className="cx-chart-empty">{snapshot ? selectedAgents.size ? t('暂无可展示的记录', 'No records to display') : t('选择上方 Agent 查看轨迹', 'Select an agent above to view its trace') : t('选择任务查看轨迹', 'Select a task to view its trace')}</span>}
       <div className={`cx-axis ${ordered ? 'ordered' : ''}`} title={explanation}>{ordered ? <><span>{t('记录顺序 · 运行时间未记录', 'Record order · execution time unavailable')}</span><span>{events.length ? `#${Math.ceil(min)}–#${Math.floor(max)}` : t('无记录', 'No records')}</span></> : ticks.map(fraction => {
@@ -261,14 +265,14 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
       const start = spans.length ? Math.min(Number.MAX_SAFE_INTEGER - 1, Math.round(spans[0].start)) : null;
       const end = start == null ? null : Math.min(Number.MAX_SAFE_INTEGER, spans.reduce((last, span) => Math.max(last, Math.round(span.end)), start + 1));
       return <button key={key} disabled={start == null || end == null} title={start == null ? t('时间未记录，无法按时间范围高亮', 'Time unavailable; cannot highlight by time range') : t('高亮此时间范围内的条目，列表内容保持不变', 'Highlight records in this time range without changing list contents')}
-        onClick={() => { if (start != null && end != null) onView({ follow: 'paused', turnRange: { startMs: start, endMs: end } }); }}>{t(`第 ${turn.order + 1} 轮`, `Turn ${turn.order + 1}`)}<span>{t(`${items.length} 条`, `${items.length} records`)}</span></button>;
+        onClick={() => { if (start != null && end != null) { const range = { startMs: start, endMs: end }; onView({ follow: 'paused', turnRange: range }); props.onRangeCommit(range); } }}>{t(`第 ${turn.order + 1} 轮`, `Turn ${turn.order + 1}`)}<span>{t(`${items.length} 条`, `${items.length} records`)}</span></button>;
     }) : <span className="cx-muted">{t('尚无可展示轮次', 'No turns to display yet')}</span>}</div> : <div className="cx-calls"><div>{t('工具调用', 'Tool calls')} <b>{new Set(events.filter(event => event.kind === 'toolCall').map(event => event.callKey ?? event.eventId)).size}</b></div><div>{t('模型请求', 'Model requests')} <b>{requestKeys.size || (view.agentScope.kind === 'all' ? snapshot?.statistics.modelRequests.value ?? t('未记录', 'Not recorded') : t('未记录', 'Not recorded'))}</b></div><span>{t('当前 Agent 范围 · 已加载记录', 'Current agent scope · loaded records')}</span></div>}
-    {(canSelect || view.turnRange) && <div className="cx-turn-range-note" title={t('只高亮时间范围内的具体条目；未命中或无时间戳的条目继续显示，列表顺序与展开状态不变。', 'Only records intersecting this time range are highlighted. Other records, including untimed records, remain visible; list order and expansion stay unchanged.')}>
+    {(canSelect || view.turnRange) && <div className="cx-turn-range-note" title={t('拖动只预览高亮；完成选择后定位首条命中记录，必要时展开其所在轮次与分组。其他条目继续显示，列表顺序不变。', 'Dragging previews highlights. Completing a selection reveals the first matching record, expanding its turn and groups when necessary. Other records remain visible in their original order.')}>
       {view.turnRange ? <>
       <span>{t('时间选区 ', 'Time selection ')}{projectedSelection && projectedSelection.max === projectedSelection.min && selectedTurnCount > 0 ? t('折叠空档内', 'Inside a folded gap') : selection ? `${runtimeTime(selection.min, true)}–${runtimeTime(selection.max, true)}` : `${clockTime(view.turnRange.startMs, language)}–${clockTime(view.turnRange.endMs, language)}`}<b>{t(`${highlightedEventCount} 条高亮`, `${highlightedEventCount} highlighted`)}</b></span>
       {canSelect && selection && <button className="cx-button" onClick={() => { onView({ overviewMode: 'duration' }); const padding = Math.max(1, selection.max - selection.min) * .1; navigation.show({ min: selection.min - padding, max: selection.max + padding }); }}>{t('定位选区', 'Reveal')}</button>}
       <button className="cx-icon" aria-label={t('清除时间选区', 'Clear time selection')} title={t('清除时间选区', 'Clear time selection')} onClick={() => onView({ turnRange: null })}><Icon name="close" /></button>
-      </> : <span>{t('双指针只高亮范围内条目，列表内容保持不变', 'Pointers highlight records in range; list contents stay unchanged')}</span>}
+      </> : <span>{t('选择范围后定位首条高亮记录，其他条目继续保留', 'Select a range to reveal its first highlighted record; other records stay visible')}</span>}
     </div>}
     {selectedCluster && <section ref={chooser} className="cx-cluster-picker" role="dialog" aria-label={t('选择聚合簇内的记录', 'Select a record in the cluster')} onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeCluster(); } }}>
       <div className="cx-popover-head">{t(`${selectedCluster.events.length} 条记录 · 聚合显示`, `${selectedCluster.events.length} records · clustered`)}<button className="cx-icon" aria-label={t('关闭聚合记录', 'Close clustered records')} onClick={closeCluster}><Icon name="close" /></button></div>
