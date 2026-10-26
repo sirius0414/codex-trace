@@ -44,7 +44,7 @@ export default function TraceUI(props: TraceUIProps) {
     else props.onSelect(eventId);
   }
   const pageProps = { ...props, view, onSelect: selectEvent, onAgentNavigate: navigateAgent };
-  const { language, uiStyle, showSpanSummary, setLanguage, setUiStyle, setShowSpanSummary, t } = usePreferences();
+  const { language, uiStyle, showSpanSummary, showTimelineCursors, setLanguage, setUiStyle, setShowSpanSummary, setShowTimelineCursors, t } = usePreferences();
   const kindLabels = localizedKindLabels(language), statusLabels = localizedStatusLabels(language);
   const time = (value: number | null | undefined) => clockTime(value, language);
   const versionDescription = [`Codex Display ${versionLabel}`, buildInfo.sourceHash && `${t('源码指纹', 'Source fingerprint')}: ${buildInfo.sourceHash}`, buildInfo.builtAt && `${t('构建时间', 'Built at')}: ${buildInfo.builtAt}`].filter(Boolean).join('\n');
@@ -70,8 +70,8 @@ export default function TraceUI(props: TraceUIProps) {
     onView({ expandedTurnIds: [...new Set([...view.expandedTurnIds, ...loaded.flatMap(event => event.turnId ? [event.turnId] : [])])],
       expandedGroupIds: [...new Set([...view.expandedGroupIds, activeAgent])] });
   }, [snapshot?.events, activeAgent, onView]);
-  // 预览只更新高亮；完成选择才通过阅读锚点定位，不借详情选择来滚动列表。
-  const rangeEvents = useMemo(() => snapshot ? eventRangeIds(snapshot, view.turnRange) : null, [snapshot, view.turnRange]);
+  // 关闭双游标时暂停高亮，保留已保存选区供再次开启；预览不触发列表定位。
+  const rangeEvents = useMemo(() => snapshot && showTimelineCursors ? eventRangeIds(snapshot, view.turnRange) : null, [snapshot, view.turnRange, showTimelineCursors]);
   const visible = useMemo(() => snapshot ? visibleEvents(snapshot, view, props.matchedIds) : [], [snapshot, view.filters, view.agentScope, props.matchedIds]);
   const highlightedEvents = useMemo(() => rangeEvents ? new Set(visible.filter(event => rangeEvents.has(event.eventId)).map(event => event.eventId)) : null, [visible, rangeEvents]);
   function revealRange(range: TimeRange) {
@@ -169,6 +169,7 @@ export default function TraceUI(props: TraceUIProps) {
       <div className="cx-popover-head"><span id="cx-settings-title">{t('设置', 'Settings')}</span><button className="cx-icon" aria-label={t('关闭设置', 'Close settings')} onClick={() => { setPopover(null); root.current?.querySelector<HTMLButtonElement>('.cx-settings-trigger')?.focus(); }}><Icon name="close" /></button></div>
       <fieldset className="cx-timeline-settings"><legend>{t('时间概览', 'Timeline')}</legend>
         <label className="cx-setting-toggle"><span><strong>{t('折叠空档', 'Fold gaps')}</strong><small>{t('压缩无记录空档的显示宽度', 'Shorten gaps without recorded intervals')}</small></span><input type="checkbox" aria-label={t('折叠无记录空档', 'Fold unrecorded gaps')} checked={(view.timelineSpacing ?? 'compact') === 'compact'} onChange={event => onView({ timelineSpacing: event.target.checked ? 'compact' : 'runtime' })} /></label>
+        <label className="cx-setting-toggle"><span><strong>{t('显示双游标', 'Show dual cursors')}</strong><small>{t('瀑布图时间范围选择与高亮', 'Select and highlight a time range in the waterfall')}</small></span><input type="checkbox" aria-label={t('显示双游标', 'Show dual cursors')} checked={showTimelineCursors} onChange={event => setShowTimelineCursors(event.target.checked)} /></label>
         <label className="cx-setting-toggle"><span><strong>{t('显示 Span 摘要', 'Show Span summary')}</strong><small>{t('运行跨度、覆盖条、滚动条与选区说明', 'Runtime, coverage, scrollbar and selection notes')}</small></span><input type="checkbox" aria-label={t('显示 Span 摘要', 'Show Span summary')} checked={showSpanSummary} onChange={event => setShowSpanSummary(event.target.checked)} /></label>
       </fieldset>
       <label className="cx-language-field"><span>{t('界面语言', 'Interface language')}</span><select value={language} onChange={event => setLanguage(event.target.value as 'zh' | 'en')}><option value="zh">简体中文</option><option value="en">English</option></select></label>

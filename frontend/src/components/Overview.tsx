@@ -22,7 +22,7 @@ function runtimeTime(milliseconds: number, precise = milliseconds > 0 && millise
 /** 概览的视口、时间高亮和事件详情各自独立；标尺／框选拥有选区手势，主图默认导航。 */
 export default function Overview(props: TraceUIProps & { highlightedEvents: ReadonlySet<string> | null; onRangeCommit: (range: TimeRange) => void }) {
   const { snapshot, view, onView } = props;
-  const { language, locale, showSpanSummary, t } = usePreferences();
+  const { language, locale, showSpanSummary, showTimelineCursors, t } = usePreferences();
   const kindLabels = localizedKindLabels(language);
   const [cluster, setCluster] = useState<{ key: string; page: number } | null>(null);
   const [width, setWidth] = useState(1000);
@@ -40,7 +40,7 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
   const timeline = useMemo(() => buildActiveTimeline(snapshot, spacing), [snapshot?.events, snapshot?.turns, spacing]);
   const mappingKey = useMemo(() => JSON.stringify(timeline.segments.map(segment => [segment.start, segment.end])), [timeline]);
   const ordered = timeline.mode === 'order';
-  const canSelect = !ordered && timeline.durationMs > 0 && events.length > 0;
+  const canSelect = showTimelineCursors && !ordered && timeline.durationMs > 0 && events.length > 0;
   const fullMin = ordered ? 1 : 0, fullMax = ordered ? Math.max(2, events.length) : Math.max(1, timeline.durationMs);
   const explanation = ordered ? t('没有可定位的轮次运行时间；仅显示记录顺序。', 'No turn execution times are available; showing record order only.')
     : (compact ? t('紧凑横轴：没有持续记录覆盖的间隔最多保留 1 秒显示宽度，其余折叠；断点可查看原始间隔。保留事件时间点和已记录的持续区间，紧凑坐标不是实际耗时，也不代表已确认断网。', 'Compact axis: gaps with no recorded interval retain at most one second of display width; the rest is folded. Breaks show their original intervals. Event anchors and recorded durations are retained. Compact coordinates are not elapsed time or proof of a network outage.') : '')
@@ -163,7 +163,8 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
   const detailedAxis = max - min < 10000;
   const ticks = max - min < 4 || width < (detailedAxis ? 440 : 300) ? [0, 1]
     : width < (detailedAxis ? 760 : 600) ? [0, .5, 1] : [0, .25, .5, .75, 1];
-  const gestureHint = t('平移模式：拖动平移，双击图中空白恢复全貌，点击记录查看详情。顶部标尺始终可单击或拖动建立时间高亮；框选模式可直接在图中选择。滚轮或双指捏合缩放，横向滚动平移；拖动期间忽略滚轮。键盘 + / − 缩放，左右箭头平移，Home 恢复。Esc 取消当前框选，再按退出框选模式。', 'Pan mode: drag to pan, double-click empty chart space to reset, click records for details. Click or drag the top ruler to highlight a time range; Select mode also selects in the chart. Wheel or pinch to zoom, horizontal scroll to pan; wheel is ignored during a drag. Keyboard: + / − to zoom, arrows to pan, Home to reset. Escape cancels a selection gesture; press again to leave Select mode.');
+  const gestureHint = t('拖动平移，双击图中空白恢复全貌，点击记录查看详情。滚轮或双指捏合缩放，横向滚动平移；拖动期间忽略滚轮。键盘 + / − 缩放，左右箭头平移，Home 恢复。', 'Drag to pan, double-click empty chart space to reset, click records for details. Wheel or pinch to zoom, horizontal scroll to pan; wheel is ignored during a drag. Keyboard: + / − to zoom, arrows to pan, Home to reset.')
+    + (showTimelineCursors ? t('双游标已开启：顶部标尺可单击或拖动建立时间高亮；框选模式可直接在图中选择。Esc 取消当前框选，再按退出框选模式。', 'Dual cursors are enabled: click or drag the top ruler to highlight a time range; Select mode also selects in the chart. Escape cancels a selection gesture; press again to leave Select mode.') : '');
   const turnItems = useMemo(() => {
     const map = new Map<string, typeof events>();
     for (const event of events) if (event.turnId) {
@@ -191,13 +192,13 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
         <button key={mode} aria-pressed={view.overviewMode === mode} onClick={() => { onView({ overviewMode: mode }); setCluster(null); }}>{label}</button>)}</div>
       <div className="cx-range">{range && <><span title={`${wallTime(range.startMs)}–${wallTime(range.endMs)}`}>{t('时间筛选 ', 'Time filter ')}{clockTime(range.startMs, language)}–{clockTime(range.endMs, language)}</span><button className="cx-icon" aria-label={t('取消区间筛选', 'Clear range filter')} onClick={() => onView({ filters: { ...view.filters, timeRange: null } })}><Icon name="close" /></button></>}</div>
       {view.overviewMode === 'duration' && <>
-        <div className="cx-chart-tools" role="group" aria-label={t('图中拖动方式', 'Chart drag mode')}>
+        {showTimelineCursors && <div className="cx-chart-tools" role="group" aria-label={t('图中拖动方式', 'Chart drag mode')}>
           <button className="cx-button cx-select-turns" aria-label={t('平移时间轴模式', 'Pan timeline mode')} aria-pressed={!selecting}
             onClick={() => { setSelecting(false); setCluster(null); }}>{t('平移', 'Pan')}</button>
           <button className="cx-button cx-select-turns" aria-label={t('在图中框选记录', 'Select records in chart')} aria-pressed={selecting} disabled={!canSelect}
             title={canSelect ? t('单击或拖动建立时间高亮；Esc 返回平移。顶部标尺始终可框选。', 'Click or drag to highlight a time range; Escape returns to Pan. The top ruler always supports selection.') : t('运行时间未记录，无法按时间框选记录', 'Execution times are unavailable; time selection is disabled')}
             onClick={() => { setSelecting(true); setCluster(null); }}>{t('框选', 'Select')}</button>
-        </div>
+        </div>}
         <span className="cx-gesture-hint" title={gestureHint}>{selecting ? t('拖动框选条目 · 滚轮缩放', 'Drag to select records · wheel to zoom') : t('滚轮 / 捏合缩放 · 拖动平移', 'Wheel / pinch to zoom · drag to pan')}</span>
         <div className="cx-zoom-controls" role="group" aria-label={t('时间轴缩放', 'Timeline zoom')}>
           <button className="cx-icon cx-zoom" aria-label={t('缩小时间轴', 'Zoom out timeline')} title={t('缩小（−）', 'Zoom out (−)')} disabled={!events.length || !zoomed} onClick={() => navigation.zoom(2)}><Icon name="zoomOut" /></button>
@@ -271,10 +272,10 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
       const spans = timeline.turnSpans.get(key) ?? [];
       const start = spans.length ? Math.min(Number.MAX_SAFE_INTEGER - 1, Math.round(spans[0].start)) : null;
       const end = start == null ? null : Math.min(Number.MAX_SAFE_INTEGER, spans.reduce((last, span) => Math.max(last, Math.round(span.end)), start + 1));
-      return <button key={key} disabled={start == null || end == null} title={start == null ? t('时间未记录，无法按时间范围高亮', 'Time unavailable; cannot highlight by time range') : t('高亮此时间范围内的条目，列表内容保持不变', 'Highlight records in this time range without changing list contents')}
+      return <button key={key} disabled={start == null || end == null} title={start == null ? t('时间未记录，无法按时间范围定位', 'Time unavailable; cannot reveal records by time range') : t('定位此时间范围内的首条记录；开启双游标时高亮，列表内容保持不变', 'Reveal the first record in this time range; highlight when dual cursors are enabled, keeping list contents unchanged')}
         onClick={() => { if (start != null && end != null) { const range = { startMs: start, endMs: end }; onView({ follow: 'paused', turnRange: range }); props.onRangeCommit(range); } }}>{t(`第 ${turn.order + 1} 轮`, `Turn ${turn.order + 1}`)}<span>{t(`${items.length} 条`, `${items.length} records`)}</span></button>;
     }) : <span className="cx-muted">{t('尚无可展示轮次', 'No turns to display yet')}</span>}</div> : <div className="cx-calls"><div>{t('工具调用', 'Tool calls')} <b>{new Set(events.filter(event => event.kind === 'toolCall').map(event => event.callKey ?? event.eventId)).size}</b></div><div>{t('模型请求', 'Model requests')} <b>{requestKeys.size || (view.agentScope.kind === 'all' ? snapshot?.statistics.modelRequests.value ?? t('未记录', 'Not recorded') : t('未记录', 'Not recorded'))}</b></div><span>{t('当前 Agent 范围 · 已加载记录', 'Current agent scope · loaded records')}</span></div>}
-    {showSpanSummary && (canSelect || view.turnRange) && <div className="cx-turn-range-note" title={t('拖动只预览高亮；完成选择后定位首条命中记录，必要时展开其所在轮次与分组。其他条目继续显示，列表顺序不变。', 'Dragging previews highlights. Completing a selection reveals the first matching record, expanding its turn and groups when necessary. Other records remain visible in their original order.')}>
+    {showSpanSummary && showTimelineCursors && (canSelect || view.turnRange) && <div className="cx-turn-range-note" title={t('拖动只预览高亮；完成选择后定位首条命中记录，必要时展开其所在轮次与分组。其他条目继续显示，列表顺序不变。', 'Dragging previews highlights. Completing a selection reveals the first matching record, expanding its turn and groups when necessary. Other records remain visible in their original order.')}>
       {view.turnRange ? <>
       <span>{t('时间选区 ', 'Time selection ')}{projectedSelection && projectedSelection.max === projectedSelection.min && selectedTurnCount > 0 ? t('折叠空档内', 'Inside a folded gap') : selection ? `${runtimeTime(selection.min, true)}–${runtimeTime(selection.max, true)}` : `${clockTime(view.turnRange.startMs, language)}–${clockTime(view.turnRange.endMs, language)}`}<b>{t(`${highlightedEventCount} 条高亮`, `${highlightedEventCount} highlighted`)}</b></span>
       {canSelect && selection && <button className="cx-button" onClick={() => { onView({ overviewMode: 'duration' }); const padding = Math.max(1, selection.max - selection.min) * .1; navigation.show({ min: selection.min - padding, max: selection.max + padding }); }}>{t('定位选区', 'Reveal')}</button>}
