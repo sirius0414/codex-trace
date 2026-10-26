@@ -54,6 +54,17 @@ for line in sys.stdin:
                             listing = await session.list_tools()
                             self.assertEqual(len(listing.tools), 10)
                             self.assertTrue(all(t.meta["ui"]["visibility"] == ["app"] for t in listing.tools))
+                            for tool in listing.tools:
+                                if tool.name in ("open_codex_display", "open_codex_display_panel"):
+                                    self.assertEqual(len(tool.icons), 1)
+                                    icon = tool.icons[0]
+                                    self.assertEqual(icon.mimeType, "image/svg+xml")
+                                    prefix, data = icon.src.split(",", 1)
+                                    self.assertEqual(prefix, "data:image/svg+xml;base64")
+                                    self.assertEqual(base64.b64decode(data, validate=True),
+                                                     (ROOT / "plugin/assets/icon.svg").read_bytes())
+                                else:
+                                    self.assertIsNone(tool.icons)
                             opened = await session.call_tool("open_codex_display_panel", {}, meta={"threadId": THREAD})
                             self.assertFalse(opened.isError)
                             view = opened.meta["codex-display/result"]

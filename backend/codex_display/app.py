@@ -5,6 +5,7 @@ content 只返回固定提示，禁止把任务正文、路径或原始异常放
 from __future__ import annotations
 
 import asyncio
+from base64 import b64encode
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from mcp.server import Server
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.stdio import stdio_server
-from mcp.types import CallToolResult, Resource, TextContent, Tool, ToolAnnotations
+from mcp.types import CallToolResult, Icon, Resource, TextContent, Tool, ToolAnnotations
 
 from . import __version__
 from .adapters.history import HistoryAdapter, HistoryError
@@ -84,10 +85,19 @@ def tool_schema(name):
     return {"$defs": CONTRACT["$defs"], **CONTRACT["$defs"][definition]}
 
 
+def entrypoint_icons():
+    """原生入口读取 Tool.icons；内嵌随包 SVG，避免宿主解析本机文件路径。"""
+    # 安装包将 plugin/ 展平到包根；开发源码仍把资源放在 plugin/assets/。
+    assets = ROOT / "assets" if (ROOT / "assets").is_dir() else ROOT / "plugin/assets"
+    data = b64encode((assets / "icon.svg").read_bytes()).decode("ascii")
+    return [Icon(src="data:image/svg+xml;base64," + data, mimeType="image/svg+xml", sizes=["any"])]
+
+
 @server.list_tools()
 async def list_tools():
     """仅向 app 暴露工具；本地偏好和导出会写插件文件，故不标为纯只读。"""
     result = []
+    icons = entrypoint_icons()
     for name in [*OPEN, *(name for name in TOOLS if name not in OPEN)]:
         metadata = {"ui": {"visibility": ["app"]}, "openai/visibility": "private"}
         if name in OPEN:
@@ -95,6 +105,7 @@ async def list_tools():
             metadata["ui"]["resourceUri"] = uri
             metadata["openai/ui"] = {"entrypoints": [{"type": surface}]}
         result.append(Tool(name=name, title="执行轨迹" if name in OPEN else None,
+                           icons=icons if name in OPEN else None,
                            description="Local execution observation. Task data stays in app-only result metadata.",
                            inputSchema=tool_schema(name),
                            annotations=ToolAnnotations(readOnlyHint=name not in ("save_view_state", "download_records"),

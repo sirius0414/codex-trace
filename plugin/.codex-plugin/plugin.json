@@ -9,6 +9,10 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "执行轨迹",
-    "shortDescription": "只读查看本地 Codex 已保存的执行轨迹。"
+    "shortDescription": "只读查看本地 Codex 已保存的执行轨迹。",
+    "composerIcon": "./assets/icon.svg",
+    "composerIconDark": "./assets/icon-dark.svg",
+    "logo": "./assets/logo.svg",
+    "logoDark": "./assets/logo-dark.svg"
   }
 }

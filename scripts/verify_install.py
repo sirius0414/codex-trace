@@ -216,8 +216,12 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
         resources = client.request("resources/list", {}).get("resources", [])
         bundled = (installed / "ui/trajectory-v1.html").read_text()
         uris = {"global": "ui://codex-display/trajectory-v1.html", "thread": "ui://codex-display/trajectory-panel-v1.html"}
+        expected_icon = "data:image/svg+xml;base64," + base64.b64encode((installed / "assets/icon.svg").read_bytes()).decode("ascii")
         for surface, name in (("global", "open_codex_display"), ("thread", "open_codex_display_panel")):
-            metadata = next(t for t in tools if t["name"] == name)["_meta"]
+            tool = next(t for t in tools if t["name"] == name)
+            metadata = tool["_meta"]
+            check(surface + "_entrypoint_icon_embedded", tool.get("icons") == [
+                {"src": expected_icon, "mimeType": "image/svg+xml", "sizes": ["any"]}])
             check(surface + "_app_entrypoint", metadata.get("openai/ui", {}).get("entrypoints") == [{"type": surface}]
                   and metadata.get("ui", {}).get("resourceUri") == uris[surface])
             check(surface + "_ui_resource_registered", any(r.get("uri") == uris[surface] for r in resources))
