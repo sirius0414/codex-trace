@@ -121,6 +121,26 @@ test('a viewport wholly inside a middle gap remains unattributed', () => {
   assert.deepEqual(coverageTotals([], 40, 60), { recordedMs: 0, unattributedMs: 20, overlapMs: 0 });
 });
 
+test('compact coverage statistics include the original span of folded gaps without inflating recorded intervals', () => {
+  // 60 秒无持续时间归因的空档被压缩为 1 秒显示；有证据的两段长度保持不变。
+  const { segments } = timelineCoverage([{ start: 0, end: 10, lane: 1 }, { start: 1010, end: 1030, lane: 2 }], 0, 1030);
+  const before = structuredClone(segments);
+  assert.deepEqual(coverageTotals(segments, 0, 1030, 60030), { recordedMs: 30, unattributedMs: 60000, overlapMs: 0 });
+  assert.deepEqual(coverageTotals(segments, 5, 1020, 60015), { recordedMs: 15, unattributedMs: 60000, overlapMs: 0 });
+  assert.deepEqual(coverageTotals(segments, 100, 900, 48000), { recordedMs: 0, unattributedMs: 48000, overlapMs: 0 });
+  assert.deepEqual(segments, before);
+});
+
+test('original-span overrides leave recorded overlap unchanged and fall back safely when invalid', () => {
+  const { segments } = timelineCoverage([{ start: 0, end: 30, lane: 1 }, { start: 10, end: 50, lane: 2 }], 0, 100);
+  assert.deepEqual(coverageTotals(segments, 0, 100, 6100), { recordedMs: 50, unattributedMs: 6050, overlapMs: 20 });
+  for (const invalid of [undefined, null, NaN, Infinity, -Infinity, -1]) {
+    assert.deepEqual(coverageTotals(segments, 0, 100, invalid), { recordedMs: 50, unattributedMs: 50, overlapMs: 20 });
+  }
+  assert.deepEqual(coverageTotals(segments, 0, 100, 0), { recordedMs: 50, unattributedMs: 0, overlapMs: 20 });
+  assert.deepEqual(coverageTotals(segments, 0, 0, 10000), { recordedMs: 0, unattributedMs: 0, overlapMs: 0 });
+});
+
 test('100,000 ranges retain exact totals while rendering at most 400 summaries', () => {
   const spans = Array.from({ length: 100000 }, (_, index) => ({ start: index * 2, end: index * 2 + 1, lane: index % 3 }));
   const result = timelineCoverage(spans, 0, 200000);

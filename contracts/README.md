@@ -53,6 +53,26 @@ bounds); payloads still require runtime validation at the service boundary.
   are opaque and each byte chunk has its own offset, size and checksum.
 - View state contains only preferences and identifiers. Text payloads, source
   paths and authentication material cannot be added as undeclared properties.
+- `ViewState.turnRange` optionally preserves a record highlight range as an
+  absolute wall-clock `TimeRange`; omission or `null` clears it. The UI matches
+  each record's actual timestamp or recorded interval to highlight only records
+  intersecting the range. Untimed and unmatched records stay visible without a
+  range highlight; turn/group headers indicate contained matches. It never
+  filters or reorders the list; existing Agent and event filters independently
+  control visibility.
+  Positive intervals use half-open overlap; point records include the left edge
+  and exclude an internal right edge, with the final axis endpoint included.
+  This field is outside `Filters`: it does not change loaded-text query requests
+  or search cache keys. Restoring preferences preserves the original wall-clock
+  positions rather than reinterpreting them on a newly compressed active axis.
+- `ViewState.timelineSpacing` is an optional display preference: `compact`
+  compresses long gaps without recorded interval coverage, while `runtime`
+  preserves the original spacing within turn execution windows. Omitted values
+  default to `compact` in the UI, including previously saved preferences. The
+  preference is outside `Filters` and loaded-text query requests; changing it
+  does not reset search cache keys, alter original timestamps or clear the
+  absolute `turnRange`. A compact display coordinate is not a measurement of net
+  execution time or evidence of a network interruption.
 
 ## Local ZIP delivery
 

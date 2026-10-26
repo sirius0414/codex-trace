@@ -225,6 +225,21 @@ test('untimed overview uses explicit record positions without inventing timestam
   assert.equal(zoomed.flatMap(mark => mark.events).length, 51);
 });
 
+test('active-time overview uses projected positions while preserving source records and wall-time filters', () => {
+  const first = event('run-1', { timing: { ...base.events[0].timing, startMs: 10000, endMs: 20000, durationMs: 10000, precision: 'exact' } });
+  const second = event('run-2', { turnId: 'turn-2', timing: { ...base.events[0].timing, startMs: 36070000, endMs: 36080000, durationMs: 10000, precision: 'exact' } });
+  const positions = new Map([['run-1', { start: 10000, end: 20000 }], ['run-2', { start: 70000, end: 80000 }]]);
+  const marks = overviewMarks([first, second], { min: 60000, max: 120000, mode: 'time', selectedEventId: 'run-2', positions });
+  assert.equal(marks.length, 1);
+  assert.equal(marks[0].start, 70000); assert.equal(marks[0].end, 80000);
+  assert.strictEqual(marks[0].events[0], second);
+  assert.equal(second.timing.startMs, 36070000);
+  const data = snapshot([first, second]);
+  const filtered = { ...view, filters: { ...view.filters, timeRange: { startMs: 36070000, endMs: 36080000 } } };
+  assert.deepEqual(visibleEvents(data, filtered, null).map(item => item.eventId), ['run-2']);
+  assert.deepEqual(overviewMarks([first], { min: 0, max: 120000, mode: 'time', selectedEventId: null, positions: new Map() }), []);
+});
+
 test('all Agent scopes and older pages keep the recorded root creation origin including real zero', () => {
   const origin={timestampMs:10000,basis:'threadCreatedAt',precision:'second',explanation:'Synthetic creation reference.'};
   const recent=event('recent',{timing:{...base.events[0].timing,startMs:50000,endMs:51000}});

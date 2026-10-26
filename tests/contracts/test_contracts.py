@@ -290,6 +290,37 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate("ViewState", state)
 
+    def test_turn_range_is_optional_absolute_view_state_outside_event_filters(self):
+        state = read("view-state.json")
+        validate("ViewState", state)  # 已保存的旧偏好不要求补上新字段。
+        for turn_range in (None, {"startMs": 0, "endMs": 1000}, {"startMs": 1790000000000, "endMs": 1790000001000}):
+            with self.subTest(turn_range=turn_range):
+                validate("ViewState", {**state, "turnRange": turn_range})
+        for invalid in (True, [], {"startMs": 0}, {"startMs": -1, "endMs": 100},
+                        {"startMs": 0.5, "endMs": 100}, {"startMs": 0, "endMs": 100, "turnIds": ["one"]}):
+            with self.subTest(turn_range=invalid), self.assertRaises(ValidationError):
+                validate("ViewState", {**state, "turnRange": invalid})
+        with self.assertRaises(ValidationError):
+            validate("Filters", {**state["filters"], "turnRange": {"startMs": 0, "endMs": 100}})
+        request = read("requests.json")["QueryLoadedEventsRequest"]
+        with self.assertRaises(ValidationError):
+            validate("QueryLoadedEventsRequest", {**request, "turnRange": {"startMs": 0, "endMs": 100}})
+
+    def test_timeline_spacing_is_optional_display_preference_outside_filters_and_queries(self):
+        state = read("view-state.json")
+        validate("ViewState", state)  # 旧偏好缺少显示模式时由 UI 默认采用 compact。
+        for spacing in ("compact", "runtime"):
+            with self.subTest(spacing=spacing):
+                validate("ViewState", {**state, "timelineSpacing": spacing})
+        for invalid in (None, True, "absolute", "", [], {}):
+            with self.subTest(spacing=invalid), self.assertRaises(ValidationError):
+                validate("ViewState", {**state, "timelineSpacing": invalid})
+        with self.assertRaises(ValidationError):
+            validate("Filters", {**state["filters"], "timelineSpacing": "compact"})
+        request = read("requests.json")["QueryLoadedEventsRequest"]
+        with self.assertRaises(ValidationError):
+            validate("QueryLoadedEventsRequest", {**request, "timelineSpacing": "compact"})
+
     def test_raw_fixture_is_exact_binary_with_unknown_bad_and_partial_records(self):
         raw = (FIXTURES / "unknown-and-partial.bin").read_bytes()
         expected = read("scenarios.json")["unknownBytes"]

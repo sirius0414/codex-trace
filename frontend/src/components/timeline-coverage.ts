@@ -32,8 +32,10 @@ function intersectingRange(segments: CoverageSegment[], min: number, max: number
 /**
  * 对 timelineCoverage 的原始有序分区统计视口内的精确覆盖，不创建裁剪副本。
  * 视口内没有持续时间证据的部分计入 unattributedMs；无效视口各项为 0。
+ * 紧凑坐标可传入原运行跨度 spanMs，使被压缩的空档仍按原时间计入未归因。
+ * 已记录区间与重叠仍按未压缩的正区间统计；无效跨度退回显示坐标跨度。
  */
-export function coverageTotals(segments: CoverageSegment[], min: number, max: number): {
+export function coverageTotals(segments: CoverageSegment[], min: number, max: number, spanMs?: number): {
   recordedMs: number; unattributedMs: number; overlapMs: number;
 } {
   if (!validDomain(min, max)) return { recordedMs: 0, unattributedMs: 0, overlapMs: 0 };
@@ -45,7 +47,8 @@ export function coverageTotals(segments: CoverageSegment[], min: number, max: nu
     if (segment.mask) recordedMs += duration;
     if (segment.mask & (segment.mask - 1)) overlapMs += duration;
   }
-  return { recordedMs, unattributedMs: Math.max(0, max - min - recordedMs), overlapMs };
+  const elapsed = spanMs != null && Number.isFinite(spanMs) && spanMs >= 0 ? spanMs : max - min;
+  return { recordedMs, unattributedMs: Math.max(0, elapsed - recordedMs), overlapMs };
 }
 
 /**

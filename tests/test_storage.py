@@ -82,6 +82,21 @@ class StorageTests(unittest.TestCase):
             self.assertTrue(self.store.save_view("A", revision, state)["saved"])
             self.assertEqual(self.reopen().load_view("A")["state"]["agentScope"], state["agentScope"])
 
+    def test_absolute_turn_selection_and_both_clear_forms_survive_restart(self):
+        # 顶层偏好完整替换，旧状态缺失字段和显式 null 都不能复活上次的轮次选区。
+        absolute_range = {"startMs": 1790000000000, "endMs": 1790000001000}
+        for revision, extra in enumerate(({}, {"turnRange": absolute_range}, {"turnRange": None}, {})):
+            state = {**STATE, **extra}
+            self.assertTrue(self.store.save_view("A", revision, state)["saved"])
+            self.assertEqual(self.reopen().load_view("A")["state"], state)
+
+    def test_timeline_spacing_survives_restart_without_changing_absolute_turn_selection(self):
+        absolute_range = {"startMs": 1790000000000, "endMs": 1790000001000}
+        for revision, extra in enumerate(({}, {"timelineSpacing": "runtime"}, {"timelineSpacing": "compact"}, {})):
+            state = {**STATE, "turnRange": absolute_range, **extra}
+            self.assertTrue(self.store.save_view("A", revision, state)["saved"])
+            self.assertEqual(self.reopen().load_view("A")["state"], state)
+
     def test_returned_payloads_do_not_alias_caller_mutations(self):
         state = copy.deepcopy(STATE)
         returned = self.store.save_view("A", 0, state)

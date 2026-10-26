@@ -1,4 +1,6 @@
-import type { EventKind, Group, Relationship, ThreadSnapshot, TraceEvent, UsageMetric, UsageSnapshot, ViewState } from '../../../contracts/types';
+/** 列表与概览共享的纯投影；轮次范围按原墙钟片段匹配，事件的原始时间和查询条件保持独立。 */
+import type { EventKind, Group, Relationship, ThreadSnapshot, TimeRange, TraceEvent, UsageMetric, UsageSnapshot, ViewState } from '../../../contracts/types';
+import { buildActiveTimeline, type ActiveTimeline } from './active-timeline.ts';
 
 export const kindLabels: Record<EventKind, string> = {
   userMessage: '用户', assistantMessage: '助手', reasoningSummary: '思考摘要', systemContext: '系统说明',
@@ -43,7 +45,7 @@ export function recordedEnd(event: TraceEvent): number | null {
   if (precision === 'exact' && durationMs != null && Number.isFinite(durationMs) && durationMs >= 0 && Math.abs(startMs + durationMs) <= Number.MAX_SAFE_INTEGER) return startMs + durationMs;
   return startMs;
 }
-/** 时间轴原点只认主任务创建证据；无事件时间时退为顺序轴，不把位置解释为时长。 */
+/** 墙钟范围辅助：原点只认创建证据；累计运行图使用 buildActiveTimeline，不使用这里的墙钟跨度。 */
 export function overviewFrame(snapshot: Pick<ThreadSnapshot, 'timelineOrigin'> | null, events: TraceEvent[], language: Language = 'zh') {
   const evidence = snapshot?.timelineOrigin;
   const origin = evidence?.basis === 'threadCreatedAt' && evidence.precision === 'second'
@@ -68,16 +70,20 @@ export function overviewLane(event: TraceEvent) {
 export type OverviewMark = {
   key: string; lane: number; start: number; end: number; events: TraceEvent[]; selected: boolean;
 };
-export function overviewMarks(events: TraceEvent[], options: { min: number; max: number; mode: 'time' | 'order'; selectedEventId: string | null; bins?: number }): OverviewMark[] {
+/** 绘图坐标可使用累计运行时间；事件本身始终保留来源中的绝对时间。 */
+export type OverviewPosition = { start: number; end: number };
+export function overviewMarks(events: TraceEvent[], options: { min: number; max: number; mode: 'time' | 'order'; selectedEventId: string | null; bins?: number; positions?: ReadonlyMap<string, OverviewPosition> }): OverviewMark[] {
   // 按横向格子和三条轨道聚合，限制 SVG 节点数量；选中事件始终单列，保留定位目标。
   const bins = Math.max(1, Math.min(40, Math.floor(options.bins ?? 40)));
   const groups = new Map<string, OverviewMark>();
   const span = Math.max(1, options.max - options.min);
   for (let index = 0; index < events.length; index++) {
     const event = events[index];
-    const start = options.mode === 'order' ? index + 1 : event.timing.startMs;
+    const projected = options.positions?.get(event.eventId);
+    if (options.mode !== 'order' && options.positions && !projected) continue;
+    const start = options.mode === 'order' ? index + 1 : projected?.start ?? event.timing.startMs;
     if (start == null) continue;
-    const end = options.mode === 'order' ? start : recordedEnd(event) ?? start;
+    const end = options.mode === 'order' ? start : projected?.end ?? recordedEnd(event) ?? start;
     if (start > options.max || end < options.min) continue;
     const lane = overviewLane(event), selected = event.eventId === options.selectedEventId;
     const bucket = Math.max(0, Math.min(bins - 1, Math.floor((start - options.min) / span * bins)));
@@ -119,6 +125,109 @@ export function scopedEvents(snapshot: ThreadSnapshot, view: ViewState) {
   const groups = groupScope(snapshot, view);
   return snapshot.events.filter(event => !groups || groups.has(event.groupId));
 }
+
+type TurnRangeIndex = { points: Array<{ wall: number; active: number }>; finalEnd: number };
+const turnRangeIndexes = new WeakMap<ActiveTimeline, TurnRangeIndex>();
+function turnRangeIndex(timeline: ActiveTimeline): TurnRangeIndex {
+  const cached = turnRangeIndexes.get(timeline);
+  if (cached) return cached;
+  const walls = new Set<number>();
+  let finalEnd = -Infinity;
+  for (const spans of timeline.turnSpans.values()) for (const span of spans) {
+    finalEnd = Math.max(finalEnd, span.end);
+    if (span.start === span.end) walls.add(span.start);
+  }
+  const points = [...walls].sort((a, b) => a - b).map(wall => ({ wall, active: timeline.toActive(wall) }));
+  const index = { points, finalEnd };
+  // 时间轴随完整快照重建；拖动时只复用它的点索引，不再扫描事件或重复投影零点。
+  turnRangeIndexes.set(timeline, index);
+  return index;
+}
+
+/**
+ * 把正宽累计选区转换成可持久化的整数墙钟范围。接缝、前导与尾部零点会落在
+ * 累计轴的同一位置，因此边界逆映射后还要包含选区内的这些点；只向点扩展，
+ * 不向接缝前的正区间扩展。内部右边界排除点，全轴最终右边界允许包含点。
+ */
+export function turnRangeFromActive(timeline: ActiveTimeline, start: number, end: number): TimeRange | null {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return null;
+  let wallStart = timeline.toWall(start, 'start'), wallEnd = timeline.toWall(end, 'end');
+  const { points } = turnRangeIndex(timeline);
+  let low = 0, high = points.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (points[middle].active < start) low = middle + 1;
+    else high = middle;
+  }
+  const first = low;
+  high = points.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2), point = points[middle];
+    if (point.active < end || point.active === end && end === timeline.durationMs) low = middle + 1;
+    else high = middle;
+  }
+  const hasPoint = first < low;
+  if (hasPoint) {
+    // 墙钟与累计位置同序，只需区间两端的点；大量零点也不逐帧线性扫描。
+    const last = points[low - 1];
+    wallStart = Math.min(wallStart, points[first].wall);
+    // 显式留一毫秒包含零点；不能依赖“当前最后一点”，否则追加后会掉出保存选区。
+    wallEnd = Math.max(wallEnd, Math.min(Number.MAX_SAFE_INTEGER, last.wall + 1));
+  }
+  const startMs = Math.round(wallStart);
+  let endMs = Math.round(wallEnd);
+  if (hasPoint && endMs <= startMs) endMs = Math.min(Number.MAX_SAFE_INTEGER, startMs + 1);
+  return endMs > startMs ? { startMs, endMs } : null;
+}
+
+/**
+ * 轮次选区保存绝对墙钟边界，按执行片段选择整轮，不能把中断空档当成执行。
+ * 缺失／null 表示未筛选；正区间按半开相交，点包含左端、排除内部右端，
+ * 全轴最终右端上的点允许选中。timeline 可复用，避免拖动时反复推断同一批证据。
+ */
+export function turnRangeKeys(snapshot: ThreadSnapshot, range: TimeRange | null | undefined, timeline?: ActiveTimeline): Set<string> | null {
+  if (!range) return null;
+  const matches = new Set<string>();
+  if (!Number.isFinite(range.startMs) || !Number.isFinite(range.endMs) || range.startMs < 0 || range.endMs <= range.startMs) return matches;
+  const frame = timeline ?? buildActiveTimeline(snapshot);
+  const { finalEnd } = turnRangeIndex(frame);
+  for (const [id, spans] of frame.turnSpans) {
+    if (spans.some(span => span.end > span.start ? span.start < range.endMs && span.end > range.startMs
+      : span.start >= range.startMs && (span.start < range.endMs || span.start === range.endMs && range.endMs === finalEnd))) matches.add(id);
+  }
+  return matches;
+}
+
+/**
+ * 指针只高亮与墙钟选区相交的具体条目，不沿 turnId 扩大范围，也不借轮次包络补时间。
+ * 缺失／null 表示无选区；正区间半开相交，点包含左端、排除内部右端，最终事件右端点可包含。
+ * 没有可定位起点的条目仍留在列表中，但不能据此推造高亮位置。
+ */
+export function eventRangeIds(snapshot: ThreadSnapshot, range: TimeRange | null | undefined): Set<string> | null {
+  if (!range) return null;
+  const matches = new Set<string>();
+  if (!Number.isFinite(range.startMs) || !Number.isFinite(range.endMs) || range.startMs < 0 || range.endMs <= range.startMs) return matches;
+  const endTime = (event: TraceEvent) => {
+    const start = event.timing.startMs;
+    if (start == null || !Number.isFinite(start) || start < 0 || start > Number.MAX_SAFE_INTEGER) return null;
+    const end = recordedEnd(event) ?? start;
+    return Number.isFinite(end) && end >= start && end <= Number.MAX_SAFE_INTEGER ? end : null;
+  };
+  let finalEnd = -Infinity;
+  for (const event of snapshot.events) {
+    const end = endTime(event);
+    if (end != null) finalEnd = Math.max(finalEnd, end);
+  }
+  for (const event of snapshot.events) {
+    const start = event.timing.startMs, end = endTime(event);
+    if (start == null || end == null) continue;
+    if (end > start ? start < range.endMs && end > range.startMs
+      : start >= range.startMs && (start < range.endMs || start === range.endMs && range.endMs === finalEnd)) matches.add(event.eventId);
+  }
+  return matches;
+}
+
+/** 列表仅受 Agent、正文及事件筛选影响；双指针只提供高亮，不改变可见记录集合。 */
 export function visibleEvents(snapshot: ThreadSnapshot, view: ViewState, matchedIds: Set<string> | null) {
   const filters = view.filters;
   return scopedEvents(snapshot, view).filter(event => {
@@ -136,7 +245,7 @@ export function visibleEvents(snapshot: ThreadSnapshot, view: ViewState, matched
 }
 export type ListRow = { key: string; height: number; top: number } & (
   { type: 'event'; event: TraceEvent; child: boolean } |
-  { type: 'turn'; id: string; label: string; count: number; expanded: boolean; usage: UsageSnapshot[] } |
+  { type: 'turn'; id: string; turnKey: string | null; label: string; count: number; expanded: boolean; usage: UsageSnapshot[] } |
   { type: 'group'; group: Group; expanded: boolean } |
   { type: 'warning'; group: Group } |
   { type: 'earlier'; group?: Group }
@@ -179,7 +288,7 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
         if (event.turnId !== turn) {
           turn = event.turnId;
           const expanded = turn == null || expandedTurns.has(turn);
-          append({ key: `turn:${groupId}:${turn ?? 'context'}`, type: 'turn', id: turn ?? '__context__',
+          append({ key: `turn:${groupId}:${turn ?? 'context'}`, type: 'turn', id: turn ?? '__context__', turnKey: turn == null ? null : JSON.stringify([event.threadId, turn]),
             label: turn == null ? language === 'en' ? 'Task context · position not recorded' : '任务上下文 · 位置未记录' : language === 'en' ? `${child ? 'Child task · ' : ''}Turn ${turnNumber(event.threadId, turn)}` : `${child ? '子任务 · ' : ''}第 ${turnNumber(event.threadId, turn)} 轮`,
             count: counts.get(turn) ?? 0, expanded, height: 23, usage: turnData(event.threadId, turn)?.usage ?? [] });
         }
@@ -225,7 +334,7 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
       if (!visibleIds.has(event.eventId) && !nested.some(child => hasVisibleGroup(child))) continue;
       if (event.turnId !== turn && event.turnId != null) {
         turn = event.turnId;
-        append({ key: `turn:${group.groupId}:${turn}`, type: 'turn', id: turn,
+        append({ key: `turn:${group.groupId}:${turn}`, type: 'turn', id: turn, turnKey: JSON.stringify([event.threadId, turn]),
           label: language === 'en' ? `Child task · Turn ${turnNumber(event.threadId, turn)}` : `子任务 · 第 ${turnNumber(event.threadId, turn)} 轮`, count: visible.filter(item => item.turnId === turn && item.groupId === group.groupId).length,
           expanded: expandedTurns.has(turn), height: 23, usage: turnData(event.threadId, turn)?.usage ?? [] });
       }
@@ -242,7 +351,7 @@ export function makeRows(snapshot: ThreadSnapshot, view: ViewState, visible: Tra
     if (event.turnId !== turn) {
       turn = event.turnId;
       const expanded = turn == null || expandedTurns.has(turn);
-      append({ key: `turn:main:${turn ?? 'context'}`, type: 'turn', id: turn ?? '__context__',
+      append({ key: `turn:main:${turn ?? 'context'}`, type: 'turn', id: turn ?? '__context__', turnKey: turn == null ? null : JSON.stringify([event.threadId, turn]),
         label: turn == null ? language === 'en' ? 'Task context · position not recorded' : '任务上下文 · 位置未记录' : language === 'en' ? `Turn ${turnNumber(event.threadId, turn)}` : `第 ${turnNumber(event.threadId, turn)} 轮`,
         count: visible.filter(item => item.turnId === turn && item.groupId === snapshot.rootGroupId).length, expanded, height: 23, usage: turnData(event.threadId, turn)?.usage ?? [] });
     }

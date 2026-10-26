@@ -71,6 +71,27 @@ test('saved collapse and reading state survives restoration while first use expa
   assert.deepEqual(restoredView(defaultView(),0,fixture).expandedTurnIds,fixture.turns.map(turn=>turn.turnId));
 });
 
+test('timeline spacing is a persistent display preference that preserves selection and confirmed search matches',()=>{
+  const original={...defaultView(),turnRange:{startMs:1790000000000,endMs:1790000001000},
+    filters:{...defaultView().filters,text:'needle'},selectedEventId:'chosen'};
+  const before=structuredClone(original),keys=searchKeys(original,fixture),ids=new Set(['chosen']);
+  const cached={...keys,ids};
+  const legacy=restoredView(JSON.parse(JSON.stringify(original)),4,fixture);
+  assert.equal(legacy.timelineSpacing??'compact','compact');
+  for(const timelineSpacing of ['runtime','compact']) {
+    const changed={...legacy,timelineSpacing};
+    const restored=restoredView(JSON.parse(JSON.stringify(changed)),4,fixture);
+    assert.equal(restored.timelineSpacing,timelineSpacing);
+    assert.deepEqual(restored.turnRange,original.turnRange);
+    assert.equal(restored.selectedEventId,'chosen');
+    assert.deepEqual(searchKeys(restored,fixture),keys);
+    assert.deepEqual(searchVisibility(restored.filters.text,searchKeys(restored,fixture),cached),{matchedIds:ids,searching:false});
+    const prefs=new PreferenceGate();prefs.restored(4);prefs.edit(restored);
+    assert.equal(prefs.take().state.timelineSpacing,timelineSpacing);
+  }
+  assert.deepEqual(original,before);
+});
+
 test('restoration and queued preference writes preserve exact, empty and legacy Agent scopes',()=>{
   for (const agentScope of [{kind:'selected',groupIds:['main','nested']},{kind:'selected',groupIds:[]},
     {kind:'all',groupId:null},{kind:'main',groupId:null},{kind:'group',groupId:'child'}]) {

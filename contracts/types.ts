@@ -352,8 +352,10 @@ export type AgentScope = ({
 
 export type ViewState = {
   "filters": Filters;
+  "turnRange"?: (TimeRange) | (null);
   "agentScope": AgentScope;
   "overviewMode": "duration" | "turns" | "calls";
+  "timelineSpacing"?: "compact" | "runtime";
   "selectedEventId": (string) | (null);
   "detailTab": "summary" | "preview" | "raw" | "source";
   "expandedTurnIds": Array<string>;
