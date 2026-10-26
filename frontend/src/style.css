@@ -224,8 +224,6 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-runtime-note{grid-column:2;display:flex;align-items:center;flex-wrap:wrap;gap:2px 12px;padding-top:3px;font-size:10px;line-height:14px;color:var(--cx-muted);font-variant-numeric:tabular-nums}
 .cx-runtime-note span{white-space:nowrap}
 .cx-runtime-estimate{color:var(--cx-green)}
-.cx-compact-toggle{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:var(--cx-ink);cursor:pointer;min-height:24px}
-.cx-compact-toggle input{margin:0;width:13px;height:13px;accent-color:var(--cx-green)}
 .cx-idle-break{color:var(--cx-green)}
 .cx-timeline-canvas{grid-column:2;position:relative;min-width:0}
 .cx-with-turn-ruler{padding-top:24px}
@@ -317,11 +315,15 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-panel[data-ui-style="terminal"] :is(button,input,select,.cx-popover,.cx-task-picker,.cx-cluster-picker,.cx-search,.cx-code,.cx-style-option){border-radius:0}
 .cx-panel[data-ui-style="terminal"] .cx-toolbar{border-bottom-color:var(--cx-green)}
 .cx-panel[data-ui-style="terminal"] .cx-row.selected{box-shadow:inset 3px 0 var(--cx-green)}
-.cx-preference-controls{display:flex;align-items:center;gap:4px;flex-shrink:0}
-.cx-language{min-width:29px;padding-inline:5px;font-size:10px;font-weight:500}
-.cx-appearance-trigger{gap:4px;padding-inline:5px}
-.cx-appearance-trigger[aria-expanded="true"]{border-color:var(--cx-green);color:var(--cx-green);background:var(--cx-select)}
-.cx-appearance{top:44px;right:9px;width:290px;max-height:calc(100% - 53px)}
+.cx-settings-trigger{gap:4px;padding-inline:6px;flex-shrink:0}
+.cx-settings-trigger[aria-expanded="true"]{border-color:var(--cx-green);color:var(--cx-green);background:var(--cx-select)}
+.cx-settings{top:44px;right:9px;width:310px;max-height:calc(100% - 53px)}
+.cx-timeline-settings{min-width:0;border:0;border-bottom:1px solid var(--cx-line);padding:0 0 10px;margin:0 0 10px}
+.cx-timeline-settings legend{font-size:11px;color:var(--cx-muted);margin-bottom:3px;padding:0}
+.cx-setting-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;cursor:pointer}
+.cx-setting-toggle strong{display:block;font-size:11px;font-weight:500}
+.cx-setting-toggle small{display:block;color:var(--cx-muted);font-size:10px;margin-top:2px}
+.cx-setting-toggle input{margin:0;width:14px;height:14px;flex-shrink:0;accent-color:var(--cx-green)}
 .cx-language-field{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px;padding:5px 0 13px}
 .cx-language-field select{background:var(--cx-bg);color:var(--cx-ink);border:1px solid var(--cx-line);border-radius:4px;min-height:28px;padding:2px 7px}
 .cx-style-options{min-width:0;padding:0;border:0;margin:0}
@@ -342,11 +344,11 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-style-preview.terminal{background:#18251d;border-color:#344b3c;border-radius:0}
 .cx-style-preview.terminal i{background:#54765f;border-radius:0}
 .cx-style-preview.terminal i:first-child{background:#8ad5a1}
-.cx-appearance .cx-preference-note{margin:10px 0 0;font-size:10px}
+.cx-settings .cx-preference-note{margin:10px 0 0;font-size:10px}
 .cx-panel[lang="en"] .cx-facts{grid-template-columns:95px minmax(0,1fr)}
 .cx-panel[lang="en"] .cx-lane-labels{font-size:10px}
-@media(max-width:650px){.cx-appearance-trigger span{display:none}.cx-appearance-trigger{width:25px;padding:0}.cx-preference-controls{gap:3px}.cx-panel[lang="en"] .cx-type{max-width:115px}}
-@media(max-width:420px){.cx-toolbar .cx-task{order:0;flex-basis:auto;border-top:0;padding-top:3px;max-width:none}.cx-toolbar .cx-divider{display:none}.cx-toolbar .cx-task-status{font-size:10px;gap:3px}.cx-toolbar .cx-follow-label{min-width:0}.cx-preference-controls{gap:2px}.cx-language{min-width:25px;padding-inline:3px}.cx-toolbar .cx-task-status{display:none}.cx-panel[lang="en"] .cx-type{max-width:100px}.cx-appearance{right:7px}}
+@media(max-width:650px){.cx-settings-trigger span{display:none}.cx-settings-trigger{width:25px;padding:0}.cx-panel[lang="en"] .cx-type{max-width:115px}}
+@media(max-width:420px){.cx-toolbar .cx-task{order:0;flex-basis:auto;border-top:0;padding-top:3px;max-width:none}.cx-toolbar .cx-divider{display:none}.cx-toolbar .cx-task-status{font-size:10px;gap:3px}.cx-toolbar .cx-follow-label{min-width:0}.cx-toolbar .cx-task-status{display:none}.cx-panel[lang="en"] .cx-type{max-width:100px}.cx-settings{right:7px}}
 
 /* Turn 框选覆盖层只由尺和旗帜接收输入；底色及指针线裁在图内，主图默认仍可平移。 */
 .cx-turn-selection{position:absolute;inset:0;z-index:3;pointer-events:none;user-select:none;color:var(--cx-green)}

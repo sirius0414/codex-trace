@@ -13,13 +13,13 @@ import { clockTime, eventRangeIds, localizedKindLabels, latestUsage, metric, loc
 
 export default function TraceUI(props: TraceUIProps) {
   const { snapshot, view, onView } = props;
-  const { language, uiStyle, setLanguage, setUiStyle, t } = usePreferences();
+  const { language, uiStyle, showSpanSummary, setLanguage, setUiStyle, setShowSpanSummary, t } = usePreferences();
   const kindLabels = localizedKindLabels(language), statusLabels = localizedStatusLabels(language);
   const time = (value: number | null | undefined) => clockTime(value, language);
   const versionDescription = [`Codex Display ${versionLabel}`, buildInfo.sourceHash && `${t('源码指纹', 'Source fingerprint')}: ${buildInfo.sourceHash}`, buildInfo.builtAt && `${t('构建时间', 'Built at')}: ${buildInfo.builtAt}`].filter(Boolean).join('\n');
   const styleLabels = { classic: t('经典', 'Classic'), soft: t('柔和', 'Soft'), terminal: t('终端', 'Terminal') };
   const styleNotes = { classic: t('简洁、清晰的默认界面', 'Clean and familiar'), soft: t('柔和配色与圆角控件', 'Soft colors and rounded controls'), terminal: t('等宽字体与利落边框', 'Monospace type and crisp borders') };
-  const [popover, setPopover] = useState<'usage' | 'reading' | 'tasks' | 'appearance' | null>(null);
+  const [popover, setPopover] = useState<'usage' | 'reading' | 'tasks' | 'settings' | null>(null);
   const [taskQuery, setTaskQuery] = useState('');
   const [rowCount, setRowCount] = useState(0);
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width:650px)').matches);
@@ -56,7 +56,7 @@ export default function TraceUI(props: TraceUIProps) {
   }, [narrow, view.selectedEventId]);
   useEffect(() => {
     if (popover === 'tasks') taskInput.current?.focus();
-    if (popover === 'appearance') root.current?.querySelector<HTMLSelectElement>('.cx-language-field select')?.focus();
+    if (popover === 'settings') root.current?.querySelector<HTMLInputElement>('.cx-settings input')?.focus();
   }, [popover]);
   useEffect(() => {
     if (previousThread.current !== snapshot?.binding.threadId) { setPopover(null); previousThread.current = snapshot?.binding.threadId; }
@@ -65,7 +65,7 @@ export default function TraceUI(props: TraceUIProps) {
     const key = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       // 先关闭最上层弹层，再关闭详情；关闭后把焦点交回触发控件或原记录。
-      if (popover) { setPopover(null); root.current?.querySelector<HTMLButtonElement>(popover === 'usage' ? '.cx-usage-trigger' : popover === 'reading' ? '.cx-read-status' : popover === 'appearance' ? '.cx-appearance-trigger' : '.cx-task')?.focus(); }
+      if (popover) { setPopover(null); root.current?.querySelector<HTMLButtonElement>(popover === 'usage' ? '.cx-usage-trigger' : popover === 'reading' ? '.cx-read-status' : popover === 'settings' ? '.cx-settings-trigger' : '.cx-task')?.focus(); }
       else if (view.selectedEventId) { props.onSelect(null); requestAnimationFrame(() => {
         const selected = root.current?.querySelector<HTMLButtonElement>(`.cx-scroll [data-event-id="${CSS.escape(view.selectedEventId!)}"]`);
         (selected ?? root.current?.querySelector<HTMLElement>('.cx-scroll'))?.focus({ preventScroll: true });
@@ -75,7 +75,7 @@ export default function TraceUI(props: TraceUIProps) {
   }, [popover, view.selectedEventId, props.onSelect]);
   useEffect(() => {
     const close = (event: PointerEvent) => {
-      if (popover && !(event.target as Element).closest('.cx-popover,.cx-task-picker,.cx-usage-trigger,.cx-read-status,.cx-task,.cx-appearance-trigger')) setPopover(null);
+      if (popover && !(event.target as Element).closest('.cx-popover,.cx-task-picker,.cx-usage-trigger,.cx-read-status,.cx-task,.cx-settings-trigger')) setPopover(null);
     };
     document.addEventListener('pointerdown', close); return () => document.removeEventListener('pointerdown', close);
   }, [popover]);
@@ -90,10 +90,7 @@ export default function TraceUI(props: TraceUIProps) {
       <button className="cx-task" aria-expanded={popover === 'tasks'} aria-haspopup="dialog" title={snapshot?.title ?? t('选择任务', 'Select task')} onClick={() => { setPopover(value => value === 'tasks' ? null : 'tasks'); props.onTaskSearch(taskQuery); }}><span>{snapshot?.title || t('选择任务', 'Select task')}</span><Icon name="down" /></button>
       <span className={`cx-task-status ${snapshot?.status.value ?? 'unknown'}`} title={snapshot?.status.explanation}><span className="cx-status-dot" />{snapshot ? statusLabels[snapshot.status.value] : t('未选择', 'No task')}</span>
       <button className="cx-button cx-download" disabled={!snapshot || props.exporting} aria-label={t('导出记录', 'Export records')} title={t('导出所选任务可读取的全部原始记录，不受搜索、筛选、分页和折叠影响', 'Export all readable raw records for the selected task, regardless of search, filters, pages, or collapsed groups')} onClick={props.onExport}><Icon name="download" /><span>{props.exporting ? t('正在导出…', 'Exporting…') : t('导出记录', 'Export records')}</span></button>
-      <div className="cx-preference-controls">
-        <button className="cx-button cx-language" aria-label={t('切换到 English', '切换到中文')} title={t('切换到 English', 'Switch to 中文')} onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}>{language === 'zh' ? 'EN' : '中文'}</button>
-        <button className="cx-button cx-appearance-trigger" aria-label={t('选择 UI 风格', 'Choose UI style')} title={t('语言与外观', 'Language and appearance')} aria-expanded={popover === 'appearance'} aria-haspopup="dialog" aria-controls="cx-appearance" onClick={() => setPopover(value => value === 'appearance' ? null : 'appearance')}><Icon name="palette" /><span>{styleLabels[uiStyle]}</span></button>
-      </div>
+      <button className="cx-button cx-settings-trigger" aria-label={t('设置', 'Settings')} title={t('设置', 'Settings')} aria-expanded={popover === 'settings'} aria-haspopup="dialog" aria-controls="cx-settings" onClick={() => setPopover(value => value === 'settings' ? null : 'settings')}><Icon name="settings" /><span>{t('设置', 'Settings')}</span></button>
     </header>
     <Overview key={snapshot?.binding.threadId ?? 'empty'} {...props} highlightedEvents={highlightedEvents} onRangeCommit={revealRange} />
     <div className="cx-filterbar"><label className="cx-search"><Icon name="search" /><input aria-label={t('搜索已加载记录', 'Search loaded records')} value={view.filters.text} placeholder={t('搜索已加载记录…', 'Search loaded records…')} onChange={event => filter({ text: event.target.value })} /></label>
@@ -124,10 +121,14 @@ export default function TraceUI(props: TraceUIProps) {
     {(popover === 'usage' || popover === 'reading') && <section className={`cx-popover ${popover === 'usage' ? 'cx-usage-popover' : ''}`} role="dialog" aria-label={popover === 'usage' ? t('主任务 token 用量', 'Main task token usage') : t('记录读取状态', 'Record reading status')}><div className="cx-popover-head">{popover === 'usage' ? t('主任务 · token 用量', 'Main task · Token usage') : t('记录读取状态', 'Record reading status')}<button className="cx-icon" aria-label={popover === 'usage' ? t('关闭用量', 'Close usage') : t('关闭读取状态', 'Close reading status')} onClick={() => setPopover(null)}><Icon name="close" /></button></div>
       {popover === 'usage' ? <UsageFacts values={snapshot?.mainUsage ?? []} label={t('主任务；不受列表筛选影响', 'Main task; independent of list filters')} /> : <><dl className="cx-facts"><dt>{t('最近成功读取', 'Last successful read')}</dt><dd>{time(snapshot?.freshness.lastSuccessfulReadAt)}</dd><dt>{t('最近已知进展', 'Last known progress')}</dt><dd>{time(snapshot?.freshness.lastProgressAt)}</dd></dl><p>{props.error || snapshot?.freshness.limitation || t('读取成功本身不表示任务有新的进展。', 'A successful read alone does not indicate new task progress.')}</p><p>{snapshot?.coverage.explanation}</p>{snapshot?.freshness.sources.filter(source => source.reason).map(source => <p key={source.sourceId}>{source.sourceId}：{source.reason}</p>)}<p>{t('跟随只影响滚动。部分工具输出结束后保存，任务状态由已有证据独立判断。', 'Following only controls scrolling. Some tool output is saved on completion; task status is determined separately from recorded evidence.')}</p>{props.error && <button className="cx-button" onClick={props.onRetry}>{t('重试读取', 'Retry reading')}</button>}</>}
     </section>}
-    {popover === 'appearance' && <section id="cx-appearance" className="cx-popover cx-appearance" role="dialog" aria-labelledby="cx-appearance-title">
-      <div className="cx-popover-head"><span id="cx-appearance-title">{t('语言与外观', 'Language and appearance')}</span><button className="cx-icon" aria-label={t('关闭外观设置', 'Close appearance settings')} onClick={() => { setPopover(null); root.current?.querySelector<HTMLButtonElement>('.cx-appearance-trigger')?.focus(); }}><Icon name="close" /></button></div>
+    {popover === 'settings' && <section id="cx-settings" className="cx-popover cx-settings" role="dialog" aria-labelledby="cx-settings-title">
+      <div className="cx-popover-head"><span id="cx-settings-title">{t('设置', 'Settings')}</span><button className="cx-icon" aria-label={t('关闭设置', 'Close settings')} onClick={() => { setPopover(null); root.current?.querySelector<HTMLButtonElement>('.cx-settings-trigger')?.focus(); }}><Icon name="close" /></button></div>
+      <fieldset className="cx-timeline-settings"><legend>{t('时间概览', 'Timeline')}</legend>
+        <label className="cx-setting-toggle"><span><strong>{t('折叠空档', 'Fold gaps')}</strong><small>{t('压缩无记录空档的显示宽度', 'Shorten gaps without recorded intervals')}</small></span><input type="checkbox" aria-label={t('折叠无记录空档', 'Fold unrecorded gaps')} checked={(view.timelineSpacing ?? 'compact') === 'compact'} onChange={event => onView({ timelineSpacing: event.target.checked ? 'compact' : 'runtime' })} /></label>
+        <label className="cx-setting-toggle"><span><strong>{t('显示 Span 摘要', 'Show Span summary')}</strong><small>{t('运行跨度、覆盖条、滚动条与选区说明', 'Runtime, coverage, scrollbar and selection notes')}</small></span><input type="checkbox" aria-label={t('显示 Span 摘要', 'Show Span summary')} checked={showSpanSummary} onChange={event => setShowSpanSummary(event.target.checked)} /></label>
+      </fieldset>
       <label className="cx-language-field"><span>{t('界面语言', 'Interface language')}</span><select value={language} onChange={event => setLanguage(event.target.value as 'zh' | 'en')}><option value="zh">简体中文</option><option value="en">English</option></select></label>
-      <fieldset className="cx-style-options"><legend>{t('UI 风格', 'UI style')}</legend>{uiStyles.map(style => <label key={style} className={`cx-style-option ${uiStyle === style ? 'selected' : ''}`}><input type="radio" name="cx-ui-style" value={style} checked={uiStyle === style} onChange={() => setUiStyle(style)} /><span className={`cx-style-preview ${style}`} aria-hidden="true"><i /><i /><i /></span><span><strong>{styleLabels[style]}</strong><small>{styleNotes[style]}</small></span></label>)}</fieldset>
+      <fieldset className="cx-style-options"><legend>{t('UI 模板', 'UI template')}</legend>{uiStyles.map(style => <label key={style} className={`cx-style-option ${uiStyle === style ? 'selected' : ''}`}><input type="radio" name="cx-ui-style" value={style} checked={uiStyle === style} onChange={() => setUiStyle(style)} /><span className={`cx-style-preview ${style}`} aria-hidden="true"><i /><i /><i /></span><span><strong>{styleLabels[style]}</strong><small>{styleNotes[style]}</small></span></label>)}</fieldset>
       <p className="cx-preference-note">{t('更改立即生效，刷新后保留。', 'Changes apply immediately and are remembered on reload.')}</p>
     </section>}
     {props.exportMessage && <div className="cx-export-message" role="status" tabIndex={0} aria-label={t('导出结果', 'Export result')}>{props.exportMessage}</div>}

@@ -6,6 +6,7 @@ type PreferencesContextValue = UIPreferences & {
   locale: 'zh-CN' | 'en-US';
   setLanguage: (language: Language) => void;
   setUiStyle: (uiStyle: UIStyle) => void;
+  setShowSpanSummary: (showSpanSummary: boolean) => void;
   t: (zh: string, en: string) => string;
 };
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
@@ -22,6 +23,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     locale: preferences.language === 'zh' ? 'zh-CN' : 'en-US',
     setLanguage: language => setPreferences(current => ({ ...current, language })),
     setUiStyle: uiStyle => setPreferences(current => ({ ...current, uiStyle })),
+    setShowSpanSummary: showSpanSummary => setPreferences(current => ({ ...current, showSpanSummary })),
     t: (zh, en) => preferences.language === 'zh' ? zh : en,
   }), [preferences]);
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;

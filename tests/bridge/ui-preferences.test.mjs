@@ -23,27 +23,30 @@ test('client errors translate only known UI messages and preserve arbitrary sour
 
 test('first use follows the preferred browser language and defaults to classic style', () => {
   for (const languages of [[], ['zh-CN'], ['zh-TW', 'en-US'], ['fr-FR']]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'zh', uiStyle: 'classic' });
+    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'zh', uiStyle: 'classic', showSpanSummary: false });
   }
   for (const languages of [['en'], ['en-US', 'zh-CN'], ['EN-gb']]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'en', uiStyle: 'classic' });
+    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'en', uiStyle: 'classic', showSpanSummary: false });
   }
 });
 
 test('malformed, primitive and array storage values fall back without throwing', () => {
   for (const saved of ['', '{broken', 'null', 'false', '42', '"en"', '[]', '[{"language":"en"}]']) {
-    assert.deepEqual(readUIPreferences(memoryStorage(saved), ['en-US']), { language: 'en', uiStyle: 'classic' });
+    assert.deepEqual(readUIPreferences(memoryStorage(saved), ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false });
   }
 });
 
 test('invalid fields fall back independently while valid fields remain usable', () => {
   for (const language of ['fr', '', null, 7, {}, ['en']]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language, uiStyle: 'soft' })), ['en-US']), { language: 'en', uiStyle: 'soft' });
+    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language, uiStyle: 'soft' })), ['en-US']), { language: 'en', uiStyle: 'soft', showSpanSummary: false });
   }
   for (const uiStyle of ['dark', '', null, 7, {}, ['terminal'], 'toString', '__proto__']) {
-    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'zh', uiStyle })), ['en-US']), { language: 'zh', uiStyle: 'classic' });
+    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'zh', uiStyle })), ['en-US']), { language: 'zh', uiStyle: 'classic', showSpanSummary: false });
   }
-  assert.deepEqual(readUIPreferences(memoryStorage('{}'), ['en-US']), { language: 'en', uiStyle: 'classic' });
+  for (const showSpanSummary of ['true', 'false', '', null, 0, 1, {}, []]) {
+    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', showSpanSummary }))), { language: 'en', uiStyle: 'soft', showSpanSummary: false });
+  }
+  assert.deepEqual(readUIPreferences(memoryStorage('{}'), ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false });
 });
 
 test('missing or denied storage preserves defaults and never blocks saving', () => {
@@ -52,15 +55,15 @@ test('missing or denied storage preserves defaults and never blocks saving', () 
     setItem() { throw new Error('Storage quota exceeded'); },
   };
   for (const storage of [null, denied]) {
-    assert.deepEqual(readUIPreferences(storage, ['en-US']), { language: 'en', uiStyle: 'classic' });
-    assert.doesNotThrow(() => saveUIPreferences(storage, { language: 'en', uiStyle: 'terminal' }));
+    assert.deepEqual(readUIPreferences(storage, ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false });
+    assert.doesNotThrow(() => saveUIPreferences(storage, { language: 'en', uiStyle: 'terminal', showSpanSummary: true }));
   }
 });
 
 test('every language and style persists independently of task data', () => {
-  for (const language of ['zh', 'en']) for (const uiStyle of uiStyles) {
+  for (const language of ['zh', 'en']) for (const uiStyle of uiStyles) for (const showSpanSummary of [false, true]) {
     const storage = memoryStorage();
-    const expected = { language, uiStyle };
+    const expected = { language, uiStyle, showSpanSummary };
     const withTaskContent = { ...expected, threadId: 'private-task', events: ['private-content'], filters: { text: 'secret' } };
     saveUIPreferences(storage, withTaskContent);
     assert.equal(storage.entries.size, 1);
@@ -68,7 +71,7 @@ test('every language and style persists independently of task data', () => {
     assert.deepEqual(readUIPreferences(storage, language === 'zh' ? ['en-US'] : ['zh-CN']), expected);
     assert.ok(!storage.getItem(UI_PREFERENCES_KEY).includes('private'));
   }
-  assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', events: ['private-content'] }))), { language: 'en', uiStyle: 'soft' });
+  assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', events: ['private-content'] }))), { language: 'en', uiStyle: 'soft', showSpanSummary: false });
 });
 
 test('localized kind, status and relationship labels keep their original keys and endpoints', () => {

@@ -21,7 +21,7 @@ function runtimeTime(milliseconds: number, precise = milliseconds > 0 && millise
 /** 概览的视口、时间高亮和事件详情各自独立；标尺／框选拥有选区手势，主图默认导航。 */
 export default function Overview(props: TraceUIProps & { highlightedEvents: ReadonlySet<string> | null; onRangeCommit: (range: TimeRange) => void }) {
   const { snapshot, view, onView } = props;
-  const { language, locale, t } = usePreferences();
+  const { language, locale, showSpanSummary, t } = usePreferences();
   const kindLabels = localizedKindLabels(language);
   const [cluster, setCluster] = useState<{ key: string; page: number } | null>(null);
   const [width, setWidth] = useState(1000);
@@ -247,15 +247,14 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
         const elapsed = min + (max - min) * fraction;
         return <span key={fraction} title={wallTime(timeline.toWall(elapsed, fraction === 1 ? 'end' : 'start'))} style={{ left: `${fraction * 100}%`, transform: fraction === 0 ? 'none' : fraction === 1 ? 'translateX(-100%)' : 'translateX(-50%)' }}>{fraction === 0 ? compact ? t('紧凑 ', 'Compact ') : t('运行 ', 'Active ') : ''}{axisTime(elapsed)}</span>;
       })}</div>
-      {!ordered && <div className="cx-runtime-note" title={explanation}>
-        <label className="cx-compact-toggle"><input type="checkbox" aria-label={t('折叠无记录空档', 'Fold unrecorded gaps')} checked={compact} onChange={event => onView({ timelineSpacing: event.target.checked ? 'compact' : 'runtime' })} />{t('折叠空档', 'Fold gaps')}</label>
+      {showSpanSummary && !ordered && <div className="cx-runtime-note" title={explanation}>
         <span>{t('原运行跨度 ', 'Runtime span ')}{runtimeTime(timeline.runtimeDurationMs)}</span>
         {compact && <span>{t('折叠空白 ', 'Folded gaps ')}{runtimeTime(timeline.foldedUnrecordedMs)}</span>}
         <span>{t('轮次间隔 ', 'Between turns ')}{runtimeTime(timeline.excludedMs)}</span>
         {timeline.mode === 'observed' && <span className="cx-runtime-estimate">{t('按记录估算', 'Estimated from records')}</span>}
       </div>}
-      {!ordered && timeline.durationMs > 0 && events.length > 0 && <TimelineCoverage events={events} domain={{ min: fullMin, max: fullMax }} viewport={{ min, max }} width={width} formatTime={axisTime} positions={positions} compact={compact} elapsedBetween={timeline.elapsedBetween} />}
-      {zoomed && <TimelineScrollbar domain={{ min: fullMin, max: fullMax }} viewport={{ min, max }} width={width}
+      {showSpanSummary && !ordered && timeline.durationMs > 0 && events.length > 0 && <TimelineCoverage events={events} domain={{ min: fullMin, max: fullMax }} viewport={{ min, max }} width={width} formatTime={axisTime} positions={positions} compact={compact} elapsedBetween={timeline.elapsedBetween} />}
+      {showSpanSummary && zoomed && <TimelineScrollbar domain={{ min: fullMin, max: fullMax }} viewport={{ min, max }} width={width}
         label={ordered ? t('平移记录顺序', 'Pan record order') : t('平移时间轴', 'Pan timeline')}
         valueText={`${ordered ? `#${Math.ceil(min)}–#${Math.floor(max)}` : `${runtimeTime(min)}–${runtimeTime(max)}`} · ${t(`当前显示全部范围的 ${Number((100 / scale).toFixed(2))}%`, `Showing ${Number((100 / scale).toFixed(2))}% of the full range`)}`}
         title={t('拖动平移；滑块长度表示当前可见范围', 'Drag to pan; thumb length represents the visible range')} onChange={navigation.show} />}
@@ -267,7 +266,7 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
       return <button key={key} disabled={start == null || end == null} title={start == null ? t('时间未记录，无法按时间范围高亮', 'Time unavailable; cannot highlight by time range') : t('高亮此时间范围内的条目，列表内容保持不变', 'Highlight records in this time range without changing list contents')}
         onClick={() => { if (start != null && end != null) { const range = { startMs: start, endMs: end }; onView({ follow: 'paused', turnRange: range }); props.onRangeCommit(range); } }}>{t(`第 ${turn.order + 1} 轮`, `Turn ${turn.order + 1}`)}<span>{t(`${items.length} 条`, `${items.length} records`)}</span></button>;
     }) : <span className="cx-muted">{t('尚无可展示轮次', 'No turns to display yet')}</span>}</div> : <div className="cx-calls"><div>{t('工具调用', 'Tool calls')} <b>{new Set(events.filter(event => event.kind === 'toolCall').map(event => event.callKey ?? event.eventId)).size}</b></div><div>{t('模型请求', 'Model requests')} <b>{requestKeys.size || (view.agentScope.kind === 'all' ? snapshot?.statistics.modelRequests.value ?? t('未记录', 'Not recorded') : t('未记录', 'Not recorded'))}</b></div><span>{t('当前 Agent 范围 · 已加载记录', 'Current agent scope · loaded records')}</span></div>}
-    {(canSelect || view.turnRange) && <div className="cx-turn-range-note" title={t('拖动只预览高亮；完成选择后定位首条命中记录，必要时展开其所在轮次与分组。其他条目继续显示，列表顺序不变。', 'Dragging previews highlights. Completing a selection reveals the first matching record, expanding its turn and groups when necessary. Other records remain visible in their original order.')}>
+    {showSpanSummary && (canSelect || view.turnRange) && <div className="cx-turn-range-note" title={t('拖动只预览高亮；完成选择后定位首条命中记录，必要时展开其所在轮次与分组。其他条目继续显示，列表顺序不变。', 'Dragging previews highlights. Completing a selection reveals the first matching record, expanding its turn and groups when necessary. Other records remain visible in their original order.')}>
       {view.turnRange ? <>
       <span>{t('时间选区 ', 'Time selection ')}{projectedSelection && projectedSelection.max === projectedSelection.min && selectedTurnCount > 0 ? t('折叠空档内', 'Inside a folded gap') : selection ? `${runtimeTime(selection.min, true)}–${runtimeTime(selection.max, true)}` : `${clockTime(view.turnRange.startMs, language)}–${clockTime(view.turnRange.endMs, language)}`}<b>{t(`${highlightedEventCount} 条高亮`, `${highlightedEventCount} highlighted`)}</b></span>
       {canSelect && selection && <button className="cx-button" onClick={() => { onView({ overviewMode: 'duration' }); const padding = Math.max(1, selection.max - selection.min) * .1; navigation.show({ min: selection.min - padding, max: selection.max + padding }); }}>{t('定位选区', 'Reveal')}</button>}

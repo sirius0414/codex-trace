@@ -1,7 +1,7 @@
-/** 界面偏好独立于任务阅读状态；只持久化经过校验的语言和风格，不保存任务内容。 */
+/** 界面偏好独立于任务阅读状态；只持久化经过校验的显示选项，不保存任务内容。 */
 export type Language = 'zh' | 'en';
 export type UIStyle = 'classic' | 'soft' | 'terminal';
-export type UIPreferences = { language: Language; uiStyle: UIStyle };
+export type UIPreferences = { language: Language; uiStyle: UIStyle; showSpanSummary: boolean };
 type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const UI_PREFERENCES_KEY = 'codex-display.ui-preferences.v1';
@@ -27,7 +27,7 @@ export function localizeClientError(message: string, language: Language): string
 
 /** 首次使用跟随浏览器语言；存储不可用或旧值损坏时，仍能在当前页面切换。 */
 export function readUIPreferences(storage: PreferenceStorage | null, languages: readonly string[] = []): UIPreferences {
-  const defaults: UIPreferences = { language: languages[0]?.toLowerCase().startsWith('en') ? 'en' : 'zh', uiStyle: 'classic' };
+  const defaults: UIPreferences = { language: languages[0]?.toLowerCase().startsWith('en') ? 'en' : 'zh', uiStyle: 'classic', showSpanSummary: false };
   try {
     const saved: unknown = JSON.parse(storage?.getItem(UI_PREFERENCES_KEY) ?? 'null');
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults;
@@ -35,11 +35,12 @@ export function readUIPreferences(storage: PreferenceStorage | null, languages: 
     return {
       language: value.language === 'zh' || value.language === 'en' ? value.language : defaults.language,
       uiStyle: uiStyles.includes(value.uiStyle as UIStyle) ? value.uiStyle! : defaults.uiStyle,
+      showSpanSummary: typeof value.showSpanSummary === 'boolean' ? value.showSpanSummary : defaults.showSpanSummary,
     };
   } catch { return defaults; }
 }
 
 export function saveUIPreferences(storage: PreferenceStorage | null, value: UIPreferences): void {
-  try { storage?.setItem(UI_PREFERENCES_KEY, JSON.stringify({ language: value.language, uiStyle: value.uiStyle })); }
+  try { storage?.setItem(UI_PREFERENCES_KEY, JSON.stringify({ language: value.language, uiStyle: value.uiStyle, showSpanSummary: value.showSpanSummary })); }
   catch { /* 嵌入式宿主可能禁用持久存储；偏好仍保留在 React 状态中。 */ }
 }
