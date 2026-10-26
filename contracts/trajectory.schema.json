@@ -719,6 +719,16 @@
             }
           ]
         },
+        "relatedThreadIds": {
+          "description": "协作操作中明确记录的相关 Thread ID，仅用于页面跳转，不建立父子关系。",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
         "usage": {
           "type": "array",
           "items": {

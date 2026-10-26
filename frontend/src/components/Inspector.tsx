@@ -4,6 +4,7 @@ import type { DetailPart, TraceUIProps } from '../ui-types';
 import Icon from './icons';
 import { eventIcon } from './EventList';
 import { eventKindDescription } from './event-descriptions';
+import { interactionTargets } from './agent-navigation';
 import { clockTime, duration, localizedKindLabels, latestUsage, metric, relationshipEndpoints, localizedStatusLabels } from './model';
 import { usePreferences } from '../preferences';
 
@@ -32,6 +33,7 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
   const group = createdGroup ?? snapshot?.groups.find(item => item.groupId === event?.groupId);
   const relation = snapshot?.relationships.find(item => item.relationshipId === group?.relationshipId);
   const turn = snapshot?.turns.find(item => item.turnId === event?.turnId && item.threadId === event?.threadId);
+  const relatedAgents = snapshot && event && props.onAgentNavigate ? interactionTargets(snapshot, event) : [];
   useLayoutEffect(() => {
     // 窄屏覆盖详情需接管焦点；宽屏分栏保持行焦点，让方向键仍能连续浏览列表。
     if (props.overlay && !panel.current?.contains(document.activeElement)) closeButton.current?.focus({ preventScroll: true });
@@ -111,6 +113,10 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
     <div className="cx-tabs" role="tablist" aria-label={t('详情内容', 'Detail content')}>{tabs.map(([tab, title], index) => <button key={tab} id={`cx-tab-${tab}`} role="tab" aria-selected={view.detailTab === tab} aria-controls="cx-detail-content" tabIndex={view.detailTab === tab ? 0 : -1}
       onClick={() => props.onView({ detailTab: tab })} onKeyDown={key => { if (key.key === 'ArrowLeft' || key.key === 'ArrowRight') { key.preventDefault(); const next = tabs[(index + (key.key === 'ArrowRight' ? 1 : 3)) % 4][0]; props.onView({ detailTab: next }); document.getElementById(`cx-tab-${next}`)?.focus(); } }}>{title}</button>)}</div>
     <div ref={body} id="cx-detail-content" className="cx-detail-body" role="tabpanel" aria-labelledby={`cx-tab-${view.detailTab}`} tabIndex={0}>
+      {relatedAgents.length > 0 && <nav className="cx-related-agents" aria-label={t('关联 Agent 页面', 'Related agent pages')}><span>{t('关联 Agent', 'Related agents')}</span>{relatedAgents.map(agent => {
+        const name = agent.groupId === snapshot?.rootGroupId ? t('主 Agent', 'Main Agent') : agent.name;
+        return <button key={agent.groupId} className="cx-agent-jump" title={t(`跳转到 ${name} 的记录页面`, `Go to records for ${name}`)} aria-label={t(`跳转到 ${name}`, `Go to ${name}`)} onClick={() => props.onAgentNavigate?.(agent.groupId)}><Icon name="branch" /><span>{name}</span><Icon name="right" /></button>;
+      })}</nav>}
       {!event ? <p className="cx-note">{t('所选记录已不在当前快照中。可重新加载历史；不会自动选中其他记录。', 'The selected record is no longer in this snapshot. Reload history to retrieve it; no other record will be selected automatically.')}</p> : view.detailTab === 'summary' ? <><p className="cx-event-intro">{eventKindDescription(event.kind, language)}</p>{facts(event)}<div className="cx-detail-label">{t('本条目模型 token', 'Entry model tokens')}</div><UsageFacts values={event.usage ?? []} label={t('本次模型请求', 'This model request')} />{turn && <><div className="cx-detail-label">{t('本轮累计 token', 'Turn tokens')}</div><UsageFacts values={turn.usage ?? []} label={t('本轮', 'This turn')} /></>}<p className="cx-message">{event.status.explanation}</p>{lineage()}{content('summary', t('已记录概述', 'Recorded summary'), detail?.parts.summary)}</> : view.detailTab === 'preview' ? <>
         <p className="cx-event-intro">{eventKindDescription(event.kind, language)}</p><div className="cx-detail-meta">{event.toolName ?? kindLabels[event.kind]} · {statusLabels[event.status.value]} · {group?.name ?? t('主任务', 'Main task')}</div>
         {previewContent(event)}

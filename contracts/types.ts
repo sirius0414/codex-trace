@@ -103,6 +103,7 @@ export type TraceEvent = {
   "eventRevision": number;
   "callKey": (string) | (null);
   "modelRequestKey": (string) | (null);
+  "relatedThreadIds"?: Array<string>;
   "usage"?: Array<UsageSnapshot>;
 };
 

@@ -25,6 +25,7 @@ export type TraceUIProps = {
   onView: (patch: Partial<ViewState>) => void;
   onTrackingPause: (paused: boolean) => void;
   onSelect: (eventId: string | null) => void;
+  onAgentNavigate?: (groupId: string, eventId?: string) => void;
   onLoadEarlier: (groupId?: string) => void;
   onMoreDetail: (part: ContentPart) => void;
   onExport: () => void;

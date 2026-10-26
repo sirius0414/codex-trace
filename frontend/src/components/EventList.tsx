@@ -4,8 +4,10 @@ import type { TraceEvent } from '../../../contracts/types';
 import Icon, { type IconName } from './icons';
 import { clockTime, duration, localizedKindLabels, makeRows, readingAnchor, localizedStatusLabels, virtualWindow, type ListRow } from './model';
 import { bulkExpansion } from './expansion';
+import { interactionTargets } from './agent-navigation';
 import { usePreferences } from '../preferences';
 import UsageBadge from './UsageBadge';
+import { usagePresentation } from './usage';
 
 export function eventIcon(event: TraceEvent): IconName {
   if (event.status.value === 'failed') return 'alert';
@@ -183,11 +185,19 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
     </div>;
     const event = row.event;
     const highlighted = !!props.highlightedEvents?.has(event.eventId);
-    return <button key={row.key} style={style} className={`cx-row kind-${event.kind} ${highlighted ? 'in-range' : ''} ${event.status.value === 'failed' ? 'is-error' : ''} ${row.child ? 'child' : ''} ${event.eventId === view.selectedEventId ? 'selected' : ''}`} data-event-id={event.eventId} data-range-highlighted={highlighted || undefined} aria-pressed={event.eventId === view.selectedEventId} aria-label={`${highlighted ? t('时间选区命中，', 'In timeline range, ') : ''}${kindLabels[event.kind]}${event.toolName ? ` ${event.toolName}` : ''}：${event.preview}，${statusLabels[event.status.value]}`}
-      onClick={() => props.onSelect(event.eventId)} onKeyDown={key => rowKey(key, event.eventId)}>
-      <span className="cx-operation"><span className={`cx-event-icon ${eventColor(event)}`}><Icon name={eventIcon(event)} /></span><span className="cx-preview" title={event.preview}>{event.toolName ? <>{(event.kind === 'toolCall' || event.kind === 'toolResult') && <span className="cx-kind-label">{event.kind === 'toolCall' ? t('调用', 'Call') : t('结果', 'Result')}</span>}<code>{event.toolName}</code></> : <b>{kindLabels[event.kind]}</b>}{event.preview.replace(/\s+/g, ' ')}</span></span>
+    const targets = snapshot && props.onAgentNavigate ? interactionTargets(snapshot, event) : [];
+    const firstTarget = targets[0];
+    const targetName = firstTarget?.groupId === snapshot?.rootGroupId ? t('主 Agent', 'Main Agent') : firstTarget?.name;
+    // 整行详情与 Agent 跳转是平级按钮，保持虚拟行高和键盘浏览，避免嵌套交互控件。
+    return <div key={row.key} style={style} className={`cx-row kind-${event.kind} ${highlighted ? 'in-range' : ''} ${event.status.value === 'failed' ? 'is-error' : ''} ${row.child ? 'child' : ''} ${event.eventId === view.selectedEventId ? 'selected' : ''}`} data-range-highlighted={highlighted || undefined}>
+      <button className="cx-row-select" data-event-id={event.eventId} title={`${event.preview}\n${event.timing.basis}\n${usagePresentation(event.usage, language).title}`} aria-pressed={event.eventId === view.selectedEventId} aria-label={`${highlighted ? t('时间选区命中，', 'In timeline range, ') : ''}${kindLabels[event.kind]}${event.toolName ? ` ${event.toolName}` : ''}：${event.preview}，${statusLabels[event.status.value]}`}
+        onClick={() => props.onSelect(event.eventId)} onKeyDown={key => rowKey(key, event.eventId)} />
+      <span className="cx-operation"><span className={`cx-event-icon ${eventColor(event)}`}><Icon name={eventIcon(event)} /></span><span className="cx-preview" title={event.preview}>{event.toolName ? <>{(event.kind === 'toolCall' || event.kind === 'toolResult') && <span className="cx-kind-label">{event.kind === 'toolCall' ? t('调用', 'Call') : t('结果', 'Result')}</span>}<code>{event.toolName}</code></> : <b>{kindLabels[event.kind]}</b>}{event.preview.replace(/\s+/g, ' ')}</span>
+        {firstTarget && <button className="cx-agent-jump" title={t(`跳转到 ${targetName} 的记录页面`, `Go to records for ${targetName}`)} aria-label={t(`跳转到 ${targetName}`, `Go to ${targetName}`)} onClick={() => props.onAgentNavigate?.(firstTarget.groupId)}><span>{targetName}</span><Icon name="right" /></button>}
+        {targets.length > 1 && <button className="cx-agent-jump cx-agent-jump-more" aria-label={t(`查看另外 ${targets.length - 1} 个关联 Agent`, `View ${targets.length - 1} more related agents`)} title={t('在详情中选择关联 Agent', 'Choose a related agent in details')} onClick={() => props.onSelect(event.eventId)}>+{targets.length - 1}</button>}
+      </span>
       <UsageBadge values={event.usage} /><span className="cx-time">{clockTime(event.timing.startMs, language)}</span><span className="cx-duration" title={event.timing.basis}>{event.status.value === 'running' && event.timing.durationMs == null ? '…' : duration(event.timing.durationMs)}</span><span className={`cx-state ${event.status.value}`}>{event.status.value === 'failed' ? `× ${statusLabels.failed}` : event.status.value === 'running' ? `● ${statusLabels.running}` : statusLabels[event.status.value]}</span>
-    </button>;
+    </div>;
   }
   const selectedHidden = view.selectedEventId && !rows.some(row => rowId(row) === view.selectedEventId);
   const noAgentsSelected = view.agentScope.kind === 'selected' && view.agentScope.groupIds.length === 0;

@@ -17,7 +17,7 @@ from .execution import execution_intervals
 from .usage import usage_snapshots, scoped_usage_snapshots
 from .relationships import project_relationships, resolve_relationships
 
-PARSER_VERSION = '1.3.0'
+PARSER_VERSION = '1.3.1'
 _PREVIEW_LENGTH = 280
 _ITEM_TYPES = {
     'UserMessage': 'userMessage', 'AgentMessage': 'agentMessage',
@@ -236,8 +236,27 @@ def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tu
         event_kind, parts = 'compaction', {'output': '摘要未记录'}
     else:
         return None
-    return _event(thread_id, event_id, turn_id, event_kind, parts, source, ordinal, role=role, tool=tool,
-                  timing=timing, status=status, call_key=call_key, completeness=completeness)
+    event, details = _event(thread_id, event_id, turn_id, event_kind, parts, source, ordinal, role=role, tool=tool,
+                           timing=timing, status=status, call_key=call_key, completeness=completeness)
+    # 页面跳转只复制结构化 Thread ID；活动目标不等同于子任务关系，也不从路径或正文反推。
+    participants = []
+    if kind == 'subAgentActivity':
+        participants = [item.get('agentThreadId')]
+    elif kind == 'collabAgentToolCall':
+        receivers = item.get('receiverThreadIds')
+        participants = [item.get('senderThreadId'), *(receivers if isinstance(receivers, list) else [])]
+    targets = list(dict.fromkeys(value for value in participants
+                                if _str(value) and len(value) <= 512 and value != thread_id))
+    if targets:
+        event['relatedThreadIds'] = targets
+    return event, details
+
+
+def _merge_navigation_refs(target: dict, incoming: dict) -> None:
+    """精确 item 身份已确认后，保留 API/raw 任一来源明确记录的跳转目标。"""
+    if incoming.get('relatedThreadIds'):
+        target['relatedThreadIds'] = list(dict.fromkeys(
+            [*target.get('relatedThreadIds', []), *incoming['relatedThreadIds']]))
 
 
 def _raw_source(record: dict, association='physicalRecord') -> dict:
@@ -384,6 +403,8 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                 raw_positions[event_id] = ordinal
                 if event_id in events:
                     previous = events[event_id]
+                    _merge_navigation_refs(pair[0], previous)
+                    _merge_navigation_refs(previous, pair[0])
                     previous_end = previous['timing']['endMs']
                     raw_end = pair[0]['timing']['endMs']
                     raw_terminal = pair[0]['status']['value'] in ('completed', 'failed', 'stopped')
@@ -418,6 +439,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                     'completedAtMs': payload.get('completed_at_ms', payload.get('occurred_at_ms'))}, ordinal, source)
                 if pair and pair[0]['eventId'] in events:
                     event_id = pair[0]['eventId']
+                    _merge_navigation_refs(events[event_id], pair[0])
                     _attach(events[event_id], details[event_id], row)
                     raw_positions[event_id] = ordinal
                     continue

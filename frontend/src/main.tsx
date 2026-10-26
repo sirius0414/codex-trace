@@ -163,6 +163,12 @@ function TrajectoryApp() {
   function selectEvent(eventId: string | null) {
     const wasSelected = currentView.current.selectedEventId === eventId;
     patchView(selectedView(currentView.current, currentSnapshot.current, eventId));
+    // 创建来源可能早于已加载页；页面提供的分组锚点可复用现有分页门禁补读。
+    if (eventId && !currentSnapshot.current?.events.some(event => event.eventId === eventId)) {
+      const location = eventLocation(currentView.current, currentSnapshot.current, eventId);
+      patchView({ anchor: { eventId, offsetPx: 0, groupId: location.groupId ?? null } });
+      void readSnapshot(gate.current.capture());
+    }
     // 重复选择同一行时保留已加载详情及其滚动位置。
     if (wasSelected) return;
     invalidateDetails();
@@ -181,6 +187,9 @@ function TrajectoryApp() {
     setLoading(true);
     const owner = preferences.current;
     const edited = owner.editVersion;
+    const locatingSelection = !cursor && !restore && currentView.current.selectedEventId
+      && !currentSnapshot.current?.events.some(event => event.eventId === currentView.current.selectedEventId)
+      ? currentView.current.selectedEventId : null;
     let first: ThreadSnapshot | null = null;
     let initialRevision: number | null = null;
     let missingAnchor = false, missingSelection = false;
@@ -226,7 +235,12 @@ function TrajectoryApp() {
           }
         }
       }
-      applySnapshot(first); setError(missingSelection ? translated('未找到所选记录；已保留选择和阅读状态，可选择其他记录。', 'The selected record was not found. Your selection and reading state are preserved; you can choose another record.')
+      applySnapshot(first);
+      if (locatingSelection && currentView.current.selectedEventId === locatingSelection
+        && currentSnapshot.current?.events.some(event => event.eventId === locatingSelection)) {
+        patchView(selectedView(currentView.current, currentSnapshot.current, locatingSelection));
+      }
+      setError(missingSelection ? translated('未找到所选记录；已保留选择和阅读状态，可选择其他记录。', 'The selected record was not found. Your selection and reading state are preserved; you can choose another record.')
         : missingAnchor ? translated('未找到原阅读锚点；已显示最近记录并保留筛选和跟随状态。', 'The previous reading position was not found. Recent records are shown, with filters and follow state preserved.') : '');
       if (restore && owner.pending) void flushPreferences(token, owner);
     } catch (failure) {

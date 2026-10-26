@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TraceUIProps } from '../ui-types';
 import { usePreferences } from '../preferences';
 import Icon from './icons';
-import { clockTime, localizedKindLabels, overviewMarks, recordedEnd, relativeTime, scopedEvents, selectedAgentIds, turnRangeFromActive, turnRangeKeys, type OverviewMark, type OverviewPosition } from './model';
+import { clockTime, localizedKindLabels, overviewMarks, recordedEnd, relativeTime, scopedEvents, turnRangeFromActive, turnRangeKeys, type OverviewMark, type OverviewPosition } from './model';
+import { activeAgentId, agentPagePatch } from './agent-navigation';
 import { useTimelineViewport } from './useTimelineViewport';
 import TimelineCoverage from './TimelineCoverage';
 import { buildActiveTimeline } from './active-timeline';
@@ -95,13 +96,20 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
     { groupId: snapshot.rootGroupId, name: t('主 Agent', 'Main Agent') },
     ...snapshot.groups.filter(group => group.groupId !== snapshot.rootGroupId),
   ] : [];
-  const selectedAgents = snapshot ? selectedAgentIds(snapshot, view) : new Set<string>();
-  function toggleAgent(groupId: string) {
-    const next = new Set(selectedAgents);
-    if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
-    onView({ follow: 'paused', agentScope: { kind: 'selected', groupIds: [...next] },
-      expandedGroupIds: next.has(groupId) ? [...new Set([...view.expandedGroupIds, groupId])] : view.expandedGroupIds });
+  const activeAgent = snapshot ? activeAgentId(snapshot, view) : null;
+  const agentTabs = useRef<HTMLDivElement>(null);
+  function openAgent(groupId: string) {
+    if (snapshot && groupId !== activeAgent) onView(agentPagePatch(snapshot, view, groupId));
   }
+  function agentKey(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? agents.length - 1
+      : (index + (event.key === 'ArrowRight' ? 1 : agents.length - 1)) % agents.length;
+    openAgent(agents[next].groupId);
+    agentTabs.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+  }
+  useEffect(() => { agentTabs.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [activeAgent]);
   useEffect(() => {
     if (!svg.current) return;
     const observer = new ResizeObserver(entries => setWidth(Math.max(1, entries[0].contentRect.width)));
@@ -170,10 +178,10 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
     if (event.key === 'Escape' && selecting) { event.preventDefault(); event.stopPropagation(); setSelecting(false); }
   }}>
     <div className="cx-agent-bar">
-      <span className="cx-agent-label">Agent <small>{t('多选', 'Multi-select')}</small></span>
-      <div className="cx-agent-buttons" role="group" aria-label={t('Agent 查看范围，可多选', 'Agent scope, multiple selections allowed')}>
-        {agents.map(agent => <button key={agent.groupId} className="cx-agent-button" aria-pressed={selectedAgents.has(agent.groupId)} title={agent.name} onClick={() => toggleAgent(agent.groupId)}>
-          <Icon name={selectedAgents.has(agent.groupId) ? 'check' : agent.groupId === snapshot?.rootGroupId ? 'model' : 'branch'} /><span>{agent.name}</span>
+      <span className="cx-agent-label"><Icon name="branch" /><small>{agents.length || '—'}</small></span>
+      <div ref={agentTabs} className="cx-agent-buttons" role="tablist" aria-label={t('Agent 页面', 'Agent pages')}>
+        {agents.map((agent, index) => <button key={agent.groupId} id={`cx-agent-tab-${agent.groupId}`} type="button" role="tab" className="cx-agent-button" aria-selected={activeAgent === agent.groupId} aria-controls="cx-agent-page" tabIndex={activeAgent === agent.groupId ? 0 : -1} title={agent.name} onClick={() => openAgent(agent.groupId)} onKeyDown={event => agentKey(event, index)}>
+          <Icon name={agent.groupId === snapshot?.rootGroupId ? 'model' : 'branch'} /><span>{agent.name}</span>
         </button>)}
         {!snapshot && <span className="cx-muted">{t('选择任务后显示 Agent', 'Select a task to see agents')}</span>}
       </div>
@@ -242,7 +250,7 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
         }}
         onCommit={commitRange} onNavigate={navigation.show} formatValue={value => runtimeTime(value, true)} />}
       </div>
-      {!events.length && <span className="cx-chart-empty">{snapshot ? selectedAgents.size ? t('暂无可展示的记录', 'No records to display') : t('选择上方 Agent 查看轨迹', 'Select an agent above to view its trace') : t('选择任务查看轨迹', 'Select a task to view its trace')}</span>}
+      {!events.length && <span className="cx-chart-empty">{snapshot ? t('此 Agent 暂无可展示的记录', 'No records to display for this agent') : t('选择任务查看轨迹', 'Select a task to view its trace')}</span>}
       <div className={`cx-axis ${ordered ? 'ordered' : ''}`} title={explanation}>{ordered ? <><span>{t('记录顺序 · 运行时间未记录', 'Record order · execution time unavailable')}</span><span>{events.length ? `#${Math.ceil(min)}–#${Math.floor(max)}` : t('无记录', 'No records')}</span></> : ticks.map(fraction => {
         const elapsed = min + (max - min) * fraction;
         return <span key={fraction} title={wallTime(timeline.toWall(elapsed, fraction === 1 ? 'end' : 'start'))} style={{ left: `${fraction * 100}%`, transform: fraction === 0 ? 'none' : fraction === 1 ? 'translateX(-100%)' : 'translateX(-50%)' }}>{fraction === 0 ? compact ? t('紧凑 ', 'Compact ') : t('运行 ', 'Active ') : ''}{axisTime(elapsed)}</span>;

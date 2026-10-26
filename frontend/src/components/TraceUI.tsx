@@ -9,10 +9,41 @@ import Inspector, { UsageFacts } from './Inspector';
 import Overview from './Overview';
 import Icon from './icons';
 import { rangeReveal } from './expansion';
+import { activeAgentId, agentPagePatch } from './agent-navigation';
 import { clockTime, eventRangeIds, localizedKindLabels, latestUsage, metric, localizedStatusLabels, visibleEvents } from './model';
 
 export default function TraceUI(props: TraceUIProps) {
-  const { snapshot, view, onView, trackingPaused, onTrackingPause } = props;
+  const { snapshot, onView, trackingPaused, onTrackingPause } = props;
+  const activeAgent = snapshot ? activeAgentId(snapshot, props.view) : null;
+  const singlePage = props.view.agentScope.kind === 'selected' && props.view.agentScope.groupIds.length === 1 && props.view.agentScope.groupIds[0] === activeAgent;
+  // 旧的多选偏好在首次绘制即收敛到一个页面，避免短暂混入其他 Agent 的记录。
+  const view = useMemo(() => !snapshot || singlePage ? props.view : { ...props.view,
+    agentScope: { kind: 'selected' as const, groupIds: [activeAgent!] },
+    expandedGroupIds: [...new Set([...props.view.expandedGroupIds, activeAgent!])],
+  }, [props.view, snapshot, singlePage, activeAgent]);
+  useEffect(() => {
+    if (snapshot && !singlePage) onView({ agentScope: view.agentScope, expandedGroupIds: view.expandedGroupIds });
+  }, [snapshot?.binding, singlePage, activeAgent, onView]);
+  function navigateAgent(groupId: string, eventId?: string) {
+    if (!snapshot) return;
+    const patch = agentPagePatch(snapshot, view, groupId, eventId);
+    if (!patch.agentScope) return;
+    // 交互跳转应直接显示目标记录；普通标签切页则保留筛选条件。
+    onView({ ...patch, filters: { text: '', kinds: [], toolName: null, failedOnly: false, timeRange: null } });
+    if (eventId && !snapshot.events.some(event => event.eventId === eventId)) props.onSelect(eventId);
+    if (!eventId) requestAnimationFrame(() => root.current?.querySelector<HTMLElement>(`#${CSS.escape(`cx-agent-tab-${groupId}`)}`)?.focus({ preventScroll: true }));
+  }
+  function selectEvent(eventId: string | null) {
+    const event = snapshot?.events.find(item => item.eventId === eventId);
+    if (event && event.groupId !== activeAgent) navigateAgent(event.groupId, event.eventId);
+    else if (eventId && !event && snapshot) {
+      const parent = snapshot.groups.find(group => group.creationEventId === eventId)?.parentGroupId;
+      if (parent) navigateAgent(parent, eventId);
+      else props.onSelect(eventId);
+    }
+    else props.onSelect(eventId);
+  }
+  const pageProps = { ...props, view, onSelect: selectEvent, onAgentNavigate: navigateAgent };
   const { language, uiStyle, showSpanSummary, setLanguage, setUiStyle, setShowSpanSummary, t } = usePreferences();
   const kindLabels = localizedKindLabels(language), statusLabels = localizedStatusLabels(language);
   const time = (value: number | null | undefined) => clockTime(value, language);
@@ -26,6 +57,19 @@ export default function TraceUI(props: TraceUIProps) {
   const root = useRef<HTMLElement>(null);
   const taskInput = useRef<HTMLInputElement>(null);
   const previousThread = useRef(snapshot?.binding.threadId);
+  const awaitingPage = useRef<string | null>(null);
+  useEffect(() => {
+    awaitingPage.current = snapshot && !snapshot.events.some(event => event.groupId === activeAgent) ? activeAgent : null;
+  }, [snapshot?.binding.threadId, activeAgent]);
+  useEffect(() => {
+    if (!snapshot || !activeAgent || awaitingPage.current !== activeAgent) return;
+    const loaded = snapshot.events.filter(event => event.groupId === activeAgent);
+    if (!loaded.length) return;
+    // 首次补读的轮次需要展开；此后不覆盖用户在该页手动收起的阅读状态。
+    awaitingPage.current = null;
+    onView({ expandedTurnIds: [...new Set([...view.expandedTurnIds, ...loaded.flatMap(event => event.turnId ? [event.turnId] : [])])],
+      expandedGroupIds: [...new Set([...view.expandedGroupIds, activeAgent])] });
+  }, [snapshot?.events, activeAgent, onView]);
   // 预览只更新高亮；完成选择才通过阅读锚点定位，不借详情选择来滚动列表。
   const rangeEvents = useMemo(() => snapshot ? eventRangeIds(snapshot, view.turnRange) : null, [snapshot, view.turnRange]);
   const visible = useMemo(() => snapshot ? visibleEvents(snapshot, view, props.matchedIds) : [], [snapshot, view.filters, view.agentScope, props.matchedIds]);
@@ -92,15 +136,15 @@ export default function TraceUI(props: TraceUIProps) {
       <button className="cx-button cx-download" disabled={!snapshot || props.exporting} aria-label={t('导出记录', 'Export records')} title={t('导出所选任务可读取的全部原始记录，不受搜索、筛选、分页和折叠影响', 'Export all readable raw records for the selected task, regardless of search, filters, pages, or collapsed groups')} onClick={props.onExport}><Icon name="download" /><span>{props.exporting ? t('正在导出…', 'Exporting…') : t('导出记录', 'Export records')}</span></button>
       <button className="cx-button cx-settings-trigger" aria-label={t('设置', 'Settings')} title={t('设置', 'Settings')} aria-expanded={popover === 'settings'} aria-haspopup="dialog" aria-controls="cx-settings" onClick={() => setPopover(value => value === 'settings' ? null : 'settings')}><Icon name="settings" /><span>{t('设置', 'Settings')}</span></button>
     </header>
-    <Overview key={snapshot?.binding.threadId ?? 'empty'} {...props} highlightedEvents={highlightedEvents} onRangeCommit={revealRange} />
+    <Overview key={snapshot?.binding.threadId ?? 'empty'} {...pageProps} highlightedEvents={highlightedEvents} onRangeCommit={revealRange} />
     <div className="cx-filterbar"><label className="cx-search"><Icon name="search" /><input aria-label={t('搜索已加载记录', 'Search loaded records')} value={view.filters.text} placeholder={t('搜索已加载记录…', 'Search loaded records…')} onChange={event => filter({ text: event.target.value })} /></label>
       <select className="cx-type" aria-label={t('事件类型或工具', 'Event type or tool')} value={typeValue} onChange={event => filter(event.target.value.startsWith('tool:') ? { kinds: [], toolName: event.target.value.slice(5) } : { kinds: event.target.value === 'all' ? [] : [event.target.value as EventKind], toolName: null })}>
         <option value="all">{t('全部类型', 'All types')}</option>{Object.entries(kindLabels).map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}{tools.length > 0 && <optgroup label={t('工具名称', 'Tool name')}>{tools.map(tool => <option key={tool} value={`tool:${tool}`}>{tool}</option>)}</optgroup>}
       </select><button className="cx-button cx-error-filter" aria-pressed={view.filters.failedOnly} onClick={() => filter({ failedOnly: !view.filters.failedOnly })}><Icon name="alert" />{t('仅失败', 'Failed only')}</button>
     </div>
-    <div className={`cx-work ${view.selectedEventId ? 'has-detail' : ''}`}>
-      <EventList {...props} visible={visible} highlightedEvents={highlightedEvents} onCount={setRowCount} />
-      {view.selectedEventId && <Inspector {...props} overlay={narrow} />}
+    <div id="cx-agent-page" role="tabpanel" aria-labelledby={activeAgent ? `cx-agent-tab-${activeAgent}` : undefined} className={`cx-work ${view.selectedEventId ? 'has-detail' : ''}`}>
+      <EventList key={`${snapshot?.binding.threadId ?? 'empty'}:${activeAgent}`} {...pageProps} visible={visible} highlightedEvents={highlightedEvents} onCount={setRowCount} />
+      {view.selectedEventId && <Inspector {...pageProps} overlay={narrow} />}
     </div>
     <aside className="cx-usage-bar" aria-label={t('主任务 token 用量，不受 Agent 筛选影响', 'Main task token usage, independent of Agent filters')}>
       <span className="cx-usage-label"><Icon name="usage" />{t('主任务', 'Main task')} <small>tokens</small></span>
