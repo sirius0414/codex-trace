@@ -60,6 +60,7 @@ export function buildTurnFlow(snapshot: Pick<ThreadSnapshot, 'events' | 'turns'>
   const groups = new Map<string, { threadId: string; turnId: string | null; events: TraceEvent[]; order: number | null; first: number }>();
   const metadata = new Map(snapshot.turns.map(t => [JSON.stringify([t.threadId, t.turnId]), t.order]));
   for (const e of events) {
+    if (e.kind === 'modelUsage') continue;
     const key = JSON.stringify([e.threadId, e.turnId]);
     let group = groups.get(key);
     if (!group) { group = { threadId: e.threadId, turnId: e.turnId, events: [], order: e.turnId == null ? null : metadata.get(key) ?? null, first: e.order.ordinal }; groups.set(key, group); }

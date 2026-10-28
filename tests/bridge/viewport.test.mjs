@@ -1,8 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clampViewport, panViewport, zoomViewport } from '../../frontend/src/components/viewport.ts';
+import { clampViewport, panViewport, revealViewport, zoomViewport } from '../../frontend/src/components/viewport.ts';
 
 const domain = { min: 0, max: 1000 };
+
+test('revealing a selected record keeps visible targets and pans offscreen targets without losing zoom', () => {
+  const viewport = { min: 200, max: 600 };
+  assert.deepEqual(revealViewport(viewport, domain, { min: 250, max: 350 }), viewport);
+  assert.deepEqual(revealViewport(viewport, domain, { min: 650, max: 750 }), { min: 500, max: 900 });
+  assert.deepEqual(revealViewport(viewport, domain, { min: 0, max: 100 }), { min: 0, max: 400 });
+  assert.deepEqual(revealViewport(viewport, domain, { min: 900, max: 1000 }), { min: 600, max: 1000 });
+  assert.deepEqual(viewport, { min: 200, max: 600 });
+});
+
+test('revealing expands only for a target wider than the current window, including partial clipping', () => {
+  assert.deepEqual(revealViewport({ min: 200, max: 300 }, domain, { min: 250, max: 500 }, 84), { min: 250, max: 500 });
+  assert.deepEqual(revealViewport({ min: 200, max: 600 }, domain, { min: 550, max: 650 }), { min: 400, max: 800 });
+  assert.deepEqual(revealViewport({ min: 200, max: 600 }, domain, { min: -14, max: 98 }), { min: 0, max: 400 });
+});
 
 test('zoom keeps the cursor time at its original fraction', () => {
   const viewport = { min: 200, max: 600 };

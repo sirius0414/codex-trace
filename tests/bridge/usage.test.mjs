@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { usagePresentation } from '../../frontend/src/components/usage.ts';
-import { makeRows } from '../../frontend/src/components/model.ts';
+import { makeRows, scopedEvents, scopedModelRequests, visibleEvents } from '../../frontend/src/components/model.ts';
 
 const metric = value => value == null ? { availability: 'notRecorded', value: null } : { availability: 'recorded', value };
 const usage = (input, options = {}) => ({ scope: 'turn', epoch: 'session', order: 1, input: metric(input), output: metric(0), cachedInput: metric(0), cacheSemantics: 'includedInInput', coverage: 'Synthetic scope evidence.', ...options });
@@ -60,4 +60,34 @@ test('turn headers retain full scoped usage across filtering, folding and reused
     assert.ok(headers.every(row => row.count === 1));
     assert.equal(rows.filter(row => row.type === 'event').length, expanded ? 2 : 0);
   }
+});
+
+test('usage evidence stays out of records while retaining turn tokens and Agent request counts', () => {
+  const snapshot = fixture('snapshot-running'), baseView = fixture('view-state');
+  const main = snapshot.groups.find(group => group.groupId === snapshot.rootGroupId);
+  const child = snapshot.groups.find(group => group.groupId !== snapshot.rootGroupId);
+  const turnId = 'usage-turn', turnUsage = usage(500);
+  const record = { ...snapshot.events[0], eventId: 'message', kind: 'assistantMessage', threadId: main.threadId,
+    groupId: main.groupId, turnId, modelRequestKey: 'main-request' };
+  const evidence = { ...record, eventId: 'usage', kind: 'modelUsage', usage: [usage(100, { scope: 'request' })] };
+  snapshot.events = [record, evidence,
+    { ...evidence, eventId: 'second-usage', modelRequestKey: 'second-request' },
+    { ...evidence, eventId: 'child-usage', groupId: child.groupId, threadId: child.threadId, modelRequestKey: 'child-request' }];
+  snapshot.turns = [{ threadId: main.threadId, turnId, order: 0, usage: [turnUsage] }];
+  const before = structuredClone(snapshot);
+  const view = { ...baseView, agentScope: { kind: 'selected', groupIds: [main.groupId] }, expandedTurnIds: [turnId],
+    filters: { text: '', kinds: [], toolName: null, failedOnly: false, timeRange: null } };
+  const visible = visibleEvents(snapshot, view, null);
+  assert.deepEqual(visible.map(event => event.eventId), ['message']);
+  assert.deepEqual(scopedEvents(snapshot, view), visible);
+  assert.deepEqual(visibleEvents(snapshot, view, new Set(['usage'])), []);
+  const rows = makeRows(snapshot, view, visible);
+  assert.deepEqual(rows.filter(row => row.type === 'event').map(row => row.event.eventId), ['message']);
+  assert.equal(rows.find(row => row.type === 'turn').count, 1);
+  assert.deepEqual(rows.find(row => row.type === 'turn').usage, [turnUsage]);
+  assert.deepEqual([...scopedModelRequests(snapshot, view)], ['main-request', 'second-request']);
+  assert.deepEqual([...scopedModelRequests(snapshot, { ...view, agentScope: { kind: 'all', groupId: null } })],
+    ['main-request', 'second-request', 'child-request']);
+  assert.deepEqual([...scopedModelRequests(snapshot, { ...view, agentScope: { kind: 'selected', groupIds: [] } })], []);
+  assert.deepEqual(snapshot, before);
 });

@@ -41,13 +41,23 @@ test('a long background operation overlaps shorter work without making the short
 test('context and saved-time points never become model stages or lifecycle precedence edges', () => {
   const flow = buildTurnFlow(data([
     e('system', 0, null, { kind: 'systemContext' }), e('dev', 1, null, { kind: 'developerContext' }),
-    e('usage', 5, null, { kind: 'modelUsage' }), e('model', 10, 20, { kind: 'assistantMessage' }),
+    e('saved-summary', 5, null, { kind: 'reasoningSummary' }), e('model', 10, 20, { kind: 'assistantMessage' }),
   ]));
   assert.equal(flow.nodes.filter(n => n.context).length, 2);
   assert.ok(flow.nodes.every(n => n.events.length === 1));
-  assert.equal(at(flow, 'usage').basis, 'recordPosition');
+  assert.equal(at(flow, 'saved-summary').basis, 'recordPosition');
   assert.deepEqual(flow.edges, []);
   assert.equal(flow.nodes.filter(n => n.lane === 1).length, 2);
+});
+
+test('model usage evidence never creates a node or an empty turn in the execution flow', () => {
+  const usage = e('usage', 5, null, { kind: 'modelUsage', turnId: 'usage-only' });
+  const source = data([e('model', 10, 20, { kind: 'assistantMessage' }), usage]);
+  const before = structuredClone(source), flow = buildTurnFlow(source);
+  assert.deepEqual(flow.nodes.flatMap(n => n.events.map(event => event.eventId)), ['model']);
+  assert.deepEqual(flow.turns.map(turn => turn.turnId), ['t1']);
+  assert.deepEqual(source, before);
+  assert.deepEqual(buildTurnFlow(data([usage])).nodes, []);
 });
 
 test('zero, missing duration and duration-only evidence remain distinct', () => {

@@ -123,7 +123,13 @@ export function selectedAgentIds(snapshot: ThreadSnapshot, view: ViewState): Set
 }
 export function scopedEvents(snapshot: ThreadSnapshot, view: ViewState) {
   const groups = groupScope(snapshot, view);
-  return snapshot.events.filter(event => !groups || groups.has(event.groupId));
+  // 用量快照保留为统计证据，不在列表或执行概览中成为独立活动。
+  return snapshot.events.filter(event => event.kind !== 'modelUsage' && (!groups || groups.has(event.groupId)));
+}
+/** 模型请求统计包含隐藏的用量证据，仍按当前 Agent 范围去重。 */
+export function scopedModelRequests(snapshot: ThreadSnapshot, view: ViewState): Set<string> {
+  const groups = groupScope(snapshot, view);
+  return new Set(snapshot.events.flatMap(event => event.modelRequestKey && (!groups || groups.has(event.groupId)) ? [event.modelRequestKey] : []));
 }
 
 type TurnRangeIndex = { points: Array<{ wall: number; active: number }>; finalEnd: number };

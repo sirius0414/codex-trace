@@ -3,13 +3,13 @@ import type { TimeRange } from '../../../contracts/types';
 import type { TraceUIProps } from '../ui-types';
 import { usePreferences } from '../preferences';
 import Icon from './icons';
-import { scopedEvents } from './model';
+import { scopedEvents, scopedModelRequests } from './model';
 import { activeAgentId, agentPagePatch } from './agent-navigation';
 import { buildActiveTimeline } from './active-timeline';
 import TurnWaterfall from './TurnWaterfall';
 
 /** 各 Agent 的概览入口；顺序图与历史记录的原始时间保持独立。 */
-export default function Overview(props: TraceUIProps & { highlightedEvents: ReadonlySet<string> | null; onRangeCommit: (range: TimeRange) => void }) {
+export default function Overview(props: TraceUIProps & { selectionRequest?: number; highlightedEvents: ReadonlySet<string> | null; onRangeCommit: (range: TimeRange) => void }) {
   const { snapshot, view, onView } = props;
   const { t } = usePreferences();
   const events = useMemo(() => snapshot ? scopedEvents(snapshot, view) : [], [snapshot, view.agentScope]);
@@ -34,7 +34,7 @@ export default function Overview(props: TraceUIProps & { highlightedEvents: Read
     return map;
   }, [events]);
   const turns = snapshot?.turns.filter(turn => turnItems.has(JSON.stringify([turn.threadId, turn.turnId]))) ?? [];
-  const requests = new Set(events.map(e => e.modelRequestKey).filter(Boolean));
+  const requests = snapshot ? scopedModelRequests(snapshot, view) : new Set<string>();
   return <section className="cx-overview" aria-label={t('执行概览', 'Execution overview')}>
     <div className="cx-agent-bar"><span className="cx-agent-label"><Icon name="branch" /><small>{agents.length || '—'}</small></span>
       <div ref={tabs} className="cx-agent-buttons" role="tablist" aria-label={t('Agent 页面', 'Agent pages')}>

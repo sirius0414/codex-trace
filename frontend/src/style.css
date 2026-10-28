@@ -409,6 +409,7 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-flow-duration{fill:var(--cx-node);opacity:.5;pointer-events:none}
 .cx-flow-point{stroke:var(--cx-node);stroke-width:2;vector-effect:non-scaling-stroke}
 .cx-flow-node.selected .cx-flow-node-shell,.cx-flow-node:focus-visible .cx-flow-node-shell{stroke:var(--cx-ink);stroke-width:2}
+.cx-flow-node.selected .cx-flow-node-shell{fill:color-mix(in srgb,var(--cx-node) 22%,var(--cx-bg));stroke-dasharray:none;fill-opacity:1}
 .cx-flow-node.highlighted .cx-flow-node-shell{fill:color-mix(in srgb,var(--cx-node) 12%,var(--cx-bg))}
 .cx-flow-node.compact.highlighted .cx-flow-node-shell{fill:var(--cx-node);fill-opacity:.9}
 .cx-flow-caption{display:flex;justify-content:space-between;gap:8px;padding:3px 0}

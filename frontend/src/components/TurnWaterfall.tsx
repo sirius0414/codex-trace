@@ -3,12 +3,13 @@ import type { TraceUIProps } from '../ui-types';
 import type { TimeRange } from '../../../contracts/types';
 import { usePreferences } from '../preferences';
 import Icon from './icons';
-import { buildTurnFlow, FLOW_ROW, type FlowNode } from './turn-flow';
+import { buildTurnFlow, FLOW_PAD, FLOW_ROW, type FlowNode } from './turn-flow';
 import { clockTime, duration, localizedKindLabels, scopedEvents } from './model';
 import { useTimelineViewport } from './useTimelineViewport';
 import TimelineScrollbar from './TimelineScrollbar';
+import { revealViewport } from './viewport';
 
-type Props = TraceUIProps & { highlightedEvents: ReadonlySet<string> | null; onRangeCommit: (range: TimeRange) => void };
+type Props = TraceUIProps & { selectionRequest?: number; highlightedEvents: ReadonlySet<string> | null; onRangeCommit: (range: TimeRange) => void };
 
 /** 横向坐标只表示偏序布局，耗时条独立编码；不将布局坐标写回时间筛选。 */
 export default function TurnWaterfall(props: Props) {
@@ -16,6 +17,7 @@ export default function TurnWaterfall(props: Props) {
   const { language, showSpanSummary, t } = usePreferences();
   const labels = localizedKindLabels(language);
   const svg = useRef<SVGSVGElement>(null), canvas = useRef<HTMLDivElement>(null);
+  const chart = useRef<HTMLDivElement>(null), pendingReveal = useRef<string | null>(null);
   const [width, setWidth] = useState(1000);
   const events = useMemo(() => snapshot ? scopedEvents(snapshot, view) : [], [snapshot, view.agentScope]);
   const flow = useMemo(() => buildTurnFlow(snapshot ?? { events: [], turns: [] }, events), [snapshot?.turns, events]);
@@ -41,6 +43,25 @@ export default function TurnWaterfall(props: Props) {
   const height = laneTop[2] + laneHeight[2] + 8;
   const x = (position: number) => (position - min) / span * 1000;
   const y = (n: Pick<FlowNode, 'lane' | 'row'>) => laneTop[n.lane] + n.row * laneStep[n.lane];
+  const selectedNode = useMemo(() => flow.nodes.find(node => node.key === view.selectedEventId), [flow, view.selectedEventId]);
+  const selectedTop = selectedNode ? y(selectedNode) : null;
+  const selectedHeight = selectedNode ? laneStep[selectedNode.lane] - 5 : null;
+  useEffect(() => {
+    pendingReveal.current = selectedNode?.key ?? null;
+    if (!selectedNode) return;
+    // 只在选择请求或目标布局改变时定位；手动平移不会被仍打开的详情拉回。
+    navigation.show(revealViewport(navigation.viewport, { min: 0, max: domainWidth },
+      { min: selectedNode.x - FLOW_PAD, max: selectedNode.x + selectedNode.width + FLOW_PAD }, 84), false);
+  }, [resetKey, view.selectedEventId, props.selectionRequest, selectedNode?.x, selectedNode?.width, selectedTop, selectedHeight, width]);
+  useEffect(() => {
+    if (!pendingReveal.current || !chart.current) return;
+    const mark = svg.current?.querySelector<SVGGElement>(`[data-event-id="${CSS.escape(pendingReveal.current)}"]`);
+    if (!mark) return; // 水平窗口更新后节点才会挂载，下一次渲染再完成纵向定位。
+    const bounds = mark.getBoundingClientRect(), frame = chart.current.getBoundingClientRect();
+    if (bounds.top < frame.top + 4) chart.current.scrollTop -= frame.top + 4 - bounds.top;
+    else if (bounds.bottom > frame.bottom - 4) chart.current.scrollTop += bounds.bottom - frame.bottom + 4;
+    pendingReveal.current = null;
+  });
   const explanation = t('横轴按 Turn 分段；位置是执行顺序布局，不是时间刻度。每条记录独立显示，重叠活动分行保留；空间不足时只显示色块，悬浮或点击查看原记录。记录位置、缺少时序和未知耗时均明确标记。节点内条长统一按 16 + 24 × log10(1 + 毫秒 / 10) 缩放，原始耗时保留。没有补画模型阶段。', 'The axis is segmented by Turn; positions represent execution-order layout, not elapsed time. Each record has its own node; overlapping activities use separate rows. Compact nodes show only color; hover or select for the original record. Record positions, unknown order and missing durations are marked. Inner bars use 16 + 24 × log10(1 + milliseconds / 10), retaining original durations. No model stages are invented.');
   const marks = useMemo(() => flow.nodes.filter(n => n.x <= max && n.x + n.width >= min), [flow, min, max]);
   useEffect(() => {
@@ -70,7 +91,7 @@ export default function TurnWaterfall(props: Props) {
         <button className="cx-button" aria-label={t('恢复全部概览范围', 'Show full overview')} disabled={!zoomed} onClick={navigation.reset}>{t('全貌', 'Reset')}</button>
       </div>
     </div>
-    <div className="cx-chart cx-flow-chart">
+    <div ref={chart} className="cx-chart cx-flow-chart">
       <div className="cx-flow-lanes" style={{ height }}>{[t('输入', 'Input'), t('模型', 'Model'), t('工具', 'Tools')].map((label, i) => <span key={i} style={{ top: laneTop[i] + 6 }}>{label}</span>)}</div>
       <div ref={canvas} className="cx-timeline-canvas">
         <svg ref={svg} className={`cx-timeline cx-sequence-svg ${navigation.dragging ? 'dragging' : ''}`} style={{ height }} viewBox={`0 0 1000 ${height}`} preserveAspectRatio="none" tabIndex={0} role="group" aria-label={explanation}

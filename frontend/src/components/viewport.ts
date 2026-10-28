@@ -64,3 +64,13 @@ export function panViewport(viewport: Viewport, domain: Viewport, delta: number)
   const offset = Math.max(-axisSpan, Math.min(axisSpan, delta));
   return clampViewport({ min: current.min + offset, max: current.max + offset }, axis, 0);
 }
+
+/** 定位完整目标区间；已可见时保持窗口，否则居中并保留缩放，仅为超宽目标扩展。 */
+export function revealViewport(viewport: Viewport, domain: Viewport, target: Viewport, minimumSpan = 0): Viewport {
+  const current = clampViewport(viewport, domain, minimumSpan);
+  const extent = clampViewport(target, domain, 0);
+  if (extent.min >= current.min && extent.max <= current.max) return current;
+  const span = Math.max(current.max - current.min, extent.max - extent.min);
+  const center = extent.min + (extent.max - extent.min) / 2;
+  return clampViewport({ min: center - span / 2, max: center + span / 2 }, domain, minimumSpan);
+}
