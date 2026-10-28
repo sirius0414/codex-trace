@@ -7,6 +7,8 @@ type Options = {
   wheelTarget?: RefObject<HTMLElement | null>;
   domain: Viewport;
   minimumSpan: number;
+  /** 顺序布局可先显示一个可读窗口；reset 仍恢复完整 domain。 */
+  initialSpan?: number;
   resetKey: unknown;
   enabled: boolean;
   isSelectionActive?: () => boolean;
@@ -18,7 +20,8 @@ type Gesture = { viewport: Viewport; center: number; distance: number; width: nu
 export function useTimelineViewport(options: Options) {
   const [window, setWindow] = useState<Viewport | null>(null);
   const [dragging, setDragging] = useState(false);
-  const viewport = window ? clampViewport(window, options.domain, options.minimumSpan) : options.domain;
+  const initialViewport = options.initialSpan != null ? clampViewport({ min: options.domain.min, max: options.domain.min + options.initialSpan }, options.domain, options.minimumSpan) : options.domain;
+  const viewport = window ? clampViewport(window, options.domain, options.minimumSpan) : initialViewport;
   // 原生 wheel 与连续 pointer 事件读取最新窗口，避免同一帧内多个增量互相覆盖。
   const current = useRef({ ...options, viewport });
   const pointers = useRef(new Map<number, Point>());
@@ -29,7 +32,7 @@ export function useTimelineViewport(options: Options) {
   const pendingFull = useRef(false);
   current.current = { ...options, viewport: redraw.current == null ? viewport : pendingFull.current ? options.domain : clampViewport(current.current.viewport, options.domain, options.minimumSpan) };
 
-  function commit(next: Viewport) {
+  function commit(next: Viewport, interactive = true) {
     const state = current.current;
     next = clampViewport(next, state.domain, state.minimumSpan);
     if (next.min === state.viewport.min && next.max === state.viewport.max) return;
@@ -41,9 +44,9 @@ export function useTimelineViewport(options: Options) {
         redraw.current = null;
         pendingFull.current = false;
         const { viewport: next, domain } = current.current;
-        setWindow(next.min === domain.min && next.max === domain.max ? null : next);
+        setWindow(current.current.initialSpan == null && next.min === domain.min && next.max === domain.max ? null : next);
       });
-      state.onInteract();
+      if (interactive) state.onInteract();
     }
   }
 
@@ -59,7 +62,7 @@ export function useTimelineViewport(options: Options) {
     if (redraw.current != null) cancelAnimationFrame(redraw.current);
     redraw.current = null;
     pendingFull.current = false;
-    current.current.viewport = current.current.domain;
+    current.current.viewport = initialViewport;
     clearGesture();
     suppressClick.current = false;
     setWindow(null);

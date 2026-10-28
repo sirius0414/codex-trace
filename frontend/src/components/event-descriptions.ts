@@ -11,8 +11,8 @@ const descriptions: Record<EventKind, Record<Language, string>> = {
     en: 'Assistant messages are recorded replies, including progress updates, explanations, and final results.',
   },
   reasoningSummary: {
-    zh: '思考摘要是已记录的推理简述，用于了解助手分析问题和选择下一步行动的思路。',
-    en: 'A reasoning summary is a recorded account of how the assistant analyzes a problem and chooses its next action.',
+    zh: '思考活动记录包含已保存的公开摘要和活动时间；未提供公开摘要时只展示时间，不重建私有推理内容。',
+    en: 'Reasoning activity records contain recorded timing and any public summary. When no public summary is provided, only timing is shown; private reasoning is not reconstructed.',
   },
   modelUsage: {
     zh: '模型用量是某次明确 response_id 的输入、输出与缓存 token 记录。一个请求可以生成多条消息或工具调用，因此用量单独列出，不重复分摊到这些条目。',

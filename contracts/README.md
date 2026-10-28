@@ -68,14 +68,11 @@ bounds); payloads still require runtime validation at the service boundary.
   This field is outside `Filters`: it does not change loaded-text query requests
   or search cache keys. Restoring preferences preserves the original wall-clock
   positions rather than reinterpreting them on a newly compressed active axis.
-- `ViewState.timelineSpacing` is an optional display preference: `compact`
-  compresses long gaps without recorded interval coverage, while `runtime`
-  preserves the original spacing within turn execution windows. Omitted values
-  default to `compact` in the UI, including previously saved preferences. The
-  preference is outside `Filters` and loaded-text query requests; changing it
-  does not reset search cache keys, alter original timestamps or clear the
-  absolute `turnRange`. A compact display coordinate is not a measurement of net
-  execution time or evidence of a network interruption.
+- `ViewState.timelineSpacing` remains accepted for compatibility with saved views.
+  The Turn-segmented sequence overview ignores this old time-spacing preference.
+  Diagram positions are layout units, not elapsed time, and are never persisted
+  as `TimeRange`. Existing absolute `turnRange` values remain original-time
+  highlights; the turn list can still reveal their records.
 
 ## Local ZIP delivery
 

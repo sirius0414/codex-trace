@@ -2311,7 +2311,7 @@
           ]
         },
         "timelineSpacing": {
-          "description": "时间轴显示偏好：compact 压缩无记录覆盖的长空档，runtime 保留轮次内的原运行间隔；缺失时默认 compact。只改变显示坐标，不修改原时间、选区、事件筛选或后台查询。",
+          "description": "旧时间轴显示偏好，保留读取兼容；新的 Turn 顺序图忽略此值。原始时间、选区和后台查询不随顺序图布局改变。",
           "type": "string",
           "enum": [
             "compact",

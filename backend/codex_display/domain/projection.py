@@ -17,7 +17,7 @@ from .execution import execution_intervals
 from .usage import usage_snapshots, scoped_usage_snapshots
 from .relationships import project_relationships, resolve_relationships
 
-PARSER_VERSION = '1.3.1'
+PARSER_VERSION = '1.3.2'
 _PREVIEW_LENGTH = 280
 _ITEM_TYPES = {
     'UserMessage': 'userMessage', 'AgentMessage': 'agentMessage',
@@ -25,7 +25,7 @@ _ITEM_TYPES = {
     'McpToolCall': 'mcpToolCall', 'DynamicToolCall': 'dynamicToolCall',
     'FileChange': 'fileChange', 'ContextCompaction': 'contextCompaction',
     'CollabAgentToolCall': 'collabAgentToolCall', 'FunctionCallOutput': 'functionCallOutput',
-    'HookPrompt': 'hookPrompt', 'SubAgentActivity': 'subAgentActivity',
+    'HookPrompt': 'hookPrompt', 'SubAgentActivity': 'subAgentActivity', 'Extension': 'extension',
 }
 _LABELS = {'userMessage': '用户输入', 'assistantMessage': '助手输出',
            'reasoningSummary': '思考摘要', 'systemContext': '系统说明',
@@ -188,9 +188,19 @@ def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tu
         event_kind, role, parts = 'assistantMessage', 'assistant', {'output': _text(item.get('text'))}
     elif kind == 'reasoning':
         summary = _text(item.get('summary'))
-        if not summary:
-            return None  # 只展示公开摘要，不尝试重建加密或私有推理。
+        # 没有公开摘要也保留已记录的活动边界；不读取 raw_content / 私有推理。
+        if not summary and timing['precision'] != 'exact':
+            return None
+        summary = summary or '已记录思考活动时间；未提供公开摘要。'
         event_kind, role, parts = 'reasoningSummary', 'assistant', {'output': summary}
+    elif kind == 'extension' and item.get('kind') == 'image_gen.generation':
+        event_kind, role, tool = 'toolCall', 'tool', 'image_gen.generation'
+        parts = {'input': _value(item.get('revisedPrompt', '')),
+                 'output': _str(item.get('savedPath')) or ('图像结果已记录。' if item.get('result') else '')}
+        if item.get('failure') is not None:
+            parts['error'] = _value(item['failure'])
+            status = _status('failed', 'event', event_id, source, observed_end)
+        call_key = 'item:' + _identity(thread_id, turn_id, item['id'])
     elif kind == 'hookPrompt':
         fragments = item.get('fragments')
         text = '\n'.join(f['text'] for f in fragments if isinstance(f, dict) and isinstance(f.get('text'), str)) if isinstance(fragments, list) else ''
@@ -468,7 +478,11 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                 summary = _text(payload.get('summary'))
                 if summary:
                     pair = _event(thread_id, _raw_key(thread_id, row), turn_id, 'reasoningSummary', {'output': summary}, source, ordinal, role='assistant', timing=timing)
-            elif subtype in ('custom_tool_call', 'custom_tool_call_output') or mode == 'raw' and not persisted_items and subtype in ('function_call', 'function_call_output'):
+            elif subtype in ('custom_tool_call', 'custom_tool_call_output', 'function_call', 'function_call_output'):
+                # wait 是 exec 让出后独立的等待调用，官方内部 item 不替代它。
+                # 其余旧 function_call 仍沿用去重规则，不能按相近时间猜测关联。
+                if subtype == 'function_call' and not (mode == 'raw' and not persisted_items) and payload.get('name') not in ('wait', 'functions.wait'):
+                    continue
                 call_id = _str(payload.get('call_id'))
                 is_output = subtype.endswith('_output')
                 call_key = (turn_id, call_id) if turn_id and call_id else None
@@ -504,9 +518,15 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             event, parts = events[event_id], details[event_id]
             parts['output'] = parts.get('output', '') + text
             _attach(event, parts, row, 'exactCallId')
+            start, end = event['timing']['startMs'], timing['startMs']
+            if start is not None and end is not None and end >= start and (event['timing']['endMs'] is None or end > event['timing']['endMs']):
+                event['timing'] = _timing(start, end, source=event['timing']['source'],
+                    basis='同轮次同 call_id 的调用发出至返回记录的经过时间；返回不表示后台操作已结束')
             # 自定义工具返回片段不证明嵌套操作已经完成，因此只标记 fragment。
             event['content'] = [_content(part, value, 'fragment' if part == 'output' else 'unknown') for part, value in parts.items()]
         else:
+            if payload.get('type') == 'function_call_output' and not (mode == 'raw' and not persisted_items):
+                continue
             source = _raw_source(row)
             pair = _event(thread_id, _raw_key(thread_id, row), turn_id, 'toolResult', {'output': text}, source, row['ordinal'], role='tool', timing=timing, completeness='fragment')
             event_id = add(pair)

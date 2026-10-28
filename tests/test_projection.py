@@ -136,6 +136,67 @@ class ProjectionTests(unittest.TestCase):
         event['sources'][1]['byteStart']=42
         self.assertEqual(row,before)
 
+    def test_call_id_pair_records_elapsed_return_time_without_finishing_background_work(self):
+        rows = [raw('turn_context', {'turn_id': 'turn-a'}),
+                raw('response_item', {'type': 'custom_tool_call', 'call_id': 'c', 'name': 'exec', 'input': 'start'}, 1),
+                raw('response_item', {'type': 'custom_tool_call_output', 'call_id': 'c', 'output': 'Script running with cell ID 4'}, 2)]
+        rows[1]['record']['timestamp'] = '1970-01-01T00:00:01.125Z'
+        rows[2]['record']['timestamp'] = '1970-01-01T00:00:32.250Z'
+        before = deepcopy(rows)
+        result = project('thread-a', rows)
+        self.validate(result)
+        event = result['events'][0]
+        self.assertEqual((event['timing']['startMs'], event['timing']['endMs'], event['timing']['durationMs']), (1125, 32250, 31125))
+        self.assertEqual(event['status']['value'], 'unknown')
+        self.assertEqual(next(c for c in event['content'] if c['part'] == 'output')['completeness'], 'fragment')
+        self.assertEqual(len(event['sources']), 2)
+        self.assertEqual(rows, before)
+        rows[2]['record']['timestamp'] = '1970-01-01T00:00:00Z'
+        self.assertIsNone(project('thread-a', rows)['events'][0]['timing']['endMs'])
+
+    def test_ambiguous_or_cross_turn_call_ids_cannot_supply_elapsed_time(self):
+        rows = [raw('turn_context', {'turn_id': 'turn-a'}),
+                raw('response_item', {'type': 'custom_tool_call', 'call_id': 'c', 'name': 'exec'}, 1),
+                raw('response_item', {'type': 'custom_tool_call', 'call_id': 'c', 'name': 'exec'}, 2),
+                raw('response_item', {'type': 'custom_tool_call_output', 'call_id': 'c', 'output': 'result'}, 3)]
+        rows[-1]['record']['timestamp'] = '1970-01-01T00:00:10Z'
+        self.assertTrue(all(e['timing']['endMs'] is None for e in project('thread-a', rows)['events']))
+        rows[2] = raw('turn_context', {'turn_id': 'turn-b'}, 2)
+        self.assertTrue(all(e['timing']['endMs'] is None for e in project('thread-a', rows)['events']))
+
+    def test_image_extension_keeps_execution_boundary_separate_from_outer_exec_and_wait(self):
+        rows = [raw('turn_context', {'turn_id': 'turn-a'}),
+                raw('response_item', {'type': 'custom_tool_call', 'call_id': 'outer', 'name': 'exec'}, 1),
+                raw('response_item', {'type': 'custom_tool_call_output', 'call_id': 'outer', 'output': 'Script running with cell ID 4'}, 2),
+                raw('response_item', {'type': 'function_call', 'call_id': 'wait-call', 'name': 'wait', 'arguments': '{"cell_id":"4"}'}, 3),
+                raw('event_msg', {'type': 'item_completed', 'turn_id': 'turn-a', 'started_at_ms': 10, 'completed_at_ms': 34510,
+                     'item': {'id': 'image', 'type': 'Extension', 'kind': 'image_gen.generation', 'status': 'completed',
+                              'revisedPrompt': 'rocket', 'result': 'LARGE_IMAGE_BASE64', 'savedPath': '/example/rocket.png'}}, 4),
+                raw('response_item', {'type': 'function_call_output', 'call_id': 'wait-call', 'output': 'image returned'}, 5)]
+        for row, at in zip([rows[1], rows[2], rows[3], rows[5]], ['00.000', '31.000', '33.000', '34.600']):
+            row['record']['timestamp'] = f'1970-01-01T00:00:{at}Z'
+        result = project('thread-a', rows)
+        self.validate(result)
+        tools = {e['toolName']: e for e in result['events']}
+        self.assertEqual(set(tools), {'exec', 'image_gen.generation', 'wait'})
+        self.assertEqual(tools['exec']['timing']['durationMs'], 31000)
+        self.assertEqual(tools['image_gen.generation']['timing']['durationMs'], 34500)
+        self.assertEqual(tools['image_gen.generation']['status']['value'], 'completed')
+        self.assertEqual(tools['wait']['timing']['durationMs'], 1600)
+        self.assertNotIn('LARGE_IMAGE_BASE64', tools['image_gen.generation']['preview'])
+        self.assertEqual(result['details'][tools['image_gen.generation']['eventId']]['output'], '/example/rocket.png')
+
+    def test_reasoning_without_public_summary_keeps_only_recorded_activity_timing(self):
+        result = project('thread-a', [raw('event_msg', {'type': 'item_completed', 'turn_id': 'turn-a',
+            'started_at_ms': 100, 'completed_at_ms': 800,
+            'item': {'id': 'r', 'type': 'Reasoning', 'summary_text': [], 'raw_content': ['PRIVATE_REASONING']}})])
+        self.validate(result)
+        event = result['events'][0]
+        self.assertEqual(event['kind'], 'reasoningSummary')
+        self.assertEqual(event['timing']['durationMs'], 700)
+        self.assertNotIn('PRIVATE_REASONING', event['preview'])
+        self.assertNotIn('PRIVATE_REASONING', result['details'][event['eventId']]['output'])
+
     def test_missing_scope_or_ambiguous_call_does_not_link_result(self):
         rows = [raw('response_item', {'type':'custom_tool_call','call_id':'c','name':'t','input':'x'},1),
                 raw('response_item', {'type':'custom_tool_call_output','call_id':'c','output':'y'},2)]
