@@ -8,6 +8,7 @@ import EventList from './EventList';
 import Inspector, { UsageFacts } from './Inspector';
 import Overview from './Overview';
 import Icon from './icons';
+import { DEFAULT_INSPECTOR_WIDTH } from './useInspectorResize';
 import { rangeReveal } from './expansion';
 import { activeAgentId, agentPagePatch } from './agent-navigation';
 import { clockTime, eventRangeIds, localizedKindLabels, latestUsage, metric, localizedStatusLabels, visibleEvents } from './model';
@@ -53,6 +54,7 @@ export default function TraceUI(props: TraceUIProps) {
   const [popover, setPopover] = useState<'usage' | 'reading' | 'tasks' | 'settings' | null>(null);
   const [taskQuery, setTaskQuery] = useState('');
   const [rowCount, setRowCount] = useState(0);
+  const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width:650px)').matches);
   const root = useRef<HTMLElement>(null);
   const taskInput = useRef<HTMLInputElement>(null);
@@ -144,7 +146,7 @@ export default function TraceUI(props: TraceUIProps) {
     </div>
     <div id="cx-agent-page" role="tabpanel" aria-labelledby={activeAgent ? `cx-agent-tab-${activeAgent}` : undefined} className={`cx-work ${view.selectedEventId ? 'has-detail' : ''}`}>
       <EventList key={`${snapshot?.binding.threadId ?? 'empty'}:${activeAgent}`} {...pageProps} visible={visible} highlightedEvents={highlightedEvents} onCount={setRowCount} />
-      {view.selectedEventId && <Inspector {...pageProps} overlay={narrow} />}
+      {view.selectedEventId && <Inspector {...pageProps} overlay={narrow} preferredWidth={inspectorWidth} onResize={setInspectorWidth} />}
     </div>
     <aside className="cx-usage-bar" aria-label={t('主任务 token 用量，不受 Agent 筛选影响', 'Main task token usage, independent of Agent filters')}>
       <span className="cx-usage-label"><Icon name="usage" />{t('主任务', 'Main task')} <small>tokens</small></span>

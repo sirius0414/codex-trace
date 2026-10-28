@@ -7,6 +7,7 @@ import { eventKindDescription } from './event-descriptions';
 import { interactionTargets } from './agent-navigation';
 import { clockTime, duration, localizedKindLabels, latestUsage, metric, relationshipEndpoints, localizedStatusLabels } from './model';
 import { usePreferences } from '../preferences';
+import { useInspectorResize } from './useInspectorResize';
 
 export function UsageFacts({ values, label }: { values: UsageSnapshot[]; label: string }) {
   const { language, t } = usePreferences();
@@ -15,7 +16,7 @@ export function UsageFacts({ values, label }: { values: UsageSnapshot[]; label: 
     <p className="cx-data-note">{t('“—”表示未记录，不等于 0。重复读取同一累计快照不会再次相加。', '“—” means not recorded, not zero. Reading the same cumulative snapshot again does not add to the total.')}</p>
     <p className="cx-data-note">{usage?.cacheSemantics === 'includedInInput' ? t('缓存属于输入的一部分，不再与输入相加。', 'Cached tokens are included in input and are not added again.') : usage?.cacheSemantics === 'separate' ? t('来源将缓存单独记录。', 'The source records cached tokens separately.') : t('缓存与输入的关系未记录。', 'The relationship between cached tokens and input is not recorded.')}</p></>;
 }
-export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
+export default function Inspector(props: TraceUIProps & { overlay?: boolean; preferredWidth: number; onResize: (width: number) => void }) {
   const { snapshot, view } = props;
   const { language, t } = usePreferences();
   const kindLabels = localizedKindLabels(language);
@@ -26,6 +27,7 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
   const detail = props.detail?.eventId === view.selectedEventId ? props.detail : null;
   const body = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
+  const resize = useInspectorResize(panel, Boolean(props.overlay), props.preferredWidth, props.onResize);
   const closeButton = useRef<HTMLButtonElement>(null);
   const opener = useRef<Element | null>(document.activeElement);
   const [copied, setCopied] = useState<'' | 'success' | 'unavailable'>('');
@@ -108,7 +110,11 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean }) {
     if (!parts.length) return <p className="cx-data-note">{props.detailLoading ? t('正在读取内容…', 'Loading content…') : t('该记录尚无可读取正文。', 'This record has no readable content yet.')}</p>;
     return <>{parts.map(part => content(part, item.kind === 'compaction' ? t('已记录的压缩摘要', 'Recorded compaction summary') : t('内容', 'Content'), detail?.parts[part]))}{available('error') && content('error', t('错误', 'Error'), detail?.parts.error)}</>;
   }
-  return <aside ref={panel} className="cx-inspector" role={props.overlay ? 'dialog' : undefined} aria-label={t('所选记录详情', 'Selected record details')} tabIndex={-1} onKeyDown={containTab}>
+  return <aside ref={panel} id="cx-record-details" className={`cx-inspector ${resize.resizing ? 'resizing' : ''}`} style={{ width: resize.width }} role={props.overlay ? 'dialog' : undefined} aria-label={t('所选记录详情', 'Selected record details')} tabIndex={-1} onKeyDown={containTab}>
+    <div className="cx-inspector-resizer" role="separator" tabIndex={0} aria-orientation="vertical" aria-controls="cx-record-details"
+      aria-label={t('调整内容预览宽度', 'Resize content preview')} aria-valuemin={resize.min} aria-valuemax={resize.max} aria-valuenow={resize.width}
+      aria-valuetext={t(`${resize.width} 像素`, `${resize.width} pixels`)} title={t('拖动调整预览宽度；方向键微调，双击或 Enter 恢复默认', 'Drag to resize preview; use arrow keys to adjust, double-click or press Enter to reset')}
+      {...resize.handleProps} />
     <div className="cx-detail-head">{event && <Icon name={eventIcon(event)} />}<strong>{event ? kindLabels[event.kind] : t('记录详情', 'Record details')}</strong><small>{turn ? t(`${group?.kind === 'main' ? '' : '子任务 · '}第 ${turn.order + 1} 轮`, `${group?.kind === 'main' ? '' : 'Subtask · '}Turn ${turn.order + 1}`) : t('轮次未归属', 'No associated turn')}</small><button ref={closeButton} className="cx-icon" aria-label={t('关闭详情', 'Close details')} title={t('关闭详情 · Esc', 'Close details · Esc')} onClick={close}><Icon name="close" /></button></div>
     <div className="cx-tabs" role="tablist" aria-label={t('详情内容', 'Detail content')}>{tabs.map(([tab, title], index) => <button key={tab} id={`cx-tab-${tab}`} role="tab" aria-selected={view.detailTab === tab} aria-controls="cx-detail-content" tabIndex={view.detailTab === tab ? 0 : -1}
       onClick={() => props.onView({ detailTab: tab })} onKeyDown={key => { if (key.key === 'ArrowLeft' || key.key === 'ArrowRight') { key.preventDefault(); const next = tabs[(index + (key.key === 'ArrowRight' ? 1 : 3)) % 4][0]; props.onView({ detailTab: next }); document.getElementById(`cx-tab-${next}`)?.focus(); } }}>{title}</button>)}</div>
