@@ -22,6 +22,7 @@ export type ActiveTimelineRange = { start: number; end: number; wallStart: numbe
 /** 单轮自己的墙钟片段；保留明确中断后的恢复片段和已记录的零时长点。 */
 export type TurnExecutionSpan = { start: number; end: number };
 export type TimelineSpacing = 'runtime' | 'compact';
+export const DEFAULT_TIMELINE_SPACING: TimelineSpacing = 'runtime';
 export type ActiveTimeline = {
   mode: 'active' | 'observed' | 'order';
   spacing: TimelineSpacing;
@@ -169,7 +170,7 @@ function timelineProjection(segments: ActiveTimelineSegment[], emptyReference: n
  * 自己已加载事件的观察包络，并以 observed 提醒边界不足，不能据此宣称精确执行时长。
  * 空档中的点映射到同一接缝；toWall 的 start 选择接缝右侧，end 选择左侧。
  */
-export function buildActiveTimeline(snapshot: ActiveTimelineSnapshot | null, spacing: TimelineSpacing = 'runtime'): ActiveTimeline {
+export function buildActiveTimeline(snapshot: ActiveTimelineSnapshot | null, spacing: TimelineSpacing = DEFAULT_TIMELINE_SPACING): ActiveTimeline {
   const observed = new Map<string, Span>();
   const protectedSpans: Span[] = [];
   const metadata = new Map<string, TimelineTiming[]>();

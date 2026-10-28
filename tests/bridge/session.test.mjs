@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { SessionGate, PreferenceGate, defaultView, sameBinding, mergeSnapshot, mergeDetail, partsForTab, restoredView, selectedView, eventLocation, readAnchorPage, readSelectionPage, searchKeys, searchVisibility } from '../../frontend/src/state/session.ts';
 import { visibleEvents, makeRows } from '../../frontend/src/components/model.ts';
+import { DEFAULT_TIMELINE_SPACING } from '../../frontend/src/components/active-timeline.ts';
 
 const fixture=JSON.parse(readFileSync(new URL('../fixtures/contracts/snapshot-running.json',import.meta.url)));
 const open={viewSessionId:'v',sourceInstanceId:'s',identity:{state:'verified',threadId:'a',selectionEpoch:1}};
@@ -77,7 +78,7 @@ test('timeline spacing is a persistent display preference that preserves selecti
   const before=structuredClone(original),keys=searchKeys(original,fixture),ids=new Set(['chosen']);
   const cached={...keys,ids};
   const legacy=restoredView(JSON.parse(JSON.stringify(original)),4,fixture);
-  assert.equal(legacy.timelineSpacing??'compact','compact');
+  assert.equal(legacy.timelineSpacing??DEFAULT_TIMELINE_SPACING,'runtime');
   for(const timelineSpacing of ['runtime','compact']) {
     const changed={...legacy,timelineSpacing};
     const restored=restoredView(JSON.parse(JSON.stringify(changed)),4,fixture);
