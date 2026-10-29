@@ -19,7 +19,8 @@ export function createBuildInfo(root = projectRoot) {
   // timestamps, local documents, and Git state do not change the source identity.
   for (const source of ['frontend/src', 'backend/codex_display', 'contracts', 'plugin',
     'package.json', 'package-lock.json', 'requirements.lock', 'tsconfig.json',
-    'vite.config.ts', 'scripts/build-info.mjs', 'scripts/package_plugin.py', 'scripts/platform_runtime.py']) collect(source);
+    'vite.config.ts', 'scripts/build-info.mjs', 'scripts/package_plugin.py', 'scripts/platform_runtime.py',
+    'LICENSE', 'NOTICE', 'third_party', 'scripts/third_party_licenses.py']) collect(source);
   const hash = createHash('sha256');
   for (const file of files.sort()) {
     const bytes = readFileSync(join(root, file));

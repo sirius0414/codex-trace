@@ -20,6 +20,7 @@ import sys
 import tempfile
 
 from platform_runtime import executable, state_root, venv_python
+from third_party_licenses import check_snapshot, verify_documents
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -95,6 +96,8 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
         raise ValueError("UI build version does not match plugin version; rebuild the frontend first")
     if output.exists():
         raise ValueError(f"Output already exists; select a new output or remove this generated package first: {output}")
+    # 授权快照与锁文件绑定；缺失或陈旧时拒绝发布，不能只复制项目自身的 MIT。
+    third_party = check_snapshot(ROOT)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".codex-display-package-", dir=output.parent) as temporary:
         staged = Path(temporary) / "plugin"
@@ -105,6 +108,13 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
         (staged / "ui" / "trajectory-v1.html").write_text(html, encoding="utf-8")
         shutil.copyfile(ROOT / "requirements.lock", staged / "requirements.lock")
         shutil.copyfile(ROOT / "LICENSE", staged / "LICENSE")
+        shutil.copyfile(ROOT / "NOTICE", staged / "NOTICE")
+        shutil.copyfile(ROOT / "third_party/manifest.json", staged / "third-party-manifest.json")
+        for relative in third_party["files"]:
+            destination = staged / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / "third_party" / relative, destination)
+        verify_documents(staged, third_party)
         # 代码随安装缓存移动，cwd 因此相对包根；解释器保留绝对路径以摆脱 GUI 的 PATH。
         launch = {"mcpServers": {"codex-display": {
             "command": str(python), "args": ["-m", "codex_display.app"], "cwd": "./backend",
@@ -117,6 +127,7 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
                     "runtimePython": str(python), "appServerExecutable": str(codex), "appServerVersion": codex_version,
                     "runtime": runtime, "uiSha256": hashlib.sha256(html.encode()).hexdigest(),
                     "requirementsSha256": hashlib.sha256((ROOT / "requirements.lock").read_bytes()).hexdigest(),
+                    "thirdPartyManifestSha256": hashlib.sha256((staged / "third-party-manifest.json").read_bytes()).hexdigest(),
                     "runtimeBundled": False, "startupNetworkInstallation": False,
                     "minimumPython": "3.14", "entrypoint": "codex_display.app",
                     "limitations": ["This local package binds to an existing absolute Python runtime and Codex executable on this machine.", "Keep those paths installed. Rebuild/reinstall after relocating them; the cache copy contains UI/backend code, not the interpreter."]}

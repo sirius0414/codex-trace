@@ -1,0 +1,27 @@
+Codex Display
+Copyright (c) 2026 Siyue Zhang
+
+Research and design references
+
+Codex Trajectory, maintained by icesixgod:
+https://github.com/icesixgod/codex-trajectory
+Referenced during feasibility research for local Codex trajectory access and
+native plugin entrypoints.
+
+DeepSeek Harness, maintained by DeepSeek:
+https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory
+Referenced for the early trajectory interface design, including the timing
+overview, compact event ledger and on-demand inspector.
+
+Codex Display is independently maintained. It is not affiliated with,
+endorsed by, or an official release of Codex Trajectory, DeepSeek or OpenAI.
+Reference acknowledgments do not grant rights to their names or logos.
+
+Third-party software
+
+The project's MIT License applies to Codex Display's own code. Third-party
+components retain their respective licenses and copyright notices.
+See THIRD_PARTY_NOTICES.txt and LICENSES/ in the plugin package, or third_party/
+in the source repository, for the dependency inventory and full upstream texts.
+Python dependency notices accompany a separately installed runtime; Python,
+its dependency code and the external Codex executable are not bundled.

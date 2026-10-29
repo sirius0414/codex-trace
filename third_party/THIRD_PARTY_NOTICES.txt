@@ -1,0 +1,199 @@
+Codex Display — Third-party software notices
+
+Full upstream copyright, permission, disclaimer and NOTICE texts are preserved in LICENSES/.
+Declared license identifiers below are informational; the upstream texts govern.
+npm: all locked production dependencies, including dependencies that may be tree-shaken.
+Python: accompanying license information for the separately installed runtime; its code is not bundled.
+Development-only npm tools, Python itself and the external Codex executable are not bundled.
+
+npm: @modelcontextprotocol/client 2.3.1
+Declared license: Apache-2.0
+  LICENSES/npm/@modelcontextprotocol/client@2.3.1/LICENSE
+
+npm: @modelcontextprotocol/core 2.3.1
+Declared license: Apache-2.0
+  LICENSES/npm/@modelcontextprotocol/core@2.3.1/LICENSE
+
+npm: @modelcontextprotocol/ext-apps 2.0.3
+Declared license: MIT
+  LICENSES/npm/@modelcontextprotocol/ext-apps@2.0.3/LICENSE
+
+npm: @standard-schema/spec 1.1.0
+Declared license: MIT
+  LICENSES/npm/@standard-schema/spec@1.1.0/LICENSE
+
+npm: cross-spawn 7.0.6
+Declared license: MIT
+  LICENSES/npm/cross-spawn@7.0.6/LICENSE
+
+npm: eventsource 3.0.7
+Declared license: MIT
+  LICENSES/npm/eventsource@3.0.7/LICENSE
+
+npm: eventsource-parser 3.1.1
+Declared license: MIT
+  LICENSES/npm/eventsource-parser@3.1.1/LICENSE
+
+npm: isexe 2.0.0
+Declared license: ISC
+  LICENSES/npm/isexe@2.0.0/LICENSE
+
+npm: jose 6.2.13
+Declared license: MIT
+  LICENSES/npm/jose@6.2.13/LICENSE.md
+
+npm: path-key 3.1.1
+Declared license: MIT
+  LICENSES/npm/path-key@3.1.1/license
+
+npm: pkce-challenge 5.0.1
+Declared license: MIT
+  LICENSES/npm/pkce-challenge@5.0.1/LICENSE
+
+npm: react 19.3.1
+Declared license: MIT
+  LICENSES/npm/react@19.3.1/LICENSE
+
+npm: react-dom 19.3.1
+Declared license: MIT
+  LICENSES/npm/react-dom@19.3.1/LICENSE
+
+npm: scheduler 0.28.0
+Declared license: MIT
+  LICENSES/npm/scheduler@0.28.0/LICENSE
+
+npm: shebang-command 2.0.0
+Declared license: MIT
+  LICENSES/npm/shebang-command@2.0.0/license
+
+npm: shebang-regex 3.0.0
+Declared license: MIT
+  LICENSES/npm/shebang-regex@3.0.0/license
+
+npm: which 2.0.2
+Declared license: ISC
+  LICENSES/npm/which@2.0.2/LICENSE
+
+npm: zod 4.6.7
+Declared license: MIT
+  LICENSES/npm/zod@4.6.7/LICENSE
+
+python: annotated-types 0.8.0
+Declared license: MIT
+  LICENSES/python/annotated-types@0.8.0/LICENSE
+
+python: anyio 4.15.1
+Declared license: MIT
+  LICENSES/python/anyio@4.15.1/LICENSE
+
+python: attrs 26.1.0
+Declared license: MIT
+  LICENSES/python/attrs@26.1.0/LICENSE
+
+python: certifi 2026.10.19
+Declared license: MPL-2.0
+  LICENSES/python/certifi@2026.10.19/LICENSE
+
+python: cffi 2.1.1
+Declared license: MIT-0
+  LICENSES/python/cffi@2.1.1/LICENSE
+
+python: click 8.5.0
+Declared license: BSD-3-Clause
+  LICENSES/python/click@8.5.0/LICENSE.txt
+
+python: cryptography 50.0.2
+Declared license: Apache-2.0 OR BSD-3-Clause
+  LICENSES/python/cryptography@50.0.2/LICENSE
+  LICENSES/python/cryptography@50.0.2/LICENSE.APACHE
+  LICENSES/python/cryptography@50.0.2/LICENSE.BSD
+
+python: h11 0.16.0
+Declared license: MIT
+  LICENSES/python/h11@0.16.0/LICENSE.txt
+
+python: httpcore 1.0.9
+Declared license: BSD-3-Clause
+  LICENSES/python/httpcore@1.0.9/LICENSE.md
+
+python: httpx 0.28.1
+Declared license: BSD-3-Clause
+  LICENSES/python/httpx@0.28.1/LICENSE.md
+
+python: httpx-sse 0.4.3
+Declared license: MIT
+  LICENSES/python/httpx-sse@0.4.3/LICENSE
+
+python: idna 3.20
+Declared license: BSD-3-Clause
+  LICENSES/python/idna@3.20/LICENSE.md
+
+python: jsonschema 4.25.1
+Declared license: MIT
+  LICENSES/python/jsonschema@4.25.1/COPYING
+
+python: jsonschema-specifications 2025.9.1
+Declared license: MIT
+  LICENSES/python/jsonschema-specifications@2025.9.1/COPYING
+
+python: mcp 1.30.0
+Declared license: MIT
+  LICENSES/python/mcp@1.30.0/LICENSE
+
+python: pycparser 3.11
+Declared license: BSD-3-Clause
+  LICENSES/python/pycparser@3.11/LICENSE
+
+python: pydantic 2.14.1
+Declared license: MIT
+  LICENSES/python/pydantic@2.14.1/LICENSE
+
+python: pydantic-settings 2.16.1
+Declared license: MIT
+  LICENSES/python/pydantic-settings@2.16.1/LICENSE
+
+python: pydantic_core 2.50.1
+Declared license: MIT
+  LICENSES/python/pydantic_core@2.50.1/LICENSE
+
+python: PyJWT 2.15.1
+Declared license: MIT
+  LICENSES/python/PyJWT@2.15.1/AUTHORS.rst
+  LICENSES/python/PyJWT@2.15.1/LICENSE
+
+python: python-dotenv 1.2.4
+Declared license: BSD-3-Clause
+  LICENSES/python/python-dotenv@1.2.4/LICENSE
+
+python: python-multipart 0.0.32
+Declared license: Apache-2.0
+  LICENSES/python/python-multipart@0.0.32/LICENSE.txt
+
+python: referencing 0.37.0
+Declared license: MIT
+  LICENSES/python/referencing@0.37.0/COPYING
+
+python: rpds-py 2026.9.1
+Declared license: MIT
+  LICENSES/python/rpds-py@2026.9.1/LICENSE
+
+python: sse-starlette 3.5.0
+Declared license: BSD-3-Clause
+  LICENSES/python/sse-starlette@3.5.0/AUTHORS
+  LICENSES/python/sse-starlette@3.5.0/LICENSE
+
+python: starlette 1.9.0
+Declared license: BSD-3-Clause
+  LICENSES/python/starlette@1.9.0/LICENSE.md
+
+python: typing-inspection 0.4.4
+Declared license: MIT
+  LICENSES/python/typing-inspection@0.4.4/LICENSE
+
+python: typing_extensions 4.16.0
+Declared license: PSF-2.0
+  LICENSES/python/typing_extensions@4.16.0/LICENSE
+
+python: uvicorn 0.54.0
+Declared license: BSD-3-Clause
+  LICENSES/python/uvicorn@0.54.0/LICENSE.md

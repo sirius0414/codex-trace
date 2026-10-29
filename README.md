@@ -4,6 +4,27 @@ Codex 本地任务执行轨迹插件，当前版本 **0.1.0**。正式入口使�
 
 后端按系统选择 POSIX 或原生 Windows 适配器，轨迹分析与前端共用。Windows 使用方法及尚未完成的实机验收见 [Windows 适配说明](WINDOWS.md)；已有 macOS 命令继续适用。
 
+## 项目来源与维护
+
+本项目因作者对现有 Codex 轨迹查看体验的需求而开发，由作者独立维护。接入可行性研究参考了 [Codex Trajectory](https://github.com/icesixgod/codex-trajectory) 的本地轨迹读取及原生插件入口；早期界面设计参考了 [DeepSeek Harness 的 Trajectory 组件](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory)的概览、紧凑事件列表与按需详情。
+
+Codex Display 与 Codex Trajectory、DeepSeek、OpenAI 均无隶属或背书关系，也不是这些项目或公司的官方发行版。参考来源说明见 [NOTICE](NOTICE)；项目自身代码采用 [MIT 许可证](LICENSE)，第三方组件保留各自的版权声明和许可条件。
+
+## 第三方依赖授权
+
+[第三方授权清单](third_party/THIRD_PARTY_NOTICES.txt)和 [完整授权原文](third_party/LICENSES/)收录全部锁定的 npm 生产依赖（含传递依赖）及 Python 依赖，保留上游 LICENSE、NOTICE、COPYING、AUTHORS 等文件的原文。npm 清单也可能包含构建时被移除的依赖；Python 运行环境及其依赖代码由外部安装，不随插件包复制。
+
+打包自动携带 `LICENSE`、`NOTICE`、`THIRD_PARTY_NOTICES.txt`、`LICENSES/` 和 `third-party-manifest.json`，并校验依赖版本清单、锁文件指纹和授权文件内容。安装缓存验证会再次核对授权文件；缺失、内容变化或锁文件更新后未刷新清单都会使打包失败。
+
+更新依赖后，先按锁文件安装 npm 和 Python 依赖，再使用该 Python 环境刷新并提交授权快照：
+
+```sh
+.venv/bin/python scripts/third_party_licenses.py --write
+.venv/bin/python scripts/third_party_licenses.py
+```
+
+Windows 使用 `& ".\.venv\Scripts\python.exe" scripts/third_party_licenses.py --write`；不带 `--write` 时只校验。生成器只读取已安装依赖，不下载内容；完整上游授权文本优先于清单中的许可证标识，尤其是 MCP 包内同时包含的 Apache/MIT 过渡说明。
+
 ## 使用
 
 在聊天右上角 **New Tab → 执行轨迹** 打开面板。此入口的来源语义已在目标宿主验证，服务会先只读校验任务 ID。无法确认时显示任务选择器。全局侧栏也提供“执行轨迹”，按宿主规则全屏打开；全局来源语义未验证，因此始终要求选择任务，不根据最近任务或环境变量猜测来源。

@@ -1,6 +1,7 @@
 """Package/browser boundaries using synthetic assets and disposable directories."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -136,7 +137,22 @@ class PackagingTests(unittest.TestCase):
         manifest.mkdir(parents=True)
         (manifest / "plugin.json").write_text('{"name":"codex-display","version":"0.0.0-test"}')
         (source / "requirements.lock").write_text("mcp==1.30.0\n")
+        (source / "package-lock.json").write_text('{"packages": {"": {"name": "synthetic"}}}')
         (source / "LICENSE").write_text("synthetic license")
+        (source / "NOTICE").write_text("synthetic project notice")
+        legal_files = {"LICENSES/python/mcp@1.30.0/LICENSE": b"Synthetic upstream permission and copyright\r\n",
+                       "LICENSES/python/mcp@1.30.0/NOTICE": b"Synthetic upstream attribution\n",
+                       "THIRD_PARTY_NOTICES.txt": b"Synthetic third-party inventory\n"}
+        inventory = {"schemaVersion": 1,
+                     "lockfiles": {name: hashlib.sha256((source / name).read_bytes()).hexdigest() for name in ("package-lock.json", "requirements.lock")},
+                     "components": [{"ecosystem": "python", "location": "mcp", "name": "mcp", "version": "1.30.0",
+                                     "files": [name for name in legal_files if name.startswith("LICENSES/")]}],
+                     "files": {name: hashlib.sha256(data).hexdigest() for name, data in legal_files.items()}}
+        for name, data in legal_files.items():
+            path = source / "third_party" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        (source / "third_party/manifest.json").write_text(json.dumps(inventory))
         (source / ".env").write_text("SYNTHETIC_SECRET_MUST_NOT_SHIP=yes\n")
         (source / "unrelated-session.jsonl").write_text("SYNTHETIC_UNRELATED_CONTENT\n")
         return source
@@ -178,10 +194,34 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn(".env", shipped)
         self.assertNotIn("unrelated-session.jsonl", shipped)
         self.assertTrue((cache / "ui/trajectory-v1.html").is_file())
+        # 移走源码和 node_modules 后仍能读到完整上游授权，不能只保留 SPDX 标识。
+        self.assertEqual((cache / "NOTICE").read_text(), "synthetic project notice")
+        self.assertEqual((cache / "LICENSES/python/mcp@1.30.0/LICENSE").read_bytes(), b"Synthetic upstream permission and copyright\r\n")
+        self.assertEqual((cache / "LICENSES/python/mcp@1.30.0/NOTICE").read_text(), "Synthetic upstream attribution\n")
+        inventory = json.loads((cache / "third-party-manifest.json").read_text())
+        for name, digest in inventory["files"].items():
+            self.assertEqual(hashlib.sha256((cache / name).read_bytes()).hexdigest(), digest)
         for path in cache.rglob("*"):
             if path.is_file():
                 self.assertNotIn(b"SYNTHETIC_SECRET_MUST_NOT_SHIP", path.read_bytes())
                 self.assertNotIn(b"SYNTHETIC_UNRELATED_CONTENT", path.read_bytes())
+
+    def test_missing_notices_and_stale_inventory_never_publish_a_package(self):
+        source = self.prepare_source()
+        for relative in ("NOTICE", "third_party/LICENSES/python/mcp@1.30.0/NOTICE", "requirements.lock"):
+            with self.subTest(relative=relative):
+                path = source / relative
+                original = path.read_bytes()
+                if relative.endswith(".lock"):
+                    path.write_bytes(b"mcp==1.30.1\n")
+                else:
+                    path.unlink()
+                output = self.root / "must-not-publish"
+                with mock.patch.object(packaging, "ROOT", source), mock.patch.object(packaging, "verify_runtime", return_value={}):
+                    with self.assertRaisesRegex(ValueError, "Third-party license validation failed"):
+                        packaging.build(output, Path(sys.executable), Path(sys.executable), self.assets)
+                self.assertFalse(output.exists())
+                path.write_bytes(original)
 
     def test_production_cache_smoke_is_fully_synthetic_and_isolated(self):
         output = self.root / "package"

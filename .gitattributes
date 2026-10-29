@@ -3,3 +3,8 @@
 
 # Preserve exact bytes in synthetic raw-record fixtures.
 /tests/fixtures/contracts/unknown-and-partial.bin binary
+
+# Preserve upstream legal text bytes and reproducible notice checksums across platforms.
+/third_party/LICENSES/** -text
+/third_party/manifest.json text eol=lf
+/third_party/THIRD_PARTY_NOTICES.txt text eol=lf

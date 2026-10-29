@@ -26,6 +26,8 @@ import time
 from uuid import uuid4
 import zipfile
 
+from third_party_licenses import verify_documents
+
 
 class HtmlAssetCheck(HTMLParser):
     """Inspect actual resource tags, not React/SDK strings embedded in scripts."""
@@ -185,6 +187,11 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
           and Path(launch["env"]["CODEX_DISPLAY_CODEX_EXECUTABLE"]).is_absolute())
     check("module_entrypoint", launch["args"] == ["-m", "codex_display.app"])
     runtime = json.loads((installed / "runtime.json").read_text(encoding="utf-8"))
+    legal_manifest = (installed / "third-party-manifest.json").read_bytes()
+    check("third_party_manifest_matches_checksum", runtime.get("thirdPartyManifestSha256") == hashlib.sha256(legal_manifest).hexdigest())
+    verify_documents(installed, json.loads(legal_manifest))
+    check("third_party_license_documents_verified", True)
+    check("project_license_and_notice_present", all((installed / name).is_file() and (installed / name).read_bytes().strip() for name in ("LICENSE", "NOTICE")))
     check("runtime_matches_current_platform", runtime.get("platform", sys.platform) == sys.platform)
     check("runtime_paths_match_manifest", runtime.get("runtimePython") == launch["command"]
           and runtime.get("appServerExecutable") == launch["env"]["CODEX_DISPLAY_CODEX_EXECUTABLE"])
