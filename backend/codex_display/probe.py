@@ -5,7 +5,7 @@ import base64
 import hashlib
 import io
 import json
-import os
+from .platform import filesystem as os
 from pathlib import Path
 import re
 import stat
@@ -152,7 +152,7 @@ class ProbeService:
             return
         self.audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd = os.open(self.audit_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, "a") as output:
+        with os.fdopen(fd, "a", encoding="utf-8") as output:
             if not stat.S_ISREG(os.fstat(output.fileno()).st_mode):
                 raise ValueError("invalid-audit-file")
             os.fchmod(output.fileno(), 0o600)

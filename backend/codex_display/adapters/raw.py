@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
+from ..platform import filesystem as os
 import re
 import stat
 import threading

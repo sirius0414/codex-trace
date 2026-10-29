@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 import copy
 import json
 import os
@@ -13,9 +14,10 @@ import unittest
 from uuid import UUID
 
 from backend.codex_display.storage import DerivedStore, StorageError
+from platform_fixtures import assert_private_mode, symlink
 
 
-STATE = json.loads((Path(__file__).parent / "fixtures/contracts/view-state.json").read_text())
+STATE = json.loads((Path(__file__).parent / "fixtures/contracts/view-state.json").read_text(encoding="utf-8"))
 
 
 class StorageTests(unittest.TestCase):
@@ -36,8 +38,8 @@ class StorageTests(unittest.TestCase):
     def test_private_permissions_and_stable_identity_after_restart(self):
         identifier = self.store.source_instance_id
         UUID(identifier)
-        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE(self.store.path.stat().st_mode), 0o600)
+        assert_private_mode(self, self.root, 0o700)
+        assert_private_mode(self, self.store.path, 0o600)
         self.assertEqual(self.reopen().source_instance_id, identifier)
         self.assertEqual(self.store._connection.execute("PRAGMA journal_mode").fetchone()[0], "delete")
 
@@ -126,7 +128,7 @@ class StorageTests(unittest.TestCase):
         outside = self.base / "outside"
         outside.mkdir()
         link = self.base / "ancestor-link"
-        link.symlink_to(outside, target_is_directory=True)
+        symlink(self, link, outside, target_is_directory=True)
         with self.assertRaises(StorageError):
             DerivedStore(link / "index")
         self.assertFalse((outside / "index").exists())
@@ -136,7 +138,7 @@ class StorageTests(unittest.TestCase):
             target = outside / (mode + ".sqlite3")
             target.write_bytes(b"synthetic")
             if mode == "symlink":
-                (root / "derived.sqlite3").symlink_to(target)
+                symlink(self, root / "derived.sqlite3", target)
             else:
                 os.link(target, root / "derived.sqlite3")
             with self.assertRaises(StorageError):
@@ -147,12 +149,18 @@ class StorageTests(unittest.TestCase):
         self.store.close()
         target = self.base / "untouched"
         target.write_bytes(b"synthetic")
-        (self.root / "derived.sqlite3-journal").symlink_to(target)
+        symlink(self, self.root / "derived.sqlite3-journal", target)
         with self.assertRaises(StorageError):
             DerivedStore(self.root)
         self.assertEqual(target.read_bytes(), b"synthetic")
 
     def test_directory_replacement_or_database_replacement_stops_writes(self):
+        if os.name == "nt":
+            # Windows 在整个使用期 pin 住目录；攻击在 rename 处就必须失败。
+            with self.assertRaises(PermissionError):
+                self.root.rename(self.root.with_name("old"))
+            self.assertTrue(self.store.put_receipt("x", {"value": "synthetic"})["saved"])
+            return
         self.root.rename(self.root.with_name("old"))
         self.root.mkdir()
         with self.assertRaises(StorageError):
@@ -163,11 +171,12 @@ class StorageTests(unittest.TestCase):
         self.store.put_receipt("x", {"synthetic": True})
         path = self.store.path
         self.store.close()
-        with sqlite3.connect(path) as connection:
+        # Connection 上下文只提交事务，不关闭句柄；Windows 清理目录前必须显式关闭。
+        with closing(sqlite3.connect(path)) as connection:
             connection.execute("PRAGMA user_version=999")
         with self.assertRaisesRegex(StorageError, "unsupported-storage-version"):
             DerivedStore(self.root)
-        with sqlite3.connect(path) as connection:
+        with closing(sqlite3.connect(path)) as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM receipts").fetchone()[0], 1)
 
     def test_invalid_keys_revisions_and_nonfinite_json_are_rejected(self):

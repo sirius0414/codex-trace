@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import math
-import os
+from ..platform import filesystem as os
 import select
 import threading
 

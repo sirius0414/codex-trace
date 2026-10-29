@@ -1,5 +1,6 @@
 import type { Binding, DownloadRequest, DownloadResult, ExportManifest } from '../../../contracts/types';
 import { sameBinding } from './binding.mjs';
+import { isExportReceiptPath } from '../bridge/local-path.mjs';
 
 const STORAGE_KEY = 'codex-display.export-intents.v1';
 const KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
@@ -77,9 +78,7 @@ export function validateExportResult(value: unknown, binding: Binding, intent: E
   if (save.status === 'verified') {
     // 此处核对响应内部的一致性；实际目录约束、落盘与读回校验由服务端执行。
     requireValid(save.filename === result.filename && save.bytes === result.totalBytes && integer(save.bytes) && integer(save.verifiedAt)
-      && typeof save.sha256 === 'string' && HASH.test(save.sha256) && typeof save.path === 'string' && save.path.length <= 4096
-      && save.path.startsWith('/') && save.path.endsWith(`/Downloads/Codex Display/${save.filename}`)
-      && !/[\\\x00-\x1f\x7f]/.test(save.path) && !save.path.split('/').some(part => part === '.' || part === '..'));
+      && typeof save.sha256 === 'string' && HASH.test(save.sha256) && isExportReceiptPath(save.path, save.filename));
   }
   return result;
 }

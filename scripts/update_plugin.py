@@ -18,6 +18,7 @@ import sys
 import tempfile
 
 from package_plugin import executable, locked_versions, verify_runtime
+from platform_runtime import IS_WINDOWS, npm_command, state_root, venv_python
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKET = "codex-display-local"
@@ -30,9 +31,9 @@ def codex_home() -> Path:
 
 
 def run(command: list[str], *, log_path: Path | None = None) -> str:
-    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=300)
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, timeout=300, encoding="utf-8")
     if log_path:
-        log_path.write_text(result.stdout + result.stderr)
+        log_path.write_text(result.stdout + result.stderr, encoding="utf-8")
     if result.returncode:
         # Do not dump JSON configuration on errors. Successful stderr warnings
         # are not installation failures.
@@ -46,15 +47,16 @@ def cli_json(codex: Path, *arguments: str):
 
 
 def write_json(path: Path, value) -> None:
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def fingerprints(directory: Path) -> dict[str, str]:
     """按相对路径核对包内容，忽略运行产生的字节码并拒绝符号链接。"""
     result = {}
-    for path in sorted(directory.rglob("*")):
-        if path.is_symlink():
-            raise ValueError(f"安装包不应包含符号链接：{path}")
+    for path in [directory, *sorted(directory.rglob("*"))]:
+        attributes = getattr(path.lstat(), "st_file_attributes", 0)
+        if path.is_symlink() or attributes & 0x400:  # FILE_ATTRIBUTE_REPARSE_POINT 包括 junction
+            raise ValueError(f"安装包不应包含符号链接或重解析点：{path}")
         if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
             result[path.relative_to(directory).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     if not result:
@@ -68,14 +70,14 @@ def runtime_paths(python_arg: str | None, codex_arg: str | None) -> tuple[Path, 
     records = []
     for path in sorted(installed.glob("*/runtime.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
-            records.append(json.loads(path.read_text()))
+            records.append(json.loads(path.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             continue
-    version = json.loads((ROOT / "plugin/.codex-plugin/plugin.json").read_text())["version"]
+    version = json.loads((ROOT / "plugin/.codex-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
 
     def choose(explicit, candidates, label):
         if explicit:
-            return executable(Path(explicit).expanduser() if "/" in explicit else explicit)
+            return executable(Path(explicit).expanduser() if any(mark in explicit for mark in ("/", "\\", "~")) else explicit)
         for candidate in candidates:
             if not candidate:
                 continue
@@ -86,23 +88,24 @@ def runtime_paths(python_arg: str | None, codex_arg: str | None) -> tuple[Path, 
         raise ValueError(f"找不到{label}，请使用对应的 --python / --codex 参数指定已有环境。")
 
     python = choose(python_arg, [*(record.get("runtimePython") for record in records),
-        Path.home() / f".local/share/codex-display/runtime/{version}/bin/python", ROOT / ".venv/bin/python"], "Python 运行环境")
-    codex = choose(codex_arg, [*(record.get("appServerExecutable") for record in records),
+        venv_python(state_root().parent / f"runtime/{version}"), venv_python(ROOT / ".venv")], "Python 运行环境")
+    desktop_candidates = [] if IS_WINDOWS else [
         "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
-        "/Applications/Codex.app/Contents/Resources/codex", shutil.which("codex")], "Codex 可执行文件")
+        "/Applications/Codex.app/Contents/Resources/codex"]
+    codex = choose(codex_arg, [*(record.get("appServerExecutable") for record in records),
+        *desktop_candidates, shutil.which("codex")], "Codex 可执行文件")
     return python, codex
 
 
 def prepare(python: Path, codex: Path) -> Path:
     """生成可供审阅的包、验证报告和安装计划，不改当前安装。"""
     verify_runtime(python, locked_versions(ROOT / "requirements.lock"))
-    npm = executable("npm")
     output_parent = ROOT / "build"
     output_parent.mkdir(exist_ok=True)
     output = Path(tempfile.mkdtemp(prefix=f"update-{datetime.now():%Y%m%d-%H%M%S}-", dir=output_parent))
     print(f"更新目录：{output}", flush=True)
     print("[1/5] 构建前端与检查契约", flush=True)
-    run([str(npm), "run", "build"], log_path=output / "build.log")
+    run(npm_command("run", "build"), log_path=output / "build.log")
     run([str(python), str(ROOT / "contracts/generate_types.py"), "--check"])
     print("[2/5] 打包并验证安装包", flush=True)
     package = output / "plugin"
@@ -110,14 +113,14 @@ def prepare(python: Path, codex: Path) -> Path:
          "--python", str(python), "--codex", str(codex)])
     run([str(python), str(ROOT / "scripts/verify_install.py"), "--package", str(package),
          "--cache-copy-only", "--out", str(output / "verification.json")])
-    verification = json.loads((output / "verification.json").read_text())
+    verification = json.loads((output / "verification.json").read_text(encoding="utf-8"))
     if verification.get("passed") is not True:
         raise ValueError("安装包验证未通过。")
     print("[3/5] 生成本地市场", flush=True)
     run([str(python), str(ROOT / "scripts/prepare_marketplace.py"), "--package", str(package),
          "--output", str(output / "marketplace"), "--codex", str(codex)])
     # 将包、市场目录和目标配置一起冻结；分开执行安装时不能悄悄换用另一份产物。
-    write_json(output / "update-plan.json", {"schemaVersion": 1, "codexHome": str(codex_home()),
+    write_json(output / "update-plan.json", {"schemaVersion": 1, "platform": sys.platform, "codexHome": str(codex_home()),
         "python": str(python), "codex": str(codex), "files": fingerprints(package),
         "catalogSha256": hashlib.sha256((output / "marketplace/.agents/plugins/marketplace.json").read_bytes()).hexdigest()})
     return output
@@ -126,9 +129,11 @@ def prepare(python: Path, codex: Path) -> Path:
 def install(output: Path) -> dict:
     """仅安装内容仍与计划一致的已验证产物；失败时尝试恢复市场注册。"""
     output = output.resolve()
-    plan = json.loads((output / "update-plan.json").read_text())
+    plan = json.loads((output / "update-plan.json").read_text(encoding="utf-8"))
     if plan.get("schemaVersion") != 1 or Path(plan["codexHome"]).resolve() != codex_home().resolve():
         raise ValueError("更新计划版本或 CODEX_HOME 不一致，请重新准备安装包。")
+    if plan.get("platform", sys.platform) != sys.platform:
+        raise ValueError("更新计划绑定其他操作系统，请在本机重新准备安装包。")
     python, codex = executable(plan["python"]), executable(plan["codex"])
     package, marketplace = output / "plugin", output / "marketplace"
     expected = plan["files"]
@@ -136,10 +141,10 @@ def install(output: Path) -> dict:
         raise ValueError("已验证的安装包或市场副本发生变化，请重新构建。")
     if hashlib.sha256((marketplace / ".agents/plugins/marketplace.json").read_bytes()).hexdigest() != plan["catalogSha256"]:
         raise ValueError("已准备的市场目录发生变化，请重新构建。")
-    if json.loads((output / "verification.json").read_text()).get("passed") is not True:
+    if json.loads((output / "verification.json").read_text(encoding="utf-8")).get("passed") is not True:
         raise ValueError("缺少已通过的安装包验证结果。")
     verify_runtime(python, locked_versions(package / "requirements.lock"))
-    manifest = json.loads((package / ".codex-plugin/plugin.json").read_text())
+    manifest = json.loads((package / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
     if manifest.get("name") != PLUGIN:
         raise ValueError("只能更新 codex-display。")
     previous = next((entry for entry in cli_json(codex, "plugin", "marketplace", "list", "--json")["marketplaces"]
@@ -170,7 +175,7 @@ def install(output: Path) -> dict:
             raise ValueError("安装缓存与本次构建不一致。")
         server = cli_json(codex, "mcp", "get", PLUGIN, "--json")
         transport = server.get("transport", {})
-        launch = json.loads((package / ".mcp.json").read_text())["mcpServers"][PLUGIN]
+        launch = json.loads((package / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"][PLUGIN]
         if (server.get("name") != PLUGIN or server.get("enabled") is not True or Path(transport.get("cwd") or "").resolve() != cache / "backend"
                 or transport.get("command") != launch["command"] or transport.get("args") != launch["args"]
                 or any(transport.get("env", {}).get(key) != value for key, value in launch["env"].items())):

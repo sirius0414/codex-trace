@@ -53,7 +53,7 @@ class RpcClient:
     """串行发送探测请求，后台排空 stdout/stderr，避免子进程因管道写满卡住。"""
     def __init__(self, command: list[str], cwd: Path, env: dict[str, str]):
         self.process = subprocess.Popen(command, cwd=cwd, env=env, stdin=subprocess.PIPE,
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1, encoding="utf-8")
         self.incoming: queue.Queue = queue.Queue()
         self.stderr_contains_synthetic_body = False
         self.stderr_lines = 0
@@ -158,9 +158,12 @@ for line in sys.stdin:
  if v is None: reply={{"id":r["id"],"error":{{"code":-32601,"message":"Read-only synthetic history"}}}}
  else: reply={{"id":r["id"],"result":v}}
  print(json.dumps(reply),flush=True)
-''')
+''', encoding="utf-8")
+    if sys.platform == "win32":
+        # 正式管道适配器通过当前解释器运行 .py；无 shell 批处理，也不需要编译器。
+        return implementation, source, methods
     launcher = root / "synthetic-codex"
-    launcher.write_text("#!/bin/sh\nexec " + shlex.quote(python) + " " + shlex.quote(str(implementation)) + ' "$@"\n')
+    launcher.write_text("#!/bin/sh\nexec " + shlex.quote(python) + " " + shlex.quote(str(implementation)) + ' "$@"\n', encoding="utf-8")
     launcher.chmod(0o700)
     return launcher, source, methods
 
@@ -169,8 +172,8 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
     """Exercise the real cache-local app/SDK against only the fake app-server."""
     from jsonschema import Draft202012Validator, FormatChecker
 
-    manifest = json.loads((installed / ".codex-plugin/plugin.json").read_text())
-    launch = json.loads((installed / ".mcp.json").read_text())["mcpServers"]["codex-display"]
+    manifest = json.loads((installed / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+    launch = json.loads((installed / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-display"]
     cwd = (installed / launch.get("cwd", ".")).resolve()
     def check(operation, passed):
         checks.append({"operation": operation, "passed": bool(passed)})
@@ -181,7 +184,8 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
     check("absolute_python_and_app_server", Path(launch["command"]).is_absolute()
           and Path(launch["env"]["CODEX_DISPLAY_CODEX_EXECUTABLE"]).is_absolute())
     check("module_entrypoint", launch["args"] == ["-m", "codex_display.app"])
-    runtime = json.loads((installed / "runtime.json").read_text())
+    runtime = json.loads((installed / "runtime.json").read_text(encoding="utf-8"))
+    check("runtime_matches_current_platform", runtime.get("platform", sys.platform) == sys.platform)
     check("runtime_paths_match_manifest", runtime.get("runtimePython") == launch["command"]
           and runtime.get("appServerExecutable") == launch["env"]["CODEX_DISPLAY_CODEX_EXECUTABLE"])
     check("startup_never_installs_dependencies", runtime.get("startupNetworkInstallation") is False
@@ -198,10 +202,10 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
     for key in ("PYTHONPATH", "PYTHONHOME", "CODEX_DISPLAY_UI_PATH", "CODEX_DISPLAY_AUDIT_PATH"):
         runtime_env.pop(key, None)
     module = subprocess.run([launch["command"], "-c", "import codex_display.app;print(codex_display.app.__file__)"],
-                            cwd=cwd, env=runtime_env, capture_output=True, text=True, timeout=15, check=True)
+                            cwd=cwd, env=runtime_env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
     check("imports_backend_from_installed_cache", Path(module.stdout.strip()).resolve() == installed / "backend/codex_display/app.py")
-    contract = json.loads((installed / "contracts/trajectory.schema.json").read_text())
-    tool_contracts = json.loads((installed / "contracts/tools.json").read_text())["tools"]
+    contract = json.loads((installed / "contracts/trajectory.schema.json").read_text(encoding="utf-8"))
+    tool_contracts = json.loads((installed / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
     client = RpcClient([launch["command"], *launch["args"]], cwd, runtime_env)
     try:
         initialized = client.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
@@ -214,7 +218,7 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
         check("app_only_tool_visibility", all(t.get("_meta", {}).get("ui", {}).get("visibility") == ["app"]
               and t.get("_meta", {}).get("openai/visibility") == "private" for t in tools))
         resources = client.request("resources/list", {}).get("resources", [])
-        bundled = (installed / "ui/trajectory-v1.html").read_text()
+        bundled = (installed / "ui/trajectory-v1.html").read_text(encoding="utf-8")
         uris = {"global": "ui://codex-display/trajectory-v1.html", "thread": "ui://codex-display/trajectory-panel-v1.html"}
         expected_icon = "data:image/svg+xml;base64," + base64.b64encode((installed / "assets/icon.svg").read_bytes()).decode("ascii")
         for surface, name in (("global", "open_codex_display"), ("thread", "open_codex_display_panel")):
@@ -325,7 +329,7 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
         client.close()
     check("source_bytes_and_metadata_unchanged", source.read_bytes() == original_source
           and (source.stat().st_ino, source.stat().st_size, source.stat().st_mtime_ns) == (source_before.st_ino, source_before.st_size, source_before.st_mtime_ns))
-    observed = {json.loads(line) for line in methods.read_text().splitlines()}
+    observed = {json.loads(line) for line in methods.read_text(encoding="utf-8").splitlines()}
     check("history_calls_are_read_only", bool(observed) and observed <= READ_METHODS)
     check("stderr_does_not_contain_task_body", not client.stderr_contains_synthetic_body)
     summary["historyMethods"] = sorted(observed)
@@ -346,7 +350,7 @@ def main() -> int:
               "python": sys.version.split()[0], "checks": checks}
     try:
         package = args.package.resolve()
-        manifest = json.loads((package / ".codex-plugin/plugin.json").read_text())
+        manifest = json.loads((package / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
         if manifest["name"] != "codex-display": raise ValueError("Only a codex-display package may be tested")
         with tempfile.TemporaryDirectory(prefix="codex-display-install-") as temporary:
             root = Path(temporary).resolve()
@@ -369,22 +373,22 @@ def main() -> int:
                 shutil.copytree(package, source)
                 catalog.write_text(json.dumps({"name": "codex-display-install-test", "interface": {"displayName": "Codex Display Isolated Test"},
                     "plugins": [{"name": "codex-display", "source": {"source": "local", "path": "./plugins/codex-display"},
-                    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Developer Tools"}]}))
+                    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Developer Tools"}]}), encoding="utf-8")
                 env = {**os.environ, "CODEX_HOME": str(codex_home), "PYTHONDONTWRITEBYTECODE": "1"}
                 env.pop("PYTHONPATH", None)
-                report["codexVersion"] = subprocess.run([args.codex, "--version"], env=env, capture_output=True, text=True, timeout=15, check=True).stdout.strip()
+                report["codexVersion"] = subprocess.run([args.codex, "--version"], env=env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8").stdout.strip()
                 for label, command in [
                     ("marketplace_registered_in_isolated_home", [args.codex, "plugin", "marketplace", "add", str(market)]),
                     ("plugin_installed_in_isolated_home", [args.codex, "plugin", "add", "codex-display@codex-display-install-test", "--json"]),
                 ]:
-                    run = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=30)
+                    run = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=30, encoding="utf-8")
                     checks.append({"operation": label, "passed": run.returncode == 0, "exitCode": run.returncode})
                     if run.returncode: raise RuntimeError(label + " failed")
-                manifests = [p for p in (codex_home / "plugins/cache").rglob(".codex-plugin/plugin.json") if json.loads(p.read_text()).get("name") == "codex-display"]
+                manifests = [p for p in (codex_home / "plugins/cache").rglob(".codex-plugin/plugin.json") if json.loads(p.read_text(encoding="utf-8")).get("name") == "codex-display"]
                 if len(manifests) != 1: raise RuntimeError("Expected exactly one installed cache package")
                 installed = manifests[0].parent.parent.resolve()
                 shutil.rmtree(source)
-                configured = subprocess.run([args.codex, "mcp", "list", "--json"], cwd=root, env=env, capture_output=True, text=True, timeout=15, check=True)
+                configured = subprocess.run([args.codex, "mcp", "list", "--json"], cwd=root, env=env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
                 server = next((s for s in json.loads(configured.stdout) if s.get("name") == "codex-display"), {})
                 launch_cwd = server.get("transport", {}).get("cwd")
                 checks.append({"operation": "cli_resolves_cwd_into_installed_cache", "passed": isinstance(launch_cwd, str) and Path(launch_cwd).resolve() == installed / "backend"})
@@ -394,7 +398,7 @@ def main() -> int:
         checks.append({"operation": "smoke_completed", "passed": False, "errorType": type(error).__name__})
     report["passed"] = bool(checks) and all(check.get("passed") for check in checks)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
     return 0 if report["passed"] else 1
 

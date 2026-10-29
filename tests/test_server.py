@@ -16,6 +16,7 @@ import unittest
 from unittest import mock
 from uuid import uuid4
 import zipfile
+from platform_fixtures import assert_private_mode
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -47,8 +48,8 @@ class ServerTests(unittest.TestCase):
             }}) + "\n" + json.dumps({"type": "unknown", "payload": SECRET}) + "\n")
             # A temporary fake app-server answers only initialization and a
             # single metadata read. The real Codex executable is never used.
-            executable = root / "fake-codex"
-            executable.write_text(f"#!{sys.executable}\n" + textwrap.dedent(f'''\
+            executable = root / "fake-codex.py"
+            executable.write_text(textwrap.dedent(f'''\
                 import json, sys
                 from pathlib import Path
                 Path({str(root / 'history-invoked')!r}).write_text("synthetic history started")
@@ -66,7 +67,6 @@ class ServerTests(unittest.TestCase):
                         continue
                     print(json.dumps({{"id": request["id"], "result": result}}), flush=True)
             '''))
-            executable.chmod(0o700)
             params = StdioServerParameters(
                 command=sys.executable, args=["-m", "codex_display.server"], cwd=ROOT,
                 env={"PYTHONPATH": str(ROOT / "backend"), "PYTHONDONTWRITEBYTECODE": "1",
@@ -148,7 +148,7 @@ class ServerTests(unittest.TestCase):
             written = audit.read_text()
             self.assertNotIn(SECRET, written)
             self.assertIn('"privateValue"', written)  # key name only, never its value
-            self.assertEqual(audit.stat().st_mode & 0o777, 0o600)
+            assert_private_mode(self, audit, 0o600)
         self.run_session(scenario)
 
     def test_opening_surface_is_selected_by_tool_name_and_never_reads_history(self):

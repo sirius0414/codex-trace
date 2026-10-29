@@ -34,6 +34,15 @@ test('verified receipt preserves the actual local path and exposes only declared
   assert.equal(JSON.stringify(result).includes('PRIVATE_RESPONSE_CONTENT'), false);
 });
 
+test('synthetic local export accepts a native Windows path with Chinese and spaces', async () => {
+  const value = { ...receipt(), path: 'C:\\Users\\张 三\\Local exports\\合成验证.zip' };
+  assert.deepEqual(await make().run(async () => value), value);
+  for (const path of ['C:Local exports\\合成验证.zip', '\\\\server\\share\\合成验证.zip',
+    '\\\\?\\C:\\Local exports\\合成验证.zip', 'C:\\Users\\..\\合成验证.zip',
+    'C:\\Users\\NUL\\合成验证.zip', 'C:\\Users\\name:stream\\合成验证.zip'])
+    await assert.rejects(make().run(async () => ({ ...receipt(), path })), { code: 'invalid-envelope' });
+});
+
 test('receipt rejects mismatched binding, unverified saves and invalid local file metadata', async () => {
   for (const update of [
     { kind: 'download' }, { requestId: UI_INSTANCE }, { verified: false }, { synthetic: false },

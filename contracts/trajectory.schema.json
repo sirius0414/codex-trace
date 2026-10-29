@@ -2792,7 +2792,7 @@
     },
     "LocalExportPath": {
       "type": "string",
-      "pattern": "^/(?:[^/\\\\\\u0000-\\u001f]+/)*Downloads/Codex Display/codex-display-[A-Za-z0-9][A-Za-z0-9._-]*\\.zip$",
+      "pattern": "(?:^/(?:[^/\\\\\\u0000-\\u001f\\u007f]+/)*Downloads/Codex Display/codex-display-[A-Za-z0-9][A-Za-z0-9._-]*\\.zip$|^[A-Za-z]:\\\\(?:(?!(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])(?:[ .]|\\\\|$))[^<>:\"/\\\\|?*\\u0000-\\u001f\\u007f]*[^<>:\"/\\\\|?* .\\u0000-\\u001f\\u007f]\\\\)*Downloads\\\\Codex Display\\\\codex-display-[A-Za-z0-9][A-Za-z0-9._-]*\\.zip$)",
       "maxLength": 4096,
       "not": {
         "anyOf": [
@@ -2800,11 +2800,11 @@
             "pattern": "(^|/)\\.{1,2}(/|$)"
           },
           {
-            "pattern": "[\\u0000-\\u001f]"
+            "pattern": "[\\u0000-\\u001f\\u007f]"
           }
         ]
       },
-      "description": "Output only: canonical absolute path of the verified ZIP beneath the current OS user home Downloads/Codex Display directory. The service enforces exact home containment and rejects symlink escapes; the schema cannot determine the user home."
+      "description": "Output only: canonical absolute POSIX or native Windows local-drive path of the verified ZIP beneath the current OS user home Downloads/Codex Display directory. Windows UNC/device paths, alternate streams, reserved device names, traversal and trailing dots/spaces are excluded. The service enforces exact home containment and rejects symlink/reparse escapes; the schema cannot determine the user home. Network filesystem locking/publication is not part of this contract."
     },
     "LocalSaveOutcome": {
       "description": "Only verified confirms a saved ZIP. pending/unknown and transport timeout never mean unsaved. failed is a definitive failed commit with no final file published by this request; uncertain outcomes use unknown. Receipt survives temporary export release.",

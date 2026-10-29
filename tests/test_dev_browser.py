@@ -49,6 +49,20 @@ class DevBrowserTests(unittest.TestCase):
     def client(self):
         return TestClient(self.app, base_url="http://localhost:8765")
 
+    def test_shutdown_requires_separate_capability_and_preserves_origin_boundary(self):
+        stopped = []
+        app = development.create_app(Path(sys.executable), Path(sys.executable), 8765,
+            shutdown_token="separate-shutdown-capability", shutdown_callback=lambda: stopped.append(True))
+        # 这些路由不需要启动 MCP lifespan，单独验证退出能力与同源边界。
+        client = TestClient(app, base_url="http://localhost:8765")
+        self.assertEqual(client.post("/_dev/shutdown").status_code, 403)
+        self.assertEqual(client.post("/_dev/shutdown", headers={
+            "X-Codex-Display-Shutdown": "separate-shutdown-capability", "Origin": "https://elsewhere.invalid"}).status_code, 403)
+        self.assertFalse(stopped)
+        self.assertEqual(client.post("/_dev/shutdown", headers={
+            "X-Codex-Display-Shutdown": "separate-shutdown-capability"}).status_code, 202)
+        self.assertEqual(stopped, [True])
+
     def call(self, client, name, arguments):
         response = client.post("/rpc", json={"name": name, "arguments": arguments},
             headers={"X-Codex-Display-Token": self.app.state.token, "Origin": "http://localhost:8765"})

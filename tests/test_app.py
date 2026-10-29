@@ -26,8 +26,8 @@ class AppTests(unittest.TestCase):
             source = root / "home/sessions" / f"rollout-2026-10-22T00-00-00-{THREAD}.jsonl"
             source.parent.mkdir(parents=True)
             source.write_text(json.dumps({"type": "session_meta", "payload": {"id": THREAD, "base_instructions": {"text": SECRET}}}) + "\n")
-            executable = root / "fake-history"
-            executable.write_text(f'''#!{sys.executable}
+            executable = root / "fake-history.py"
+            executable.write_text(f'''
 import json,sys
 for line in sys.stdin:
  r=json.loads(line); m=r.get("method")
@@ -41,7 +41,6 @@ for line in sys.stdin:
   print(json.dumps({{"id":r["id"],"error":{{"code":-32601,"message":"unsupported"}}}}),flush=True); continue
  print(json.dumps({{"id":r["id"],"result":v}}),flush=True)
 ''')
-            executable.chmod(0o700)
             params = StdioServerParameters(command=sys.executable, args=["-m", "codex_display.app"], cwd=ROOT,
                 env={"PYTHONPATH": str(ROOT / "backend"), "CODEX_HOME": str(root / "home"),
                      "CODEX_DISPLAY_STATE_ROOT": str(root / "index"), "CODEX_DISPLAY_CODEX_EXECUTABLE": str(executable)})

@@ -6,7 +6,6 @@ import base64
 import hashlib
 import io
 import json
-import os
 from pathlib import Path
 import stat
 import sys
@@ -14,8 +13,10 @@ import tempfile
 import unittest
 from unittest import mock
 import zipfile
+from platform_fixtures import assert_private_mode, symlink
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+from codex_display.platform import filesystem as os
 from codex_display import __version__
 from codex_display.probe import (DIAGNOSTIC_CODES, DIAGNOSTIC_PHASES, MAX_DIAGNOSTIC_ELAPSED_MS,
                                  ProbeService, candidate_identity, inspect_source, probe_zip)
@@ -108,8 +109,8 @@ class IdentityProbeTests(unittest.TestCase):
             data = path.read_text()
             self.assertNotIn("DO_NOT_LOG_PRIVATE_CONTENT", data)
             self.assertIn("arbitraryField", data)
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
-            self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode), 0o700)
+            assert_private_mode(self, path, 0o600)
+            assert_private_mode(self, path.parent, 0o700)
             self.assertEqual(len(data.splitlines()), 2)
 
     def test_observation_requires_known_activation_and_valid_instance(self):
@@ -158,7 +159,7 @@ class DiagnosticProbeTests(unittest.TestCase):
                 self.assertEqual(row["kind"], "diagnostic-event")
                 self.assertLessEqual(set(row), expected)
                 self.assertEqual(row["activationId"], activation["activationId"])
-            self.assertEqual(stat.S_IMODE(audit.stat().st_mode), 0o600)
+            assert_private_mode(self, audit, 0o600)
 
     def test_invalid_or_unbound_diagnostics_are_rejected_without_writing(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -354,10 +355,10 @@ class SourceProbeTests(unittest.TestCase):
     def test_file_and_parent_symlinks_are_rejected_even_with_matching_identity(self):
         target, _ = self.write_source(self.base / "target.jsonl")
         link = self.sessions / "link.jsonl"
-        link.symlink_to(target)
+        symlink(self, link, target)
         self.assertEqual(self.inspect(link)["reason"], "symlink-or-noncanonical-source")
         parent = self.sessions / "linked-parent"
-        parent.symlink_to(self.base, target_is_directory=True)
+        symlink(self, parent, self.base, target_is_directory=True)
         self.assertEqual(self.inspect(parent / "target.jsonl")["reason"], "symlink-or-noncanonical-source")
 
     def test_parent_swapped_after_canonical_check_is_not_followed(self):
@@ -373,7 +374,7 @@ class SourceProbeTests(unittest.TestCase):
             resolved = original_resolve(current, *args, **kwargs)
             if current == path:
                 inside.rename(self.sessions / "old-nested")
-                inside.symlink_to(outside, target_is_directory=True)
+                symlink(self, inside, outside, target_is_directory=True)
             return resolved
 
         with mock.patch.object(Path, "resolve", swap_after_resolve):
@@ -384,8 +385,11 @@ class SourceProbeTests(unittest.TestCase):
         with mock.patch.object(Path, "resolve", side_effect=OSError("synthetic failure")):
             self.assertFalse(self.inspect(path)["readable"])
 
-    def test_directory_and_fifo_are_rejected_without_waiting_for_a_writer(self):
+    def test_directory_is_rejected_as_a_source(self):
         self.assertEqual(self.inspect(self.sessions)["reason"], "not-regular")
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO fixture; Windows special handles have separate native tests")
+    def test_fifo_is_rejected_without_waiting_for_a_writer(self):
         fifo = self.sessions / "pipe"
         os.mkfifo(fifo)
         self.assertEqual(self.inspect(fifo)["reason"], "not-regular")

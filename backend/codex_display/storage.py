@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-import os
+from .platform import filesystem as os
 from pathlib import Path
 import sqlite3
 import stat
@@ -15,6 +15,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from jsonschema import Draft202012Validator
+from .platform.paths import default_state_root
 
 
 _DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -88,7 +89,7 @@ def _open_directory(path: Path) -> int:
 class DerivedStore:
     """持有一个私有数据库连接和目录 fd；上下文退出或 close 时统一释放。"""
     def __init__(self, root: Path | None = None):
-        self.root = Path(root) if root is not None else Path.home() / ".local" / "share" / "codex-display" / "index"
+        self.root = Path(root) if root is not None else default_state_root()
         if not self.root.is_absolute() or ".." in self.root.parts or self.root == Path(self.root.anchor):
             raise StorageError("invalid-storage-directory")
         self.path = self.root / "derived.sqlite3"
@@ -117,7 +118,7 @@ class DerivedStore:
             self._connection.execute("PRAGMA foreign_keys=ON")
             self._verify_location()
             self._initialize()
-            schema = json.loads(_SCHEMA_PATH.read_text())
+            schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
             self._view_validator = Draft202012Validator({**schema, "$ref": "#/$defs/ViewState"})
         except BaseException as error:
             self.close()
@@ -289,7 +290,7 @@ class DerivedStore:
             self._closed = True
             if self._connection is not None:
                 self._connection.close()
-            if self._directory >= 0:
+            if self._directory != -1:
                 os.close(self._directory)
 
     def __enter__(self) -> DerivedStore:

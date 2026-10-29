@@ -9,11 +9,11 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
-import fcntl
 import json
 import os
 from pathlib import Path
 import re
+import secrets
 import signal
 import socket
 import subprocess
@@ -24,6 +24,7 @@ import urllib.request
 from uuid import uuid4
 
 from update_plugin import runtime_paths
+from platform_dev import IS_WINDOWS, exclusive_lock, spawn_options, windows_process_info
 
 ROOT = Path(__file__).resolve().parents[1]
 DEV_ROOT = ROOT / "build/dev-browser"
@@ -38,8 +39,10 @@ class ManagerError(RuntimeError):
 def process_info(pid: int) -> dict | None:
     """只读取指定进程的身份；僵尸进程按已退出处理。"""
     try:
+        if IS_WINDOWS:
+            return windows_process_info(pid)
         result = subprocess.run(["ps", "-p", str(pid), "-o", "stat=", "-o", "lstart=", "-o", "command="],
-                                env={**os.environ, "LC_ALL": "C"}, capture_output=True, text=True, timeout=2)
+                                env={**os.environ, "LC_ALL": "C"}, capture_output=True, text=True, timeout=2, encoding="utf-8")
         fields = result.stdout.strip().split(None, 6)
         if not result.stdout.strip() and not result.stderr.strip():
             return None
@@ -83,16 +86,16 @@ class ServiceManager:
     @contextmanager
     def locked(self):
         self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with (self.directory / "server.lock").open("a") as lock:
+        with (self.directory / "server.lock").open("a+b") as lock:
             try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                with exclusive_lock(lock):
+                    yield
             except BlockingIOError as error:
                 raise ManagerError("另一个服务管理命令正在执行，请稍后重试。") from error
-            yield
 
     def _read_record(self) -> dict | None:
         try:
-            record = json.loads(self.record_path.read_text())
+            record = json.loads(self.record_path.read_text(encoding="utf-8"))
         except FileNotFoundError:
             return None
         except (OSError, ValueError) as error:
@@ -109,12 +112,12 @@ class ServiceManager:
     def _write_record(self, record: dict):
         temporary = self.directory / f".server-{uuid4().hex}.json"
         try:
-            with temporary.open("x") as output:
+            with temporary.open("x", encoding="utf-8") as output:
                 os.chmod(temporary, 0o600)
                 json.dump(record, output, ensure_ascii=False, indent=2)
                 output.write("\n")
             temporary.replace(self.record_path)
-            self.pid_path.write_text(str(record["pid"]) + "\n")
+            self.pid_path.write_text(str(record["pid"]) + "\n", encoding="utf-8")
         finally:
             temporary.unlink(missing_ok=True)
 
@@ -124,6 +127,13 @@ class ServiceManager:
 
     def owns(self, record: dict) -> bool:
         info = process_info(record["pid"])
+        if IS_WINDOWS:
+            argv = info.get("argv", []) if info else []
+            return bool(info and info["started"] == record["started"]
+                        and str(SERVER) in argv and "--instance-id" in argv
+                        and argv.index("--instance-id") + 1 < len(argv)
+                        and argv[argv.index("--instance-id") + 1] == record["instanceId"]
+                        and Path(argv[0]).absolute() == Path(record["python"]).absolute())
         # ps 的 command 可能不引用含空格的路径；匹配完整参数边界，拒绝路径/UUID 前缀相同的进程。
         script = r"(?:^|\s)" + re.escape(str(SERVER)) + r"(?=\s|$)"
         marker = r"(?:^|\s)--instance-id\s+" + re.escape(record["instanceId"]) + r"(?=\s|$)"
@@ -159,10 +169,13 @@ class ServiceManager:
             return {"state": "stopped", "staleRecord": True}
         # 信号前再次核对，不能只凭磁盘上的 PID 或端口停止进程。
         if self.owns(record):
-            try:
-                os.killpg(record["pid"], signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            if IS_WINDOWS:
+                self._request_shutdown(record)
+            else:
+                try:
+                    os.killpg(record["pid"], signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
         deadline = time.monotonic() + self.stop_timeout
         while self.owns(record):
             if time.monotonic() >= deadline:
@@ -182,7 +195,15 @@ class ServiceManager:
         if process.poll() is None:
             # 未 wait/reap 的自有子进程 PID 不会被重用，此处不依赖可能写失败的管理记录。
             try:
-                os.killpg(process.pid, signal.SIGTERM)
+                if IS_WINDOWS:
+                    record = self._read_record()
+                    if record and self.owns(record) and self._healthy(record):
+                        self._request_shutdown(record)
+                    else:
+                        # Popen 仍持有新建进程句柄；该服务的 Job 同时回收其 MCP。
+                        process.terminate()
+                else:
+                    os.killpg(process.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
             try:
@@ -190,6 +211,22 @@ class ServiceManager:
             except subprocess.TimeoutExpired as error:
                 raise ManagerError(f"启动失败且 PID {process.pid} 仍在清理，已保留现有记录；请查看日志：{self.log_path}") from error
         self._clear_record()
+
+    @staticmethod
+    def _request_shutdown(record):
+        """仅请求已核对身份的开发宿主正常退出；不能把 SIGTERM 映射成 Windows 强杀。"""
+        token = record.get("shutdownToken")
+        if not isinstance(token, str) or not token:
+            raise ManagerError("服务缺少安全停止凭据，请在原启动终端使用 Ctrl+C。")
+        client = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        request = urllib.request.Request(f"http://127.0.0.1:{record['port']}/_dev/shutdown", data=b"",
+            headers={"X-Codex-Display-Shutdown": token}, method="POST")
+        try:
+            with client.open(request, timeout=2) as response:
+                if response.status != 202:
+                    raise OSError("shutdown-not-accepted")
+        except (OSError, urllib.error.URLError) as error:
+            raise ManagerError("无法请求服务正常停止，已保留进程记录；未强杀进程。") from error
 
     def _start(self, *, port: int | None = None, python_arg: str | None = None,
                codex_arg: str | None = None, skip_build: bool | None = None) -> dict:
@@ -209,15 +246,18 @@ class ServiceManager:
             raise ManagerError(f"端口 {port} 已被其他进程占用；未启动或停止任何服务。")
         python, codex = runtime_paths(python_arg, codex_arg)
         instance = str(uuid4())
+        shutdown_token = secrets.token_urlsafe(32) if IS_WINDOWS else None
         command = [str(python), str(SERVER), "--port", str(port), "--python", str(python),
                    "--codex", str(codex), "--instance-id", instance]
         if skip_build:
             command.append("--skip-build")
+        if shutdown_token:
+            command.extend(["--shutdown-token", shutdown_token])
         fd = os.open(self.log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         with os.fdopen(fd, "ab", buffering=0) as log:
             log.write(f"\n[{datetime.now(timezone.utc).isoformat()}] Starting local browser service\n".encode())
             process = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log,
-                                       stderr=subprocess.STDOUT, start_new_session=True, close_fds=True)
+                                       stderr=subprocess.STDOUT, **spawn_options())
         try:
             info = process_info(process.pid)
             if info is None:
@@ -225,6 +265,8 @@ class ServiceManager:
             record = {"schemaVersion": 1, "root": str(ROOT), "pid": process.pid, "port": port,
                       "instanceId": instance, "started": info["started"], "python": str(python),
                       "codex": str(codex), "skipBuild": bool(skip_build)}
+            if shutdown_token:
+                record["shutdownToken"] = shutdown_token
             # 先持久化再等待就绪；管理命令被打断后，下次命令仍能识别已启动的进程。
             self._write_record(record)
             deadline = time.monotonic() + self.startup_timeout

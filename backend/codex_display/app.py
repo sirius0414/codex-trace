@@ -41,8 +41,8 @@ from .export_store import ExportStore
 ROOT = Path(__file__).resolve().parents[2]
 # schema 是数据形状的权威定义，tools.json 只映射工具名与输入／输出定义名称。
 # 导入时读取随包文件；前端不能通过工具参数指定另一份契约或资源路径。
-CONTRACT = json.loads((ROOT / "contracts/trajectory.schema.json").read_text())
-TOOLS = json.loads((ROOT / "contracts/tools.json").read_text())["tools"]
+CONTRACT = json.loads((ROOT / "contracts/trajectory.schema.json").read_text(encoding="utf-8"))
+TOOLS = json.loads((ROOT / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
 # 两个入口共用 open 契约及服务方法，但保留不同宿主来源语义和资源 URI。
 # global 要求用户选择任务；thread 可验证宿主候选身份，最终是否绑定由 service.open 决定。
 OPEN = {"open_codex_display": ("global", URI), "open_codex_display_panel": ("thread", PANEL_URI)}
@@ -260,7 +260,7 @@ async def read_resource(uri):
     if str(uri) not in (URI, PANEL_URI):
         raise ValueError("unknown-resource")
     path = Path(os.environ.get("CODEX_DISPLAY_UI_PATH", str(ROOT / "ui/trajectory-v1.html")))
-    return [ReadResourceContents(content=path.read_text(), mime_type="text/html;profile=mcp-app", meta=UI_META)]
+    return [ReadResourceContents(content=path.read_text(encoding="utf-8"), mime_type="text/html;profile=mcp-app", meta=UI_META)]
 
 
 async def main():

@@ -5,8 +5,9 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
-import selectors
+from pathlib import Path
 import subprocess
+import tempfile
 import threading
 import time
 import unittest
@@ -17,6 +18,7 @@ from backend.codex_display.adapters.history import HistoryAdapter, HistoryError
 
 THREAD_A = "11111111-1111-4111-8111-111111111111"
 THREAD_B = "22222222-2222-4222-8222-222222222222"
+EXECUTABLE = str(Path(tempfile.gettempdir()).resolve() / "synthetic-codex.exe")
 
 
 class FakeProcess:
@@ -38,27 +40,24 @@ class FakeProcess:
     def _serve(self):
         pending = b""
         try:
-            with selectors.DefaultSelector() as readable:
-                readable.register(self._read_in, selectors.EVENT_READ)
-                while not self.stop.is_set():
-                    if not readable.select(0.01):
+            # 阻塞读取与被测实现无关，在 Windows 上也无需用 select 轮询匿名管道。
+            while not self.stop.is_set():
+                chunk = os.read(self._read_in, 65536)
+                if not chunk:
+                    break
+                pending += chunk
+                while b"\n" in pending:
+                    line, pending = pending.split(b"\n", 1)
+                    request = json.loads(line)
+                    self.requests.append(request)
+                    if request.get("method") == "initialize":
+                        answer = {"id": request["id"], "result": {"userAgent": "synthetic"}}
+                    else:
+                        answer = self.handler(request)
+                    if answer is None:
                         continue
-                    chunk = os.read(self._read_in, 65536)
-                    if not chunk:
-                        break
-                    pending += chunk
-                    while b"\n" in pending:
-                        line, pending = pending.split(b"\n", 1)
-                        request = json.loads(line)
-                        self.requests.append(request)
-                        if request.get("method") == "initialize":
-                            answer = {"id": request["id"], "result": {"userAgent": "synthetic"}}
-                        else:
-                            answer = self.handler(request)
-                        if answer is None:
-                            continue
-                        payload = answer if isinstance(answer, bytes) else json.dumps(answer).encode() + b"\n"
-                        os.write(self._write_out, payload)
+                    payload = answer if isinstance(answer, bytes) else json.dumps(answer).encode() + b"\n"
+                    os.write(self._write_out, payload)
         except (OSError, ValueError):
             pass
         finally:
@@ -71,10 +70,12 @@ class FakeProcess:
     def terminate(self):
         self.terminated += 1
         self.stop.set()
+        self.stdin.close()  # EOF 唤醒合成对端的阻塞读取，等价于终止自有子进程。
 
     def kill(self):
         self.killed += 1
         self.stop.set()
+        self.stdin.close()
 
     def wait(self, timeout=None):
         self._thread.join(timeout)
@@ -98,7 +99,7 @@ class HistoryTests(unittest.TestCase):
             self.calls.append((args, options))
             return self.process
 
-        client = HistoryAdapter("/synthetic/codex", process_factory=create, **kwargs)
+        client = HistoryAdapter(EXECUTABLE, process_factory=create, **kwargs)
         self.addCleanup(client.close)
         return client
 
@@ -129,7 +130,7 @@ class HistoryTests(unittest.TestCase):
             "sourceType": "cli", "runtimeStatus": "notLoaded", "createdAt": 0, "updatedAt": 123.5,
         })
         self.assertNotIn("secret", json.dumps(result))
-        self.assertEqual(self.calls[0][0][0], ["/synthetic/codex", "app-server"])
+        self.assertEqual(self.calls[0][0][0], [EXECUTABLE, "app-server"])
         self.assertEqual(self.calls[0][1]["stderr"], subprocess.DEVNULL)
         self.assertEqual([r["method"] for r in self.process.requests], ["initialize", "initialized", "thread/read"])
 
@@ -263,6 +264,18 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(self.process.killed, 0)
         self.assertTrue(self.process.stdin.closed)
         self.assertTrue(self.process.stdout.closed)
+
+    def test_transport_cleanup_failure_keeps_protocol_error_and_closes_both_streams(self):
+        client = self.adapter(lambda message: b"invalid-rpc-json\n" if "id" in message else None)
+        original_close = client._transport.close
+        def close_then_fail():
+            original_close()
+            raise OSError("PRIVATE_CLEANUP_ERROR")
+        with patch.object(client._transport, "close", side_effect=close_then_fail):
+            self.assert_error("invalid-rpc-json", lambda: client.read(THREAD_A))
+        self.assertTrue(self.process.stdin.closed)
+        self.assertTrue(self.process.stdout.closed)
+        self.assertIsNotNone(self.process.poll())
 
     def test_executable_must_be_absolute(self):
         self.assert_error("absolute-executable-required", lambda: HistoryAdapter("codex"))

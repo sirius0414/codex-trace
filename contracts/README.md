@@ -79,8 +79,14 @@ bounds); payloads still require runtime validation at the service boundary.
 The authorized destination is the current OS user's `~/Downloads/Codex Display/`.
 The service chooses the ZIP filename and resolves the destination; requests never
 accept a path, directory, filename or overwrite flag. `LocalExportPath` is an
-output-only absolute path. Runtime checks must enforce the exact resolved home
-directory, reject symlink escapes, and avoid overwriting existing files; the
+output-only absolute path. Existing POSIX paths remain valid. On Windows the
+receipt uses a native local-drive path, for example
+`C:\Users\张 三\Downloads\Codex Display\codex-display-a.zip`. UNC shares,
+drive-relative paths, device namespaces, alternate data streams, DOS device
+names and components ending in a dot or space are excluded. Network filesystem
+locking and atomic publication are outside this local export contract.
+Runtime checks must enforce the exact resolved home
+directory, reject symlink and reparse-point escapes, and avoid overwriting existing files; the
 schema alone cannot establish filesystem containment. No upload or HTTP endpoint
 is part of this contract.
 

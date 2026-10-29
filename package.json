@@ -6,12 +6,12 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "test": "node --test tests/bridge/*.test.mjs",
-    "dev:browser": "python3 scripts/dev_browser.py",
-    "dev:browser:start": "python3 scripts/manage_dev_browser.py start",
-    "dev:browser:stop": "python3 scripts/manage_dev_browser.py stop",
-    "dev:browser:restart": "python3 scripts/manage_dev_browser.py restart",
-    "dev:browser:status": "python3 scripts/manage_dev_browser.py status",
-    "plugin:update": "python3 scripts/update_plugin.py"
+    "dev:browser": "node scripts/run_python.mjs dev_browser.py",
+    "dev:browser:start": "node scripts/run_python.mjs manage_dev_browser.py start",
+    "dev:browser:stop": "node scripts/run_python.mjs manage_dev_browser.py stop",
+    "dev:browser:restart": "node scripts/run_python.mjs manage_dev_browser.py restart",
+    "dev:browser:status": "node scripts/run_python.mjs manage_dev_browser.py status",
+    "plugin:update": "node scripts/run_python.mjs update_plugin.py"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "2.0.3",

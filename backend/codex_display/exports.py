@@ -9,11 +9,10 @@ import base64
 from contextlib import contextmanager
 from copy import deepcopy
 import errno
-import fcntl
 import hashlib
 import hmac
 import json
-import os
+from .platform import filesystem as os
 from pathlib import Path
 import stat
 import threading
@@ -22,6 +21,7 @@ from uuid import UUID, uuid4
 
 from .export_store import ExportStore, ExportUnconfirmedError, _open_chain, _verify_bytes
 from .storage import _open_directory
+from .platform.locks import lock_exclusive, unlock
 
 CHUNK_BYTES = 1024 * 1024
 # 仅临时快照自动过期；pending/unknown 保存会固定所需材料，持久回执不自动删除。
@@ -75,7 +75,7 @@ class ExportManager:
     def close(self):
         self.stop.set()
         self.janitor.join(timeout=2)
-        if self.directory >= 0:
+        if self.directory != -1:
             os.close(self.directory)
             self.directory = -1
 
@@ -100,15 +100,17 @@ class ExportManager:
                 raise ExportError('unreadable', '临时导出锁不可用。')
             os.fchmod(fd, 0o600)
             try:
-                fcntl.flock(fd, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+                lock_exclusive(fd, blocking=blocking)
                 acquired = True
             except BlockingIOError:
                 pass
             yield acquired
         finally:
-            if acquired:
-                fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
+            try:
+                if acquired:
+                    unlock(fd)
+            finally:
+                os.close(fd)
 
     def _read(self, key):
         result = self.store.get_receipt(key)
@@ -270,6 +272,12 @@ class ExportManager:
                     raise
         try:
             result = self.collector.collect(binding['threadId'], self.root / (export_id + '.zip'), destination_fd=fd)
+            # Windows 的最后写入时间可能在写句柄关闭时才最终更新。先关闭所有采集
+            # 写句柄，再按同一身份只读重开并读回，ready 回执才能保存稳定的版本。
+            os.close(fd)
+            fd = None
+            fd = os.open(export_id + '.zip', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                         dir_fd=self.directory)
             info = os.fstat(fd)
             if _identity(info) != state['fileIdentity']:
                 raise ValueError('snapshot-replaced')
@@ -291,7 +299,8 @@ class ExportManager:
             self._write(_state_key(export_id), state)
             self._unlink_snapshot(state)
         finally:
-            os.close(fd)
+            if fd is not None:
+                os.close(fd)
             lock.__exit__(None, None, None)
         return self._response(state, binding)
 
@@ -383,7 +392,7 @@ class ExportManager:
                 op.update(phase='verified', save=self._verified(saved, request_id))
             except FileNotFoundError:
                 code = ('permissionDenied' if isinstance(error, PermissionError) else
-                        'resourceLimit' if isinstance(error, OSError) and error.errno in (errno.ENOSPC, errno.EDQUOT) else
+                        'resourceLimit' if isinstance(error, OSError) and error.errno in (errno.ENOSPC, getattr(errno, "EDQUOT", -1)) else
                         'destinationUnavailable' if isinstance(error, FileNotFoundError) else 'writeFailed')
                 op.update(phase='failed', save={'status': 'failed', 'requestId': request_id, 'code': code})
             except Exception:

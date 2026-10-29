@@ -18,6 +18,8 @@ import sys
 from uuid import uuid4
 
 from package_plugin import offline_html
+from platform_runtime import npm_command
+from platform_dev import protect_windows_children
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "dist/ui"
@@ -29,7 +31,8 @@ MAX_REQUEST_BYTES = 1024 * 1024
 def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
                state_root: Path = DEV_ROOT / "index",
                export_root: Path = DEV_ROOT / "Downloads/Codex Display",
-               home: Path | None = None, instance_id: str | None = None):
+               home: Path | None = None, instance_id: str | None = None,
+               shutdown_token: str | None = None, shutdown_callback=None):
     """建立开发宿主；MCP 生命周期与 HTTP 服务绑定，工具契约仍由正式入口校验。"""
     # 延迟导入，允许系统 Python 先找到已有的锁定运行环境，再启动此服务。
     from mcp import ClientSession
@@ -44,8 +47,8 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
     authorities = {f"localhost:{port}", f"127.0.0.1:{port}"}
     if port == 80:
         authorities.update({"localhost", "127.0.0.1"})
-    tools = set(json.loads((ROOT / "contracts/tools.json").read_text())["tools"])
-    environment = {**os.environ, "PYTHONPATH": str(ROOT / "backend"), "PYTHONDONTWRITEBYTECODE": "1",
+    tools = set(json.loads((ROOT / "contracts/tools.json").read_text(encoding="utf-8"))["tools"])
+    environment = {**os.environ, "PYTHONPATH": str(ROOT / "backend"), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1",
                    "CODEX_DISPLAY_CODEX_EXECUTABLE": str(codex),
                    "CODEX_DISPLAY_STATE_ROOT": str(state_root.absolute()),
                    "CODEX_DISPLAY_EXPORT_ROOT": str(export_root.absolute())}
@@ -65,15 +68,22 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
                 yield
 
     async def index(request):
-        html = (HOST_FILES / "host.html").read_text().replace("__CODEX_DISPLAY_DEV_TOKEN__", json.dumps(token))
+        html = (HOST_FILES / "host.html").read_text(encoding="utf-8").replace("__CODEX_DISPLAY_DEV_TOKEN__", json.dumps(token))
         return HTMLResponse(html)
 
     async def host_script(request):
-        return Response((HOST_FILES / "host.js").read_text(), media_type="text/javascript")
+        return Response((HOST_FILES / "host.js").read_text(encoding="utf-8"), media_type="text/javascript")
 
     async def health(request):
         # 仅确认本开发宿主实例已完成 lifespan 初始化，不读取任务、不创建观察会话。
         return JSONResponse({"service": "codex-display-dev-browser", "pid": os.getpid(), "instanceId": instance})
+
+    async def shutdown(request):
+        if (not shutdown_token or shutdown_callback is None or not secrets.compare_digest(
+                request.headers.get("x-codex-display-shutdown", ""), shutdown_token)):
+            return JSONResponse({"message": "停止凭据无效。"}, status_code=403)
+        shutdown_callback()
+        return JSONResponse({"accepted": True}, status_code=202)
 
     async def ui(request):
         # 每次刷新读取最新构建；npm run build 后不必重启 Python 服务。
@@ -112,7 +122,8 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
             return JSONResponse({"message": "本地后端连接未完成，请重试；重启服务后请刷新页面。"}, status_code=502)
 
     app = Starlette(routes=[Route("/", index), Route("/host.js", host_script), Route("/app.html", ui),
-                            Route("/rpc", rpc, methods=["POST"]), Route("/_dev/health", health)], lifespan=lifespan)
+                            Route("/rpc", rpc, methods=["POST"]), Route("/_dev/health", health),
+                            Route("/_dev/shutdown", shutdown, methods=["POST"])], lifespan=lifespan)
     app.state.token = token
 
     async def local_boundary(request, call_next):
@@ -144,6 +155,7 @@ def main() -> int:
     parser.add_argument("--codex", help="桌面配套的 Codex app-server 可执行文件")
     parser.add_argument("--skip-build", action="store_true", help="复用 dist/ui，跳过启动时的前端构建")
     parser.add_argument("--instance-id", help=argparse.SUPPRESS)
+    parser.add_argument("--shutdown-token", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port 必须在 1–65535 之间")
@@ -151,18 +163,24 @@ def main() -> int:
         python, codex = runtime_paths(args.python, args.codex)
         verify_runtime(python, locked_versions(ROOT / "requirements.lock"))
         # 保留 venv 路径，不能 resolve 到系统 Python 后丢失已安装依赖。
-        if Path(sys.executable).absolute() != python:
+        if os.path.normcase(str(Path(sys.executable).absolute())) != os.path.normcase(str(python)):
             os.execv(str(python), [str(python), str(Path(__file__).absolute()),
                                   *sys.argv[1:], "--python", str(python), "--codex", str(codex)])
         if not args.skip_build:
-            subprocess.run([str(executable("npm")), "run", "build"], cwd=ROOT, check=True)
+            subprocess.run(npm_command("run", "build"), cwd=ROOT, check=True)
         offline_html(ASSETS)  # 缺失或无效构建在监听之前报错。
         import uvicorn
 
+        windows_job = protect_windows_children()
+
         print(f"本地调试入口：http://localhost:{args.port}/", flush=True)
         print(f"调试数据：{DEV_ROOT}\nCtrl+C 停止服务；正式插件无需更新。", flush=True)
-        uvicorn.run(create_app(python, codex, args.port, instance_id=args.instance_id), host="127.0.0.1", port=args.port,
-                    access_log=False, log_level="warning", proxy_headers=False, timeout_graceful_shutdown=5)
+        app = create_app(python, codex, args.port, instance_id=args.instance_id,
+                         shutdown_token=args.shutdown_token,
+                         shutdown_callback=lambda: setattr(server, "should_exit", True))
+        server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port,
+                    access_log=False, log_level="warning", proxy_headers=False, timeout_graceful_shutdown=5))
+        server.run()
         return 0
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"本地调试服务启动失败：{error}", file=sys.stderr)

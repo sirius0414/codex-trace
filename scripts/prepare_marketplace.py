@@ -5,6 +5,14 @@ import json
 from pathlib import Path
 import shlex
 import shutil
+import sys
+
+
+def display_command(arguments):
+    """输出可粘贴的本机 shell 命令；Windows PowerShell 路径需显式调用运算符。"""
+    if sys.platform == "win32":
+        return "& " + " ".join("'" + argument.replace("'", "''") + "'" for argument in arguments)
+    return shlex.join(arguments)
 
 
 def main():
@@ -15,7 +23,7 @@ def main():
     args = parser.parse_args()
     package = args.package.resolve()
     target = args.output.absolute()
-    manifest = json.loads((package / ".codex-plugin/plugin.json").read_text())
+    manifest = json.loads((package / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
     if manifest["name"] != "codex-display" or not (package / ".mcp.json").is_file():
         parser.error("A built codex-display package is required")
     if target.exists():
@@ -28,10 +36,10 @@ def main():
     catalog.parent.mkdir(parents=True)
     catalog.write_text(json.dumps({"name": "codex-display-local", "interface": {"displayName": "Codex Display Local"},
         "plugins": [{"name": "codex-display", "source": {"source": "local", "path": "./plugins/codex-display"},
-                     "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Developer Tools"}]}, ensure_ascii=False, indent=2) + "\n")
+                     "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Developer Tools"}]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"marketplace": str(target), "registered": False, "pluginVersion": manifest["version"],
-        "commands": [shlex.join([args.codex, "plugin", "marketplace", "add", str(target)]),
-                     shlex.join([args.codex, "plugin", "add", "codex-display@codex-display-local", "--json"])]}, ensure_ascii=False))
+        "commands": [display_command([args.codex, "plugin", "marketplace", "add", str(target)]),
+                     display_command([args.codex, "plugin", "add", "codex-display@codex-display-local", "--json"])]}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

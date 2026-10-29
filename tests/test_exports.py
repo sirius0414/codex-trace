@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib
 import multiprocessing
-import os
 from pathlib import Path
 import sys
 import tempfile
@@ -15,6 +14,7 @@ from unittest import mock
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
+from codex_display.platform import filesystem as os
 from codex_display.exports import ExportManager, ExportError, _operation_key, _state_key
 from codex_display.export_store import ExportStore, ExportUnconfirmedError
 from codex_display.storage import DerivedStore
@@ -260,9 +260,13 @@ class ExportManagerTests(unittest.TestCase):
 
     def test_expired_empty_orphan_is_reclaimed_but_nonempty_unknown_is_retained(self):
         orphan = self.manager.root / (str(uuid4()) + '.zip')
-        orphan.touch(mode=0o600)
+        os.close(os.open(orphan, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600))
         unknown = self.manager.root / (str(uuid4()) + '.zip')
-        unknown.write_bytes(b'unknown owner'); unknown.chmod(0o600)
+        descriptor = os.open(unknown, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(descriptor, b'unknown owner')
+        finally:
+            os.close(descriptor)
         for path in (orphan, unknown): os.utime(path, ns=(1, 1))
         self.manager.cleanup()
         self.assertFalse(orphan.exists())

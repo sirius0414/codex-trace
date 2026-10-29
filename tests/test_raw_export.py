@@ -3,7 +3,7 @@ from dataclasses import replace
 import errno
 import hashlib
 import json
-import os
+from codex_display.platform import filesystem as os
 from pathlib import Path
 import tempfile
 import unittest
@@ -15,6 +15,7 @@ from codex_display.adapters.raw import RawAdapter
 from codex_display.raw_export import ExportLimits, RawExportCollector, RawExportError
 import test_raw as fixtures
 import test_projection as projection_fixtures
+from platform_fixtures import symlink
 
 A, B, C, D = fixtures.A, fixtures.B, fixtures.C, fixtures.D
 line = fixtures.line
@@ -54,6 +55,8 @@ class RawExportTests(unittest.TestCase):
         self.sessions.mkdir()
         self.private = self.root/'private'
         self.private.mkdir(mode=0o700)
+        directory = os.open_directory(self.private, private=True)
+        os.close(directory)
         self.raw = RawAdapter([self.sessions])
         self.addCleanup(self.raw.close)
         self.history = History()
@@ -251,10 +254,11 @@ class RawExportTests(unittest.TestCase):
         self.assertEqual(self.destination.read_bytes(),b'keep')
         self.destination.unlink()
         target=self.private/'target';target.write_bytes(b'keep')
-        self.destination.symlink_to(target)
+        symlink(self, self.destination, target)
         with self.assertRaises(FileExistsError):self.collector.collect(A,self.destination)
         self.assertEqual(target.read_bytes(),b'keep')
 
+    @unittest.skipIf(os.name == 'nt', 'POSIX chmod fixture; Windows private DACL checks use native tests')
     def test_private_directory_is_required(self):
         self.write(A);self.private.chmod(0o755)
         with self.assertRaises(RawExportError) as context:self.collector.collect(A,self.destination)

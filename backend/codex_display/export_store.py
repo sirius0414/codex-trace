@@ -1,12 +1,12 @@
 """把已冻结 ZIP 发布到固定本地目录，不接受 UI 指定路径。
 
-先校验同目录的私有临时文件，再用硬链接原子创建最终名称，已有文件绝不覆盖。
+先校验同目录的私有临时文件，再由平台层用硬链接原子创建最终名称，已有文件绝不覆盖。
 该层只处理冻结文件；不读取 Codex 来源，也不负责持久化幂等回执。
 """
 from __future__ import annotations
 
 import hashlib
-import os
+from .platform import filesystem as os
 from pathlib import Path
 import re
 import stat
@@ -263,6 +263,10 @@ class ExportStore:
                 current = os.stat(temporary_name, dir_fd=directory, follow_symlinks=False)
                 if not stat.S_ISREG(current.st_mode) or _identity(current) != owned:
                     raise ValueError("export-temporary-replaced")
+                # 关闭写句柄让 Windows 最后写入时间稳定，避免并发核验者将本进程
+                # 迟到的时间更新误认成外部改写；发布仍需核对最终文件身份和完整哈希。
+                os.close(temporary)
+                temporary = None
                 # link(2) 仅在目标不存在时原子创建名称，避免先检查再 rename 的覆盖竞态。
                 try:
                     os.link(temporary_name, filename, src_dir_fd=directory, dst_dir_fd=directory,

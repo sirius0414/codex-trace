@@ -1,4 +1,4 @@
-import os
+from codex_display.platform import filesystem as os
 from pathlib import Path
 import select
 import tempfile

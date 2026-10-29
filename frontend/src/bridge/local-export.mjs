@@ -1,3 +1,5 @@
+import { isLocalOutputPath } from './local-path.mjs';
+
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 const HASH = /^[a-f0-9]{64}$/;
 
@@ -58,8 +60,7 @@ export class LocalExportAttempt {
     if (!result || result.kind !== 'local-export' || result.requestId !== this.request.requestId ||
         result.verified !== true || result.synthetic !== true ||
         typeof result.filename !== 'string' || !result.filename || result.filename.length > 255 || /[\x00-\x1f\x7f/\\]/.test(result.filename) ||
-        typeof result.path !== 'string' || !result.path.startsWith('/') || result.path.length > 8192 || /[\x00-\x1f\x7f]/.test(result.path) ||
-        result.path.split('/').some(part => part === '.' || part === '..') || !result.path.endsWith('/' + result.filename) ||
+        !isLocalOutputPath(result.path, result.filename) ||
         !Number.isSafeInteger(result.bytes) || result.bytes < 0 || typeof result.sha256 !== 'string' || !HASH.test(result.sha256))
       throw new LocalExportError('invalid-envelope', '本地导出响应无法核对，结果未确认；可重试核对同一次导出。');
     if (result.bytes !== this.expectedBytes || result.sha256 !== this.expectedHash)

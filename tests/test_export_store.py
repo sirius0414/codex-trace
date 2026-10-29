@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import multiprocessing
-import os
+import os as native_os
 from pathlib import Path
 import stat
 import sys
@@ -13,8 +13,10 @@ import tracemalloc
 import unittest
 from unittest import mock
 from uuid import UUID
+from platform_fixtures import assert_private_mode, symlink
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+from codex_display.platform import filesystem as os
 from codex_display import export_store
 from codex_display.export_store import ExportStore, ExportUnconfirmedError
 
@@ -62,8 +64,8 @@ class ExportStoreTests(unittest.TestCase):
         self.assertEqual(result["bytes"], len(PAYLOAD))
         self.assertEqual(result["sha256"], hashlib.sha256(PAYLOAD).hexdigest())
         self.assertTrue(result["verified"])
-        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE(saved.stat().st_mode), 0o600)
+        assert_private_mode(self, self.root, 0o700)
+        assert_private_mode(self, saved, 0o600)
         self.assertEqual(list(self.root.iterdir()), [saved])
 
     def test_cached_result_is_verified_from_disk_without_writing(self):
@@ -81,7 +83,7 @@ class ExportStoreTests(unittest.TestCase):
         result = self.store.save_bytes(payload)
         saved = Path(result["path"])
         temporary = self.root / ".codex-display-tmp-concurrent-publisher"
-        os.link(saved, temporary)
+        native_os.link(saved, temporary)
         original = saved.stat()
         real_read = os.read
         totals, current_total = [], 0
@@ -111,7 +113,7 @@ class ExportStoreTests(unittest.TestCase):
         result = self.store.save_bytes(PAYLOAD)
         saved = Path(result["path"])
         temporary = self.root / ".codex-display-tmp-concurrent-publisher"
-        os.link(saved, temporary)
+        native_os.link(saved, temporary)
         original = saved.stat()
         real_read = os.read
         changed = False
@@ -155,7 +157,7 @@ class ExportStoreTests(unittest.TestCase):
         result = self.store.save_bytes(PAYLOAD)
         saved = Path(result["path"])
         temporary = self.root / ".codex-display-tmp-concurrent-publisher"
-        os.link(saved, temporary)
+        native_os.link(saved, temporary)
         original = saved.stat()
         real_read = os.read
         passes = 0
@@ -203,23 +205,29 @@ class ExportStoreTests(unittest.TestCase):
                 self.store.verify_saved({**result, **replacement})
         self.assertEqual(Path(result["path"]).read_bytes(), PAYLOAD)
 
-    def test_cached_symlink_and_special_file_are_rejected_without_following(self):
+    def test_cached_symlink_is_rejected_without_following(self):
         result = self.store.save_bytes(PAYLOAD)
         saved = Path(result["path"])
         saved.unlink()
         protected = self.base / "protected"
         protected.write_bytes(PAYLOAD)
-        saved.symlink_to(protected)
+        symlink(self, saved, protected)
         with self.assertRaises(OSError):
             self.store.verify_saved(result)
         self.assertTrue(saved.is_symlink())
         self.assertEqual(protected.read_bytes(), PAYLOAD)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO fixture; Windows special handles have separate native tests")
+    def test_cached_fifo_is_rejected_without_waiting_for_a_writer(self):
+        result = self.store.save_bytes(PAYLOAD)
+        saved = Path(result["path"])
         saved.unlink()
         os.mkfifo(saved)
         with self.assertRaisesRegex(ValueError, "not-regular-file"):
             self.store.verify_saved(result)
         self.assertTrue(stat.S_ISFIFO(saved.stat().st_mode))
 
+    @unittest.skipIf(os.name == "nt", "POSIX mode fixture; Windows private DACL inheritance uses native tests")
     def test_existing_export_directory_is_restricted_without_changing_parent(self):
         parent_mode = stat.S_IMODE(self.base.stat().st_mode)
         self.root.mkdir(mode=0o777)
@@ -259,7 +267,7 @@ class ExportStoreTests(unittest.TestCase):
         protected = self.base / "protected"
         protected.write_bytes(b"preserve-target")
         link = self.root / f"codex-display-{FIXED_UUID.hex}.zip"
-        link.symlink_to(protected)
+        symlink(self, link, protected)
         with mock.patch.object(export_store, "uuid4", return_value=FIXED_UUID):
             with self.assertRaises(FileExistsError):
                 self.store.save_bytes(PAYLOAD)
@@ -270,7 +278,7 @@ class ExportStoreTests(unittest.TestCase):
     def test_symlink_directory_and_parent_chain_are_rejected(self):
         actual = self.base / "actual"
         actual.mkdir()
-        self.root.symlink_to(actual, target_is_directory=True)
+        symlink(self, self.root, actual, target_is_directory=True)
         with self.assertRaises(OSError):
             self.store.save_bytes(PAYLOAD)
         self.assertEqual(list(actual.iterdir()), [])
@@ -466,8 +474,8 @@ class ExportStoreTests(unittest.TestCase):
         self.assertEqual(os.lseek(source, 0, os.SEEK_CUR), 11)
         self.assertEqual((path.stat().st_size, path.stat().st_mtime_ns), (before.st_size, before.st_mtime_ns))
         self.assertEqual(Path(result["path"]).read_bytes(), payload)
-        self.assertEqual(stat.S_IMODE(self.root.stat().st_mode), 0o700)
-        self.assertEqual(stat.S_IMODE(Path(result["path"]).stat().st_mode), 0o600)
+        assert_private_mode(self, self.root, 0o700)
+        assert_private_mode(self, Path(result["path"]), 0o600)
 
     def test_existing_same_candidate_is_only_verified_even_when_original_source_is_gone(self):
         _, source = self.source()
@@ -523,7 +531,7 @@ class ExportStoreTests(unittest.TestCase):
         protected, source = self.source()
         candidate = self.candidate()
         self.root.mkdir()
-        Path(candidate["path"]).symlink_to(protected)
+        symlink(self, Path(candidate["path"]), protected)
         with self.assertRaises(OSError):
             self.store.publish_file(source, candidate)
         self.assertEqual(protected.read_bytes(), PAYLOAD)
@@ -531,7 +539,7 @@ class ExportStoreTests(unittest.TestCase):
         self.root.rmdir()
         actual = self.base / "actual"
         actual.mkdir()
-        self.root.symlink_to(actual, target_is_directory=True)
+        symlink(self, self.root, actual, target_is_directory=True)
         with self.assertRaises(OSError):
             self.store.publish_file(source, candidate)
         self.assertEqual(list(actual.iterdir()), [])
@@ -630,6 +638,7 @@ class ExportStoreTests(unittest.TestCase):
         self.assertEqual(recovered, {**candidate, "verified": True})
         self.assertEqual(list(self.root.iterdir()), [Path(candidate["path"])])
 
+    @unittest.skipIf(os.name == "nt", "POSIX directory-move fixture; Windows pinned directories deny rename")
     def test_link_success_then_directory_move_and_exception_is_unconfirmed_not_prepublication_failure(self):
         _, source = self.source()
         candidate = self.candidate()

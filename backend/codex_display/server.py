@@ -97,7 +97,7 @@ async def read_resource(uri):
     if str(uri) not in (URI, PANEL_URI):
         raise ValueError("unknown-resource")
     path = Path(os.environ.get("CODEX_DISPLAY_UI_PATH", Path(__file__).parents[2] / "ui" / "trajectory-v1.html"))
-    return [ReadResourceContents(content=path.read_text(), mime_type="text/html;profile=mcp-app", meta=UI_META)]
+    return [ReadResourceContents(content=path.read_text(encoding="utf-8"), mime_type="text/html;profile=mcp-app", meta=UI_META)]
 
 
 def verify_thread(thread_id: str) -> dict:

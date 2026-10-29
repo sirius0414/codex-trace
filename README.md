@@ -2,6 +2,8 @@
 
 Codex 本地任务执行轨迹插件，当前版本 **0.1.0**。正式入口使用 Python MCP 服务和随包提供的 React 界面，不依赖开发服务器或远程 UI 资源。
 
+后端按系统选择 POSIX 或原生 Windows 适配器，轨迹分析与前端共用。Windows 使用方法及尚未完成的实机验收见 [Windows 适配说明](WINDOWS.md)；已有 macOS 命令继续适用。
+
 ## 使用
 
 在聊天右上角 **New Tab → 执行轨迹** 打开面板。此入口的来源语义已在目标宿主验证，服务会先只读校验任务 ID。无法确认时显示任务选择器。全局侧栏也提供“执行轨迹”，按宿主规则全屏打开；全局来源语义未验证，因此始终要求选择任务，不根据最近任务或环境变量猜测来源。
@@ -45,7 +47,7 @@ Codex 本地任务执行轨迹插件，当前版本 **0.1.0**。正式入口使�
 
 导出不是跨文件原子快照：运行中的来源可能先后变化，每段都有自己的采集时间和冻结上界。成功保存不代表来源完整，应同时查看完整性说明。没有继承证明的父任务后续内容不会被当作本任务事件；物理来源与逻辑继承范围在 manifest 中分开记录。
 
-保存目录固定为 `~/Downloads/Codex Display/`，前端不能指定路径。服务流式写入、无覆盖发布并读回验证；只有显示“本地导出已校验”和实际路径，才确认保存成功。目录为 `0700`，ZIP 为 `0600`。目录不可用或权限不足时会给出失败结果。
+保存目录固定为用户主目录下的 `Downloads/Codex Display/`（Windows 为 `%USERPROFILE%\Downloads\Codex Display\`），前端不能指定路径。服务流式写入、无覆盖发布并读回验证；只有显示“本地导出已校验”和实际路径，才确认保存成功。POSIX 目录为 `0700`、ZIP 为 `0600`，Windows 使用私有 DACL。目录不可用或权限不足时会给出失败结果。
 
 - 等待或超时后的“结果未确认”表示可能已经保存。使用原保存请求核对，不能把它当作失败而自动换名再存一份。
 - 页面恢复且原会话的恢复标识仍在时，可核对持久化保存记录；完全关闭后新建标签不保证保留这些标识，界面暂不提供旧回执列表。明确重试仅恢复原请求、原候选文件；已经开始发布但结果不明的请求只做核验。
@@ -104,6 +106,36 @@ PYTHONPATH=backend:tests .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python contracts/generate_types.py --check
 ```
 
+### Windows 原生开发与安装
+
+以下命令在 Windows PowerShell 中执行，不需要 WSL。准备 Python ≥3.14、Node.js/npm，以及支持所需只读 app-server API 的 Codex。Windows 的虚拟环境解释器位于 `Scripts\python.exe`；JSON、UI 和脚本使用 UTF-8。项目目录、运行环境和导出目录可包含中文及空格。
+
+```powershell
+py -3.14 -m venv .venv
+& ".\.venv\Scripts\python.exe" -m pip install -r requirements.lock
+npm ci --ignore-scripts
+npm run build
+npm test
+$env:PYTHONUTF8 = "1"
+$env:PYTHONPATH = "backend;tests"
+& ".\.venv\Scripts\python.exe" -m unittest discover -s tests -v
+& ".\.venv\Scripts\python.exe" contracts/generate_types.py --check
+```
+
+首次组包使用新的输出目录和独立运行环境；将 `$codex` 改为实际的原生 `codex.exe`。脚本也能从标准 npm 安装的 `codex.cmd` 定位原生程序；自定义批处理包装器须显式指定 exe。npm 构建由 Node 直接运行 `npm-cli.js`，路径不会交给 `cmd.exe` 解释。
+
+```powershell
+$runtime = Join-Path $env:LOCALAPPDATA "codex-display\runtime\0.1.0"
+$codex = "C:\工具目录\Codex\codex.exe"
+& ".\.venv\Scripts\python.exe" scripts/package_plugin.py --output ".\build\plugin-windows-0.1.0" --python ".\.venv\Scripts\python.exe" --prepare-runtime $runtime --codex $codex
+& "$runtime\Scripts\python.exe" scripts/verify_install.py --package ".\build\plugin-windows-0.1.0" --cache-copy-only --out ".\build\windows-cache-verification.json"
+npm run plugin:update -- --python "$runtime\Scripts\python.exe" --codex $codex --prepare-only
+```
+
+准备结果经过审阅后，沿用下文的 `--install-prepared` 流程。安装包绑定组包机器的绝对路径，不能把 macOS 包直接复制到 Windows 使用。Windows 私有索引默认位于 `%LOCALAPPDATA%\codex-display\index\`；Codex 来源仍由 `CODEX_HOME` 指定，默认 `%USERPROFILE%\.codex`。
+
+开发服务继续使用 `npm run dev:browser:start/stop/restart/status`，也可用 `CODEX_DISPLAY_PYTHON` 指定 npm 启动器使用的解释器。Windows 管理器需要系统 PowerShell/CIM 核对进程创建时间和完整参数，停止时请求已核验实例正常退出；身份不明或停止失败会保留记录。日志可用 `Get-Content .\build\dev-browser\server.log -Wait` 查看。原生 Windows 的 DACL、文件占用、并发导出和桌面入口验收状态见 [Windows 适配说明](WINDOWS.md)，本机模拟分支检查不代表这些验收已经通过。
+
 安装阶段准备独立运行环境并固定绝对路径。以下首次打包命令要求运行环境与输出目录尚不存在；已有同版本环境时去掉 `--prepare-runtime`，把 `--python` 指向该环境中的 `bin/python`。重建包使用新的输出目录，脚本不会覆盖旧包。
 
 ```sh
@@ -156,9 +188,9 @@ npm run plugin:update
 
 | 位置 | 内容与保留方式 |
 | --- | --- |
-| `~/.local/share/codex-display/index/` | 派生索引、阅读偏好、持久导出回执和临时 ZIP；目录仅用户可读 |
-| `~/Downloads/Codex Display/` | 已保存的最终 ZIP；插件不会自动删除 |
-| `~/.local/share/codex-display/runtime/0.1.0/` | 独立 Python 运行环境；插件运行期间必须保留 |
+| macOS：`~/.local/share/codex-display/index/`；Windows：`%LOCALAPPDATA%\codex-display\index\` | 派生索引、阅读偏好、持久导出回执和临时 ZIP；使用本用户私有权限 |
+| macOS：`~/Downloads/Codex Display/`；Windows：`%USERPROFILE%\Downloads\Codex Display\` | 已保存的最终 ZIP；插件不会自动删除 |
+| macOS：`~/.local/share/codex-display/runtime/0.1.0/`；Windows：`%LOCALAPPDATA%\codex-display\runtime\0.1.0\` | 文档建议的独立 Python 运行环境；插件运行期间必须保留 |
 
 未被已接受保存请求保留的临时 ZIP 默认 30 分钟过期，每 60 秒检查清理。pending／unknown 保存所需的材料会保留；回执与锁文件没有自动过期清理策略。不要在尚待核对保存结果时删除索引目录，否则会丢失恢复依据。派生索引包含任务摘要，最终 ZIP 保留原始记录内容。
 

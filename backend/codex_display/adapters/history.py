@@ -10,12 +10,14 @@ import json
 import math
 import os
 import re
-import selectors
 import subprocess
 import threading
 import time
 from collections.abc import Callable
 from typing import Any
+
+from ..platform.pipes import make_pipe_transport
+from ..platform.process import executable_command
 
 
 # 即使内部调用传错方法，也必须在发送 JSON-RPC 前拒绝有副作用的操作。
@@ -141,6 +143,7 @@ class HistoryAdapter:
         timeout_seconds: float = 10,
         max_response_bytes: int = 8 * 1024 * 1024,
         process_factory: Callable[..., Any] = subprocess.Popen,
+        transport_factory: Callable[..., Any] = make_pipe_transport,
     ):
         if not isinstance(executable, str) or not os.path.isabs(executable):
             raise HistoryError("absolute-executable-required")
@@ -152,22 +155,19 @@ class HistoryAdapter:
         self.max_response_bytes = max_response_bytes
         self._lock = threading.RLock()
         self._process: Any = None
-        self._selector: selectors.BaseSelector | None = None
+        self._transport = None
         self._pending = b""
         self._sequence = 0
         self._closed = False
         self._initialized = False
         try:
             self._process = process_factory(
-                [executable, "app-server"], stdin=subprocess.PIPE,
+                executable_command(executable, "app-server"), stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0,
             )
             if self._process.stdin is None or self._process.stdout is None:
                 raise HistoryError("missing-process-pipes")
-            os.set_blocking(self._process.stdin.fileno(), False)
-            os.set_blocking(self._process.stdout.fileno(), False)
-            self._selector = selectors.DefaultSelector()
-            self._selector.register(self._process.stdout, selectors.EVENT_READ)
+            self._transport = transport_factory(self._process.stdin, self._process.stdout)
             self._call("initialize", {
                 "clientInfo": {"name": "codex_display", "version": "0.0.1"},
             })
@@ -191,20 +191,10 @@ class HistoryAdapter:
         data = json.dumps(message, ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode() + b"\n"
         if len(data) > _MAX_REQUEST_BYTES:
             raise HistoryError("request-too-large")
-        offset = 0
-        with selectors.DefaultSelector() as writable:
-            writable.register(self._process.stdin, selectors.EVENT_WRITE)
-            while offset < len(data):
-                remaining = deadline - time.monotonic()
-                if remaining <= 0 or not writable.select(remaining):
-                    raise HistoryError("request-timeout")
-                try:
-                    count = os.write(self._process.stdin.fileno(), data[offset:])
-                except BlockingIOError:
-                    continue
-                if count == 0:
-                    raise HistoryError("app-server-disconnected")
-                offset += count
+        try:
+            self._transport.write(data, deadline)
+        except TimeoutError:
+            raise HistoryError("request-timeout") from None
 
     def _call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         """串行收发一个只读 RPC；锁等待、写入和读取共享有限时间预算。"""
@@ -261,13 +251,10 @@ class HistoryAdapter:
                     return message["result"]
                 if consumed + len(self._pending) > self.max_response_bytes:
                     raise HistoryError("response-limit-exceeded")
-                remaining = deadline - time.monotonic()
-                if remaining <= 0 or self._selector is None or not self._selector.select(remaining):
-                    raise HistoryError("request-timeout")
                 try:
-                    chunk = os.read(self._process.stdout.fileno(), min(65536, self.max_response_bytes + 1))
-                except BlockingIOError:
-                    continue
+                    chunk = self._transport.read(min(65536, self.max_response_bytes + 1), deadline)
+                except TimeoutError:
+                    raise HistoryError("request-timeout") from None
                 if not chunk:
                     raise HistoryError("app-server-disconnected")
                 self._pending += chunk
@@ -367,34 +354,42 @@ class HistoryAdapter:
                 "turnsNextCursor": turn_cursor, "turnsComplete": complete}
 
     def _close_unlocked(self) -> None:
-        """仅回收本连接持有的子进程、selector 和管道，调用方须已持有连接锁。"""
+        """仅回收本连接资源；清理错误不能遮蔽触发关闭的协议错误，且总尝试关闭每条管道。"""
         if self._closed:
             return
         self._closed = True
         self._pending = b""
-        if self._selector is not None:
-            self._selector.close()
         process = self._process
-        if process is None:
-            return
-        # 只向本类创建的 Popen 发信号；不操作进程组、桌面进程或来源文件记载的 PID。
-        if process.poll() is None:
-            try:
-                process.terminate()
-            except ProcessLookupError:
-                pass
         try:
-            process.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            try:
-                process.kill()
-            except ProcessLookupError:
-                pass
-            process.wait(timeout=1)
+            if process is not None:
+                try:
+                    if process.poll() is None:
+                        # 只向自有 Popen 发信号；不操作进程组、桌面进程或来源文件的 PID。
+                        process.terminate()
+                except OSError:
+                    pass
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=1)
+        except Exception:
+            # 包括 Windows 结束进程/等待的竞争错误，仍须取消 worker 并关闭管道。
+            pass
         finally:
-            for stream in (process.stdin, process.stdout):
-                if stream is not None:
-                    stream.close()
+            try:
+                if self._transport is not None:
+                    self._transport.close()
+            except Exception:
+                pass
+            finally:
+                if process is not None:
+                    for stream in (process.stdin, process.stdout):
+                        try:
+                            if stream is not None:
+                                stream.close()
+                        except Exception:
+                            pass
 
     def close(self) -> None:
         """幂等关闭本适配器连接，不改变用户任务生命周期。"""

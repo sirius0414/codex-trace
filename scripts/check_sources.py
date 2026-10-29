@@ -14,6 +14,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from codex_display.server import verify_thread
+from platform_runtime import executable
 
 
 def main():
@@ -22,6 +23,7 @@ def main():
     parser.add_argument("--thread-id", action="append", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    args.codex = executable(args.codex)
     os.environ["CODEX_DISPLAY_CODEX_EXECUTABLE"] = str(args.codex.absolute())
     checks = []
     for thread_id in args.thread_id:
@@ -32,10 +34,10 @@ def main():
         except Exception as error:
             checks.append({"threadId": thread_id, "identityMatches": False, "errorClass": type(error).__name__})
     report = {"generatedAt": datetime.now(timezone.utc).isoformat(),
-              "codexVersion": subprocess.check_output([str(args.codex), "--version"], text=True).strip(),
+              "codexVersion": subprocess.check_output([str(args.codex), "--version"], text=True, encoding="utf-8").strip(),
               "taskMutations": [], "sourceScope": "explicit IDs; physical segment header only", "checks": checks}
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))
     return 0 if all(check.get("identityMatches") for check in checks) else 1
 

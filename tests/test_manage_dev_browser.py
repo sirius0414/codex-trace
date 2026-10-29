@@ -23,6 +23,7 @@ finally:
     sys.path.pop(0)
 
 
+@unittest.skipIf(sys.platform == "win32", "POSIX process-group fixtures; Windows manager has separate tests")
 class ManageDevBrowserTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="codex-display-manager-test-")

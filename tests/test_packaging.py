@@ -18,7 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 def load_script(name):
     spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / (name + ".py"))
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
 
 
@@ -108,7 +112,10 @@ class PackagingTests(unittest.TestCase):
     def test_venv_interpreter_symlink_is_preserved(self):
         interpreter = self.root / "venv/bin/python"
         interpreter.parent.mkdir(parents=True)
-        interpreter.symlink_to(sys.executable)
+        try:
+            interpreter.symlink_to(sys.executable)
+        except OSError as error:
+            self.skipTest(f"Symlink creation unavailable: {error}")
         self.assertEqual(packaging.executable(interpreter), interpreter)
         self.assertNotEqual(packaging.executable(interpreter), interpreter.resolve())
         missing = self.root / "missing-python"

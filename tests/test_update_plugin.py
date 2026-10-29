@@ -199,10 +199,33 @@ class UpdatePluginTests(unittest.TestCase):
         cli.assert_not_called()
         run.assert_not_called()
 
+    def test_update_plan_from_other_platform_refuses_before_cli(self):
+        plan = self.output / "update-plan.json"
+        value = json.loads(plan.read_text(encoding="utf-8"))
+        value["platform"] = "win32" if sys.platform != "win32" else "darwin"
+        update.write_json(plan, value)
+        with mock.patch.object(update, "cli_json") as cli, mock.patch.object(update, "run") as run:
+            with self.assertRaisesRegex(ValueError, "其他操作系统"):
+                update.install(self.output)
+        cli.assert_not_called()
+        run.assert_not_called()
+
+    def test_package_symlink_refuses_fingerprint(self):
+        link = self.package / "linked-ui.html"
+        try:
+            link.symlink_to(self.package / "ui/trajectory-v1.html")
+        except OSError as error:
+            self.skipTest(f"Symlink creation unavailable: {error}")
+        with self.assertRaisesRegex(ValueError, "重解析点"):
+            update.fingerprints(self.package)
+
     def test_runtime_discovery_uses_selected_home_and_preserves_venv_symlink(self):
         interpreter = self.root / "runtime/bin/python"
         interpreter.parent.mkdir(parents=True)
-        interpreter.symlink_to(sys.executable)
+        try:
+            interpreter.symlink_to(sys.executable)
+        except OSError as error:
+            self.skipTest(f"Symlink creation unavailable: {error}")
         self.cache.mkdir(parents=True)
         update.write_json(self.cache / "runtime.json", {"runtimePython": str(interpreter),
                           "appServerExecutable": sys.executable})

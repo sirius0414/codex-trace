@@ -14,11 +14,11 @@ from jsonschema import Draft202012Validator, ValidationError
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts"
 FIXTURES = ROOT / "tests" / "fixtures" / "contracts"
-SCHEMA = json.loads((CONTRACTS / "trajectory.schema.json").read_text())
+SCHEMA = json.loads((CONTRACTS / "trajectory.schema.json").read_text(encoding="utf-8"))
 
 
 def read(name: str) -> dict:
-    return json.loads((FIXTURES / name).read_text())
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 def validate(definition: str, instance: object) -> None:
@@ -199,6 +199,20 @@ class ContractTests(unittest.TestCase):
         for name in ("../codex-display-a.zip", "codex-display-a.txt", "codex-display-a.zip\n"):
             with self.subTest(name=name), self.assertRaises(ValidationError):
                 validate("ExportFilename", name)
+
+    def test_native_export_path_cases_match_frontend_receipt_validation(self):
+        """同一批合成路径同时交给 Schema 与前端；这不证明 Windows 文件系统行为。"""
+        cases = read("export-path-cases.json")
+        for path in cases["validPaths"]:
+            with self.subTest(path=path):
+                validate("LocalExportPath", path)
+                result = read("export-save-verified.json")
+                result["filename"] = result["save"]["filename"] = cases["filename"]
+                result["save"]["path"] = path
+                validate("DownloadResult", result)
+        for path in cases["invalidPaths"]:
+            with self.subTest(path=path), self.assertRaises(ValidationError):
+                validate("LocalExportPath", path)
 
     def test_ready_and_uncertain_save_states_cannot_claim_verified_delivery(self):
         ready = read("export-ready.json")

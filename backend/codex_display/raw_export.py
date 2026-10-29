@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-import os
+from .platform import filesystem as os
 from pathlib import Path
 import re
 import stat

@@ -1,12 +1,13 @@
 import hashlib
 import json
-import os
+from codex_display.platform import filesystem as os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from codex_display.adapters.raw import RawAdapter, RawError
+from platform_fixtures import symlink
 
 A = '11111111-1111-4111-8111-111111111111'
 B = '22222222-2222-4222-8222-222222222222'
@@ -224,18 +225,21 @@ class RawTests(unittest.TestCase):
         with self.assertRaises(RawError):
             self.adapter.read(A, {'id': B, 'path': str(path)})
 
-    def test_file_directory_symlinks_and_fifo_rejected_without_reads(self):
+    def test_file_and_directory_symlinks_rejected_without_reads(self):
         target, _ = self.write(A)
-        symlink = self.sessions / 'link.jsonl'
-        symlink.symlink_to(target)
-        self.assertIn('symlink-or-noncanonical-source', self.read(symlink).issues)
+        linked_file = self.sessions / 'link.jsonl'
+        symlink(self, linked_file, target)
+        self.assertIn('symlink-or-noncanonical-source', self.read(linked_file).issues)
         linked = self.sessions / 'linked'
-        linked.symlink_to(self.sessions, target_is_directory=True)
+        symlink(self, linked, self.sessions, target_is_directory=True)
         self.assertIn('symlink-or-noncanonical-source', self.read(linked / target.name).issues)
+        self.assertIn('not-regular-source', self.read(self.sessions).issues)
+
+    @unittest.skipUnless(hasattr(os, 'mkfifo'), 'POSIX FIFO fixture; Windows special handles have separate native tests')
+    def test_fifo_is_rejected_without_waiting_for_a_writer(self):
         fifo = self.sessions / 'fifo'
         os.mkfifo(fifo)
         self.assertIn('not-regular-source', self.read(fifo).issues)
-        self.assertIn('not-regular-source', self.read(self.sessions).issues)
 
     def test_duplicate_source_locations_are_ambiguous_not_latest(self):
         parent, _ = self.write(A)
@@ -311,7 +315,7 @@ class RawTests(unittest.TestCase):
             if current == path and not switched:
                 switched = True
                 folder.rename(self.sessions / 'saved-folder')
-                folder.symlink_to(outside, target_is_directory=True)
+                symlink(self, folder, outside, target_is_directory=True)
             return resolved
         with mock.patch.object(Path, 'resolve', swap):
             snapshot = self.read(path)
