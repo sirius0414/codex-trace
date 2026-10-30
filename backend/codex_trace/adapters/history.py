@@ -169,7 +169,7 @@ class HistoryAdapter:
                 raise HistoryError("missing-process-pipes")
             self._transport = transport_factory(self._process.stdin, self._process.stdout)
             self._call("initialize", {
-                "clientInfo": {"name": "codex_display", "version": "0.0.1"},
+                "clientInfo": {"name": "codex_trace", "version": "0.0.1"},
             })
             with self._lock:
                 self._write({"method": "initialized", "params": {}}, time.monotonic() + self.timeout_seconds)

@@ -25,7 +25,7 @@ class PlatformScriptSelectionTests(unittest.TestCase):
     """可移植选择逻辑；windows=True 只模拟分支，不证明 Windows 实机可用。"""
 
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="codex-display-中文 路径-")
+        temporary = tempfile.TemporaryDirectory(prefix="codex-trace-中文 路径-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
 
@@ -33,7 +33,7 @@ class PlatformScriptSelectionTests(unittest.TestCase):
         self.assertEqual(runtime.venv_python(self.root, windows=False), self.root / "bin/python")
         self.assertEqual(runtime.venv_python(self.root, windows=True), self.root / "Scripts/python.exe")
         with mock.patch.object(runtime, "IS_WINDOWS", True), mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.root)}):
-            self.assertEqual(runtime.state_root(), self.root / "codex-display/index")
+            self.assertEqual(runtime.state_root(), self.root / "codex-trace/index")
 
     def test_relative_localappdata_refuses_before_creating_a_runtime_or_manifest(self):
         for value in ("", "relative/profile", "../other-profile"):
@@ -81,7 +81,7 @@ class PlatformScriptSelectionTests(unittest.TestCase):
 
     def test_node_python_dispatcher_runs_existing_interpreter_and_passes_arguments(self):
         result = subprocess.run(["node", str(ROOT / "scripts/run_python.mjs"), "package_plugin.py", "--help"],
-            cwd=self.root, env={**os.environ, "CODEX_DISPLAY_PYTHON": sys.executable},
+            cwd=self.root, env={**os.environ, "CODEX_TRACE_PYTHON": sys.executable},
             capture_output=True, text=True, encoding="utf-8", timeout=10, check=True)
         self.assertIn("--prepare-runtime", result.stdout)
 

@@ -10,9 +10,9 @@ import threading
 import unittest
 from unittest import mock
 
-from codex_display.adapters.raw import RawSnapshot
-from codex_display.domain.projection import project
-from codex_display.service import ServiceError, TrajectoryService, default_view
+from codex_trace.adapters.raw import RawSnapshot
+from codex_trace.domain.projection import project
+from codex_trace.service import ServiceError, TrajectoryService, default_view
 from contracts.test_contracts import validate
 
 A = "11111111-1111-4111-8111-111111111111"
@@ -270,7 +270,7 @@ class ObservationTests(unittest.TestCase):
         task = self.service.tasks[A]
         self.raw.fail.add(A)
         self.history.fail.add(A)
-        with mock.patch("codex_display.observation.time.monotonic", return_value=100):
+        with mock.patch("codex_trace.observation.time.monotonic", return_value=100):
             for delay in (1, 2, 5, 10, 10):
                 self.service.refresh_raw(A, force=True)
                 self.service.refresh_history(A, force=True)
@@ -290,13 +290,13 @@ class ObservationTests(unittest.TestCase):
 
     def test_growth_coalescing_has_a_fixed_deadline_and_idle_checks_remain_low_frequency(self):
         task = self.service.tasks[A]
-        with mock.patch("codex_display.observation.time.monotonic", return_value=100):
+        with mock.patch("codex_trace.observation.time.monotonic", return_value=100):
             self.service.refresh_history(A, force=True)
             self.assertEqual(task.api_due_at, 105)
             self.raw.put(rows=[raw_item(0), raw_item(1)])
             self.service.refresh_raw(A, force=True)
             self.assertEqual(task.api_due_at, 100.75)
-        with mock.patch("codex_display.observation.time.monotonic", return_value=100.5):
+        with mock.patch("codex_trace.observation.time.monotonic", return_value=100.5):
             self.raw.put(rows=[raw_item(0), raw_item(1), raw_item(2)])
             self.service.refresh_raw(A, force=True)
             self.assertEqual(task.api_due_at, 100.75)
@@ -305,7 +305,7 @@ class ObservationTests(unittest.TestCase):
         self.raw.put(B, [], state="unreadable", reason="source-missing")
         binding = self.bind(B)
         self.read(binding)
-        with mock.patch("codex_display.observation.time.monotonic", return_value=100):
+        with mock.patch("codex_trace.observation.time.monotonic", return_value=100):
             self.service.refresh_history(B, force=True)
             self.assertEqual(self.service.tasks[B].api_due_at, 100.75)
         self.assertEqual(self.service._freshness(self.service.tasks[B])["outputGranularity"], "completedResults")
@@ -838,16 +838,16 @@ class ObservationTests(unittest.TestCase):
 
 class LazyHistoryReconnectTests(unittest.TestCase):
     def setUp(self):
-        from codex_display.app import LazyHistory
+        from codex_trace.app import LazyHistory
         self.wrapper = LazyHistory("/synthetic/codex")
         self.addCleanup(self.wrapper.close)
 
     def test_failed_observer_connection_is_closed_and_next_read_constructs_a_fresh_adapter(self):
-        from codex_display.adapters.history import HistoryError
+        from codex_trace.adapters.history import HistoryError
         first, second = mock.Mock(), mock.Mock()
         first.read.side_effect = HistoryError("app-server-disconnected")
         second.read.return_value = {"id": A}
-        with mock.patch("codex_display.app.HistoryAdapter", side_effect=[first, second]) as factory:
+        with mock.patch("codex_trace.app.HistoryAdapter", side_effect=[first, second]) as factory:
             self.assertIsNone(self.wrapper.adapter)
             factory.assert_not_called()
             with self.assertRaises(HistoryError):
@@ -864,7 +864,7 @@ class LazyHistoryReconnectTests(unittest.TestCase):
 
     def test_only_explicit_read_methods_are_forwarded_and_task_actions_are_unavailable(self):
         adapter = mock.Mock()
-        with mock.patch("codex_display.app.HistoryAdapter", return_value=adapter) as factory:
+        with mock.patch("codex_trace.app.HistoryAdapter", return_value=adapter) as factory:
             for method in ("resume", "thread_resume", "turn_start", "send_message", "send_input", "stop", "interrupt", "write"):
                 with self.subTest(method=method), self.assertRaises(AttributeError):
                     getattr(self.wrapper, method)
@@ -876,10 +876,10 @@ class LazyHistoryReconnectTests(unittest.TestCase):
             factory.assert_called_once_with("/synthetic/codex")
 
     def test_startup_failure_is_retryable_without_reusing_a_half_initialized_adapter(self):
-        from codex_display.adapters.history import HistoryError
+        from codex_trace.adapters.history import HistoryError
         adapter = mock.Mock()
         adapter.read.return_value = {"id": A}
-        with mock.patch("codex_display.app.HistoryAdapter", side_effect=[HistoryError("app-server-start-failed"), adapter]) as factory:
+        with mock.patch("codex_trace.app.HistoryAdapter", side_effect=[HistoryError("app-server-start-failed"), adapter]) as factory:
             with self.assertRaises(HistoryError):
                 self.wrapper.read(A)
             self.assertIsNone(self.wrapper.adapter)
@@ -887,7 +887,7 @@ class LazyHistoryReconnectTests(unittest.TestCase):
             self.assertEqual(factory.call_count, 2)
 
     def test_concurrent_retry_waits_for_failed_connection_cleanup_and_uses_replacement(self):
-        from codex_display.adapters.history import HistoryError
+        from codex_trace.adapters.history import HistoryError
         entered, release, second_done = threading.Event(), threading.Event(), threading.Event()
         first, second = mock.Mock(), mock.Mock()
         order, errors, results = [], [], []
@@ -906,7 +906,7 @@ class LazyHistoryReconnectTests(unittest.TestCase):
             finally:
                 if identifier == B:
                     second_done.set()
-        with mock.patch("codex_display.app.HistoryAdapter", side_effect=[first, second]) as factory:
+        with mock.patch("codex_trace.app.HistoryAdapter", side_effect=[first, second]) as factory:
             old_worker = threading.Thread(target=attempt, args=(A,), daemon=True)
             new_worker = threading.Thread(target=attempt, args=(B,), daemon=True)
             old_worker.start()

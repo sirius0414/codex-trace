@@ -6,5 +6,5 @@
     "reason": "missing",
     "explanation": "无法确定当前任务，请选择"
   },
-  "uiResourceUri": "ui://codex-display/trajectory-v1.html"
+  "uiResourceUri": "ui://codex-trace/trajectory-v1.html"
 }

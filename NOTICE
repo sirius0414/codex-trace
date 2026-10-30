@@ -1,4 +1,4 @@
-Codex Display
+Codex Trace
 Copyright (c) 2026 Siyue Zhang
 
 Research and design references
@@ -13,13 +13,13 @@ https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-t
 Referenced for the early trajectory interface design, including the timing
 overview, compact event ledger and on-demand inspector.
 
-Codex Display is independently maintained. It is not affiliated with,
+Codex Trace is independently maintained. It is not affiliated with,
 endorsed by, or an official release of Codex Trajectory, DeepSeek or OpenAI.
 Reference acknowledgments do not grant rights to their names or logos.
 
 Third-party software
 
-The project's MIT License applies to Codex Display's own code. Third-party
+The project's MIT License applies to Codex Trace's own code. Third-party
 components retain their respective licenses and copyright notices.
 See THIRD_PARTY_NOTICES.txt and LICENSES/ in the plugin package, or third_party/
 in the source repository, for the dependency inventory and full upstream texts.

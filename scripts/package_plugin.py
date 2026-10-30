@@ -20,21 +20,18 @@ import sys
 import tempfile
 
 from platform_runtime import executable, state_root, venv_python
-from third_party_licenses import check_snapshot, verify_documents
+from third_party_licenses import check_snapshot, verify_documents, python_pins
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def locked_versions(lockfile: Path) -> dict[str, str]:
+def locked_versions(lockfile: Path, *, platform: str | None = None) -> dict[str, str]:
+    """Return exact pins applicable to the target runtime platform."""
     versions = {}
-    for line in lockfile.read_text(encoding="utf-8").splitlines():
-        text = line.strip()
-        if not text or text.startswith("#"):
+    for item in python_pins(lockfile):
+        if item.get("sys_platform") not in (None, platform or sys.platform):
             continue
-        match = re.fullmatch(r"([A-Za-z0-9_.-]+)==([^\s;]+)", text)
-        if not match:
-            raise ValueError(f"requirements.lock must use exact package==version pins: {text}")
-        versions[match[1]] = match[2]
+        versions[item["name"]] = item["version"]
     if not versions or "mcp" not in versions:
         raise ValueError("requirements.lock must include a pinned mcp SDK")
     return versions
@@ -45,7 +42,7 @@ def verify_runtime(python: Path, versions: dict[str, str]) -> dict:
     command = """import importlib.metadata,json,sys
 try:
  from compression import zstd
- available = zstd.decompress(zstd.compress(b'codex-display-runtime')) == b'codex-display-runtime'
+ available = zstd.decompress(zstd.compress(b'codex-trace-runtime')) == b'codex-trace-runtime'
 except ImportError:
  available = False
 names=json.loads(sys.argv[1])
@@ -83,7 +80,7 @@ def offline_html(assets: Path) -> str:
 
 def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
     """验证外部运行环境后在同级临时目录组包，完整写入后才发布到新目录。"""
-    backend = ROOT / "backend" / "codex_display"
+    backend = ROOT / "backend" / "codex_trace"
     if not (backend / "app.py").is_file():
         raise ValueError("Production backend app.py is missing")
     versions = locked_versions(ROOT / "requirements.lock")
@@ -99,10 +96,10 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
     # 授权快照与锁文件绑定；缺失或陈旧时拒绝发布，不能只复制项目自身的 MIT。
     third_party = check_snapshot(ROOT)
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".codex-display-package-", dir=output.parent) as temporary:
+    with tempfile.TemporaryDirectory(prefix=".codex-trace-package-", dir=output.parent) as temporary:
         staged = Path(temporary) / "plugin"
         shutil.copytree(ROOT / "plugin", staged, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
-        shutil.copytree(backend, staged / "backend" / "codex_display", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        shutil.copytree(backend, staged / "backend" / "codex_trace", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(ROOT / "contracts", staged / "contracts", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         (staged / "ui").mkdir()
         (staged / "ui" / "trajectory-v1.html").write_text(html, encoding="utf-8")
@@ -116,10 +113,10 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
             shutil.copyfile(ROOT / "third_party" / relative, destination)
         verify_documents(staged, third_party)
         # 代码随安装缓存移动，cwd 因此相对包根；解释器保留绝对路径以摆脱 GUI 的 PATH。
-        launch = {"mcpServers": {"codex-display": {
-            "command": str(python), "args": ["-m", "codex_display.app"], "cwd": "./backend",
-            "env": {"CODEX_DISPLAY_CODEX_EXECUTABLE": str(codex), "CODEX_DISPLAY_STATE_ROOT": str(state_root()),
-                    "CODEX_DISPLAY_EXPORT_ROOT": str(Path.home() / "Downloads" / "Codex Display"),
+        launch = {"mcpServers": {"codex-trace": {
+            "command": str(python), "args": ["-m", "codex_trace.app"], "cwd": "./backend",
+            "env": {"CODEX_TRACE_CODEX_EXECUTABLE": str(codex), "CODEX_TRACE_STATE_ROOT": str(state_root()),
+                    "CODEX_TRACE_EXPORT_ROOT": str(Path.home() / "Downloads" / "Codex Trace"),
                     "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"}
         }}}
         (staged / ".mcp.json").write_text(json.dumps(launch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -129,12 +126,12 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
                     "requirementsSha256": hashlib.sha256((ROOT / "requirements.lock").read_bytes()).hexdigest(),
                     "thirdPartyManifestSha256": hashlib.sha256((staged / "third-party-manifest.json").read_bytes()).hexdigest(),
                     "runtimeBundled": False, "startupNetworkInstallation": False,
-                    "minimumPython": "3.14", "entrypoint": "codex_display.app",
+                    "minimumPython": "3.14", "entrypoint": "codex_trace.app",
                     "limitations": ["This local package binds to an existing absolute Python runtime and Codex executable on this machine.", "Keep those paths installed. Rebuild/reinstall after relocating them; the cache copy contains UI/backend code, not the interpreter."]}
         if frontend_build:
             metadata["frontendBuild"] = frontend_build
         (staged / "runtime.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-        (staged / "INSTALL.txt").write_text("Codex Display 0.1.0 local package\n\nUI, contracts and backend code are included in this cacheable package.\nThe MCP cwd is relative to the installed package; runtime executables are absolute.\nPython >=3.14 with compression.zstd is required. No dependencies are installed at startup.\nKeep runtime.json paths installed; rebuild and reinstall after relocating them.\nOpen Execution Trace from a chat's New Tab menu. The global entry asks you to select a task.\nReload/restart Codex when convenient after an update to refresh plugin resources.\nUninstalling the plugin does not remove ZIPs in ~/Downloads/Codex Display/.\n", encoding="utf-8")
+        (staged / "INSTALL.txt").write_text("Codex Trace 0.1.0 local package\n\nUI, contracts and backend code are included in this cacheable package.\nThe MCP cwd is relative to the installed package; runtime executables are absolute.\nPython >=3.14 with compression.zstd is required. No dependencies are installed at startup.\nKeep runtime.json paths installed; rebuild and reinstall after relocating them.\nOpen Execution Trace from a chat's New Tab menu. The global entry asks you to select a task.\nReload/restart Codex when convenient after an update to refresh plugin resources.\nUninstalling the plugin does not remove ZIPs in ~/Downloads/Codex Trace/.\n", encoding="utf-8")
         # 在同一父目录完成重命名，避免失败的组包结果被当作可安装目录使用。
         staged.rename(output)
     return {"output": str(output), "uiBytes": len(html.encode()), "python": str(python), "codex": str(codex)}

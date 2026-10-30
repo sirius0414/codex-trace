@@ -76,12 +76,12 @@ bounds); payloads still require runtime validation at the service boundary.
 
 ## Local ZIP delivery
 
-The authorized destination is the current OS user's `~/Downloads/Codex Display/`.
+The authorized destination is the current OS user's `~/Downloads/Codex Trace/`.
 The service chooses the ZIP filename and resolves the destination; requests never
 accept a path, directory, filename or overwrite flag. `LocalExportPath` is an
 output-only absolute path. Existing POSIX paths remain valid. On Windows the
 receipt uses a native local-drive path, for example
-`C:\Users\张 三\Downloads\Codex Display\codex-display-a.zip`. UNC shares,
+`C:\Users\张 三\Downloads\Codex Trace\codex-trace-a.zip`. UNC shares,
 drive-relative paths, device namespaces, alternate data streams, DOS device
 names and components ending in a dot or space are excluded. Network filesystem
 locking and atomic publication are outside this local export contract.

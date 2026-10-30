@@ -14,10 +14,10 @@ from unittest import mock
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
-from codex_display.platform import filesystem as os
-from codex_display.exports import ExportManager, ExportError, _operation_key, _state_key
-from codex_display.export_store import ExportStore, ExportUnconfirmedError
-from codex_display.storage import DerivedStore
+from codex_trace.platform import filesystem as os
+from codex_trace.exports import ExportManager, ExportError, _operation_key, _state_key
+from codex_trace.export_store import ExportStore, ExportUnconfirmedError
+from codex_trace.storage import DerivedStore
 from contracts.test_contracts import validate
 
 A = '11111111-1111-4111-8111-111111111111'
@@ -61,7 +61,7 @@ class ExportManagerTests(unittest.TestCase):
         self.root = self.base / 'state'
         self.store = DerivedStore(self.root)
         (self.base / 'Downloads').mkdir()
-        self.destination = ExportStore(self.base / 'Downloads/Codex Display')
+        self.destination = ExportStore(self.base / 'Downloads/Codex Trace')
         self.collector = Collector()
         self.manager = ExportManager(self.store, self.collector, self.destination)
         self.addCleanup(lambda: self.store.close())
@@ -199,7 +199,7 @@ class ExportManagerTests(unittest.TestCase):
         self.assertEqual(self.manager.result(self.binding, self.commit_key)['save']['status'], 'verified')
     def test_expiry_cleans_only_private_snapshot_preserves_receipt_and_saved_file(self):
         created = self.create(); saved = self.commit(created)
-        with mock.patch('codex_display.exports.now_ms', return_value=created['expiresAt'] + 1):
+        with mock.patch('codex_trace.exports.now_ms', return_value=created['expiresAt'] + 1):
             self.manager.cleanup()
             result = self.manager.status(self.binding, created['exportId'])
         validate('DownloadResult', result)

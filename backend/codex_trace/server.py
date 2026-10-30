@@ -1,4 +1,4 @@
-"""保留的 M0 宿主接入诊断入口；正式插件由 codex_display.app 启动。
+"""保留的 M0 宿主接入诊断入口；正式插件由 codex_trace.app 启动。
 
 诊断工具验证身份字段和合成下载，不提供任务执行变更接口。这里保留 M0 的
 structuredContent 诊断协议；正式任务内容的 UI 私有信封以 app.py 为准。
@@ -22,18 +22,18 @@ from .export_store import ExportStore
 from .probe import (DIAGNOSTIC_CODES, DIAGNOSTIC_PHASES, FIELD_NAME_PATTERN, MAX_DIAGNOSTIC_ELAPSED_MS,
                     PANEL_URI, ProbeService, URI, inspect_source)
 
-server = Server("codex-display", version=__version__)
-audit = os.environ.get("CODEX_DISPLAY_AUDIT_PATH")
+server = Server("codex-trace", version=__version__)
+audit = os.environ.get("CODEX_TRACE_AUDIT_PATH")
 service = ProbeService(Path(audit) if audit else None)
-export_root = os.environ.get("CODEX_DISPLAY_EXPORT_ROOT")
+export_root = os.environ.get("CODEX_TRACE_EXPORT_ROOT")
 export_store = ExportStore(Path(export_root) if export_root else None)
 APP_META = {"ui": {"visibility": ["app"]}, "openai/visibility": "private"}
 UI_META = {"ui": {"prefersBorder": False,
                   "csp": {"connectDomains": [], "resourceDomains": []}},
            "openai/widgetCSP": {"connect_domains": [], "resource_domains": []}}
 OPEN_TOOLS = {
-    "open_codex_display": ("global", URI),
-    "open_codex_display_panel": ("thread", PANEL_URI),
+    "open_codex_trace": ("global", URI),
+    "open_codex_trace_panel": ("thread", PANEL_URI),
 }
 
 
@@ -46,11 +46,11 @@ def schema(properties=None, required=None):
 async def list_tools():
     annotations = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
     return [
-        Tool(name="open_codex_display", title="执行轨迹", description="Open the local read-only execution viewer (M0 host validation).",
+        Tool(name="open_codex_trace", title="执行轨迹", description="Open the local read-only execution viewer (M0 host validation).",
              inputSchema=schema(), annotations=annotations,
              _meta={"ui": {"resourceUri": URI, "visibility": ["app"]}, "openai/visibility": "private",
                     "openai/ui": {"entrypoints": [{"type": "global"}]}}),
-        Tool(name="open_codex_display_panel", title="执行轨迹", description="Open the local read-only execution viewer in a task panel (M0 host validation).",
+        Tool(name="open_codex_trace_panel", title="执行轨迹", description="Open the local read-only execution viewer in a task panel (M0 host validation).",
              inputSchema=schema(), annotations=annotations,
              _meta={"ui": {"resourceUri": PANEL_URI, "visibility": ["app"]}, "openai/visibility": "private",
                     "openai/ui": {"entrypoints": [{"type": "thread"}]}}),
@@ -96,14 +96,14 @@ async def read_resource(uri):
     """两个宿主入口复用离线诊断界面，资源 URI 使用固定白名单。"""
     if str(uri) not in (URI, PANEL_URI):
         raise ValueError("unknown-resource")
-    path = Path(os.environ.get("CODEX_DISPLAY_UI_PATH", Path(__file__).parents[2] / "ui" / "trajectory-v1.html"))
+    path = Path(os.environ.get("CODEX_TRACE_UI_PATH", Path(__file__).parents[2] / "ui" / "trajectory-v1.html"))
     return [ReadResourceContents(content=path.read_text(encoding="utf-8"), mime_type="text/html;profile=mcp-app", meta=UI_META)]
 
 
 def verify_thread(thread_id: str) -> dict:
     """只读核对显式选择的身份；冷读状态不能证明原任务仍在运行或已经完成。"""
     from .adapters.history import HistoryAdapter
-    executable = os.environ.get("CODEX_DISPLAY_CODEX_EXECUTABLE")
+    executable = os.environ.get("CODEX_TRACE_CODEX_EXECUTABLE")
     if not executable or not Path(executable).is_absolute():
         raise ValueError("app-server-executable-not-configured")
     with HistoryAdapter(executable) as history:
@@ -146,7 +146,7 @@ async def call_tool(name: str, arguments: dict):
                                             arguments["uiInstanceId"], arguments["requestId"], export_store)
             # 即便是合成导出，实际保存路径和结果也只进入 UI 私有信封。
             return CallToolResult(content=[TextContent(type="text", text="Local export result is available in the app.")],
-                                  _meta={"codex-display/result": result})
+                                  _meta={"codex-trace/result": result})
         elif name == "probe_thread_identity":
             result = await asyncio.to_thread(verify_thread, arguments["threadId"])
         else:

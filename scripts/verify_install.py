@@ -175,17 +175,17 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
     from jsonschema import Draft202012Validator, FormatChecker
 
     manifest = json.loads((installed / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-    launch = json.loads((installed / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-display"]
+    launch = json.loads((installed / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
     cwd = (installed / launch.get("cwd", ".")).resolve()
     def check(operation, passed):
         checks.append({"operation": operation, "passed": bool(passed)})
         if not passed:
             raise RuntimeError(operation + " failed")
-    check("cache_copy_backend_exists", (installed / "backend/codex_display/app.py").is_file())
+    check("cache_copy_backend_exists", (installed / "backend/codex_trace/app.py").is_file())
     check("relative_cwd_resolves_inside_cache", cwd == installed / "backend")
     check("absolute_python_and_app_server", Path(launch["command"]).is_absolute()
-          and Path(launch["env"]["CODEX_DISPLAY_CODEX_EXECUTABLE"]).is_absolute())
-    check("module_entrypoint", launch["args"] == ["-m", "codex_display.app"])
+          and Path(launch["env"]["CODEX_TRACE_CODEX_EXECUTABLE"]).is_absolute())
+    check("module_entrypoint", launch["args"] == ["-m", "codex_trace.app"])
     runtime = json.loads((installed / "runtime.json").read_text(encoding="utf-8"))
     legal_manifest = (installed / "third-party-manifest.json").read_bytes()
     check("third_party_manifest_matches_checksum", runtime.get("thirdPartyManifestSha256") == hashlib.sha256(legal_manifest).hexdigest())
@@ -194,9 +194,9 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
     check("project_license_and_notice_present", all((installed / name).is_file() and (installed / name).read_bytes().strip() for name in ("LICENSE", "NOTICE")))
     check("runtime_matches_current_platform", runtime.get("platform", sys.platform) == sys.platform)
     check("runtime_paths_match_manifest", runtime.get("runtimePython") == launch["command"]
-          and runtime.get("appServerExecutable") == launch["env"]["CODEX_DISPLAY_CODEX_EXECUTABLE"])
+          and runtime.get("appServerExecutable") == launch["env"]["CODEX_TRACE_CODEX_EXECUTABLE"])
     check("startup_never_installs_dependencies", runtime.get("startupNetworkInstallation") is False
-          and runtime.get("runtimeBundled") is False and runtime.get("entrypoint") == "codex_display.app")
+          and runtime.get("runtimeBundled") is False and runtime.get("entrypoint") == "codex_trace.app")
     fake, source, methods = synthetic_history(root, launch["command"])
     (root / "Downloads").mkdir(mode=0o700)
     original_source = source.read_bytes()
@@ -204,31 +204,31 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
     # Override every local-data path after applying the package environment.
     # Do not override HOME: only documented constructor configuration is used.
     runtime_env = {**os.environ, **launch.get("env", {}), "CODEX_HOME": str(root / "codex-home"),
-                   "CODEX_DISPLAY_CODEX_EXECUTABLE": str(fake), "CODEX_DISPLAY_STATE_ROOT": str(root / "index"),
-                   "CODEX_DISPLAY_EXPORT_ROOT": str(root / "Downloads/Codex Display"), "PYTHONDONTWRITEBYTECODE": "1"}
-    for key in ("PYTHONPATH", "PYTHONHOME", "CODEX_DISPLAY_UI_PATH", "CODEX_DISPLAY_AUDIT_PATH"):
+                   "CODEX_TRACE_CODEX_EXECUTABLE": str(fake), "CODEX_TRACE_STATE_ROOT": str(root / "index"),
+                   "CODEX_TRACE_EXPORT_ROOT": str(root / "Downloads/Codex Trace"), "PYTHONDONTWRITEBYTECODE": "1"}
+    for key in ("PYTHONPATH", "PYTHONHOME", "CODEX_TRACE_UI_PATH", "CODEX_TRACE_AUDIT_PATH"):
         runtime_env.pop(key, None)
-    module = subprocess.run([launch["command"], "-c", "import codex_display.app;print(codex_display.app.__file__)"],
+    module = subprocess.run([launch["command"], "-c", "import codex_trace.app;print(codex_trace.app.__file__)"],
                             cwd=cwd, env=runtime_env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
-    check("imports_backend_from_installed_cache", Path(module.stdout.strip()).resolve() == installed / "backend/codex_display/app.py")
+    check("imports_backend_from_installed_cache", Path(module.stdout.strip()).resolve() == installed / "backend/codex_trace/app.py")
     contract = json.loads((installed / "contracts/trajectory.schema.json").read_text(encoding="utf-8"))
     tool_contracts = json.loads((installed / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
     client = RpcClient([launch["command"], *launch["args"]], cwd, runtime_env)
     try:
         initialized = client.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
-            "clientInfo": {"name": "codex-display-install-smoke", "version": "0.1.0"}})
-        check("installed_mcp_initialize", initialized.get("serverInfo", {}).get("name") == "codex-display")
+            "clientInfo": {"name": "codex-trace-install-smoke", "version": "0.1.0"}})
+        check("installed_mcp_initialize", initialized.get("serverInfo", {}).get("name") == "codex-trace")
         check("server_matches_package_version", initialized["serverInfo"].get("version") == manifest["version"])
         client.send("notifications/initialized", {})
         tools = client.request("tools/list", {}).get("tools", [])
-        check("production_tool_allowlist", {t["name"] for t in tools} == set(tool_contracts) | {"open_codex_display_panel"})
+        check("production_tool_allowlist", {t["name"] for t in tools} == set(tool_contracts) | {"open_codex_trace_panel"})
         check("app_only_tool_visibility", all(t.get("_meta", {}).get("ui", {}).get("visibility") == ["app"]
               and t.get("_meta", {}).get("openai/visibility") == "private" for t in tools))
         resources = client.request("resources/list", {}).get("resources", [])
         bundled = (installed / "ui/trajectory-v1.html").read_text(encoding="utf-8")
-        uris = {"global": "ui://codex-display/trajectory-v1.html", "thread": "ui://codex-display/trajectory-panel-v1.html"}
+        uris = {"global": "ui://codex-trace/trajectory-v1.html", "thread": "ui://codex-trace/trajectory-panel-v1.html"}
         expected_icon = "data:image/svg+xml;base64," + base64.b64encode((installed / "assets/icon.svg").read_bytes()).decode("ascii")
-        for surface, name in (("global", "open_codex_display"), ("thread", "open_codex_display_panel")):
+        for surface, name in (("global", "open_codex_trace"), ("thread", "open_codex_trace_panel")):
             tool = next(t for t in tools if t["name"] == name)
             metadata = tool["_meta"]
             check(surface + "_entrypoint_icon_embedded", tool.get("icons") == [
@@ -257,17 +257,17 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
             expected = "Local observation request could not be completed." if error else "Local observation result is available in the app."
             if result.get("content") != [{"type": "text", "text": expected}]:
                 raise RuntimeError(name + " exposed non-static model-visible content")
-            data = result.get("_meta", {}).get("codex-display/result")
-            definition = "ErrorResult" if error else tool_contracts["open_codex_display" if name == "open_codex_display_panel" else name]["output"]
+            data = result.get("_meta", {}).get("codex-trace/result")
+            definition = "ErrorResult" if error else tool_contracts["open_codex_trace" if name == "open_codex_trace_panel" else name]["output"]
             Draft202012Validator({**contract, "$ref": "#/$defs/" + definition}, format_checker=FormatChecker()).validate(data)
             called.add(name)
             return data
 
-        global_open = call("open_codex_display", {}, {"threadId": SYNTHETIC_THREAD})
+        global_open = call("open_codex_trace", {}, {"threadId": SYNTHETIC_THREAD})
         check("global_entry_requires_selection", global_open["identity"]["state"] == "selectionRequired")
-        empty_open = call("open_codex_display_panel", {})
+        empty_open = call("open_codex_trace_panel", {})
         check("missing_identity_requires_selection", empty_open["identity"]["state"] == "selectionRequired")
-        opened = call("open_codex_display_panel", {}, {"threadId": SYNTHETIC_THREAD})
+        opened = call("open_codex_trace_panel", {}, {"threadId": SYNTHETIC_THREAD})
         check("thread_entry_verifies_synthetic_identity", opened["identity"]["state"] == "verified"
               and opened["identity"].get("threadId") == SYNTHETIC_THREAD)
         binding = {"schemaVersion": "1.0.0", "sourceInstanceId": opened["sourceInstanceId"],
@@ -319,11 +319,11 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
         committed = call("download_records", commit_request)
         receipt = committed["save"]
         saved = Path(receipt.get("path", ""))
-        check("synthetic_export_saved_only_in_temporary_destination", receipt["status"] == "verified" and saved.parent == root / "Downloads/Codex Display"
+        check("synthetic_export_saved_only_in_temporary_destination", receipt["status"] == "verified" and saved.parent == root / "Downloads/Codex Trace"
               and saved.is_file() and saved.read_bytes() == archive_bytes and saved.stat().st_mode & 0o777 == 0o600)
         check("saved_bytes_match_receipt", receipt["bytes"] == len(archive_bytes) and receipt["sha256"] == hashlib.sha256(archive_bytes).hexdigest())
         retry = call("download_records", commit_request)
-        check("commit_retry_reuses_verified_file", all(retry["save"].get(k) == receipt[k] for k in ("status", "requestId", "filename", "path", "bytes", "sha256")) and len(list((root / "Downloads/Codex Display").glob("*.zip"))) == 1)
+        check("commit_retry_reuses_verified_file", all(retry["save"].get(k) == receipt[k] for k in ("status", "requestId", "filename", "path", "bytes", "sha256")) and len(list((root / "Downloads/Codex Trace").glob("*.zip"))) == 1)
         result = call("download_records", {"action": "result", "binding": binding, "requestId": commit_request["requestId"]})
         check("saved_result_is_recoverable", all(result["save"].get(k) == receipt[k] for k in ("status", "requestId", "filename", "path", "bytes", "sha256")))
         call("download_records", {"action": "release", "binding": binding, "exportId": export["exportId"]})
@@ -358,14 +358,14 @@ def main() -> int:
     try:
         package = args.package.resolve()
         manifest = json.loads((package / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-        if manifest["name"] != "codex-display": raise ValueError("Only a codex-display package may be tested")
-        with tempfile.TemporaryDirectory(prefix="codex-display-install-") as temporary:
+        if manifest["name"] != "codex-trace": raise ValueError("Only a codex-trace package may be tested")
+        with tempfile.TemporaryDirectory(prefix="codex-trace-install-") as temporary:
             root = Path(temporary).resolve()
             codex_home = root / "codex-home"
             codex_home.mkdir(mode=0o700)
             if args.cache_copy_only:
                 # 删除安装源后再启动，确保服务和离线 UI 真正从缓存副本独立工作。
-                installed = codex_home / "plugins/cache/synthetic/codex-display" / manifest["version"]
+                installed = codex_home / "plugins/cache/synthetic/codex-trace" / manifest["version"]
                 source = root / "input-package"
                 shutil.copytree(package, source)
                 shutil.copytree(source, installed)
@@ -376,27 +376,27 @@ def main() -> int:
                 market = root / "market"
                 catalog = market / ".agents/plugins/marketplace.json"
                 catalog.parent.mkdir(parents=True)
-                source = market / "plugins/codex-display"
+                source = market / "plugins/codex-trace"
                 shutil.copytree(package, source)
-                catalog.write_text(json.dumps({"name": "codex-display-install-test", "interface": {"displayName": "Codex Display Isolated Test"},
-                    "plugins": [{"name": "codex-display", "source": {"source": "local", "path": "./plugins/codex-display"},
+                catalog.write_text(json.dumps({"name": "codex-trace-install-test", "interface": {"displayName": "Codex Trace Isolated Test"},
+                    "plugins": [{"name": "codex-trace", "source": {"source": "local", "path": "./plugins/codex-trace"},
                     "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}, "category": "Developer Tools"}]}), encoding="utf-8")
                 env = {**os.environ, "CODEX_HOME": str(codex_home), "PYTHONDONTWRITEBYTECODE": "1"}
                 env.pop("PYTHONPATH", None)
                 report["codexVersion"] = subprocess.run([args.codex, "--version"], env=env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8").stdout.strip()
                 for label, command in [
                     ("marketplace_registered_in_isolated_home", [args.codex, "plugin", "marketplace", "add", str(market)]),
-                    ("plugin_installed_in_isolated_home", [args.codex, "plugin", "add", "codex-display@codex-display-install-test", "--json"]),
+                    ("plugin_installed_in_isolated_home", [args.codex, "plugin", "add", "codex-trace@codex-trace-install-test", "--json"]),
                 ]:
                     run = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=30, encoding="utf-8")
                     checks.append({"operation": label, "passed": run.returncode == 0, "exitCode": run.returncode})
                     if run.returncode: raise RuntimeError(label + " failed")
-                manifests = [p for p in (codex_home / "plugins/cache").rglob(".codex-plugin/plugin.json") if json.loads(p.read_text(encoding="utf-8")).get("name") == "codex-display"]
+                manifests = [p for p in (codex_home / "plugins/cache").rglob(".codex-plugin/plugin.json") if json.loads(p.read_text(encoding="utf-8")).get("name") == "codex-trace"]
                 if len(manifests) != 1: raise RuntimeError("Expected exactly one installed cache package")
                 installed = manifests[0].parent.parent.resolve()
                 shutil.rmtree(source)
                 configured = subprocess.run([args.codex, "mcp", "list", "--json"], cwd=root, env=env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
-                server = next((s for s in json.loads(configured.stdout) if s.get("name") == "codex-display"), {})
+                server = next((s for s in json.loads(configured.stdout) if s.get("name") == "codex-trace"), {})
                 launch_cwd = server.get("transport", {}).get("cwd")
                 checks.append({"operation": "cli_resolves_cwd_into_installed_cache", "passed": isinstance(launch_cwd, str) and Path(launch_cwd).resolve() == installed / "backend"})
             report.update(verify_cache(installed, root, checks))

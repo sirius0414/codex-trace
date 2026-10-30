@@ -1,4 +1,4 @@
-from codex_display.platform import filesystem as os
+from codex_trace.platform import filesystem as os
 from pathlib import Path
 import select
 import tempfile
@@ -7,8 +7,8 @@ import time
 import unittest
 from unittest import mock
 
-from codex_display.adapters.watch import SourceWatcher
-from codex_display.adapters.raw import RawAdapter
+from codex_trace.adapters.watch import SourceWatcher
+from codex_trace.adapters.raw import RawAdapter
 
 
 class SourceWatcherTests(unittest.TestCase):
@@ -88,7 +88,7 @@ class SourceWatcherTests(unittest.TestCase):
 
     @unittest.skipUnless(hasattr(select, 'kqueue'), 'kqueue requires macOS/BSD')
     def test_descriptor_limit_does_not_fail_a_valid_source_read(self):
-        with mock.patch('codex_display.adapters.watch.os.dup', side_effect=OSError('synthetic fd limit')):
+        with mock.patch('codex_trace.adapters.watch.os.dup', side_effect=OSError('synthetic fd limit')):
             self.watcher.watch('source', self.fd)
         self.assertEqual(len(self.watcher._files), 0)
         self.assertEqual(os.pread(self.fd, 8, 0), b'initial\n')

@@ -8,12 +8,12 @@ import subprocess
 import tempfile
 import unittest
 
-from codex_display.platform import filesystem as fs
+from codex_trace.platform import filesystem as fs
 
 
 class FilesystemContractTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="codex-display-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="codex-trace-")
         # macOS /var 是链接；真正的生产入口同样要求无链接绝对路径。
         self.root = Path(self.temporary.name).resolve() / "中文 空格"
         self.directory = fs.open_directory(self.root, create=True, private=True)
@@ -97,7 +97,7 @@ class FilesystemContractTests(unittest.TestCase):
 @unittest.skipUnless(os.name == "nt", "requires native Windows handles, ACLs and sharing semantics")
 class WindowsFilesystemTests(FilesystemContractTests):
     def test_storage_errors_keep_portable_errno_and_sanitized_messages(self):
-        from codex_display.platform import _windows
+        from codex_trace.platform import _windows
         for code in (39, 112):
             with self.subTest(code=code):
                 error = _windows._error(code)
@@ -132,7 +132,7 @@ class WindowsFilesystemTests(FilesystemContractTests):
         chain.rename(chain.with_name("renamed"))
 
     def test_sqlite_inherited_journal_acl_remains_private(self):
-        from codex_display.storage import DerivedStore
+        from codex_trace.storage import DerivedStore
         with DerivedStore(self.root / "index") as store:
             with store._transaction() as connection:
                 connection.execute("INSERT INTO metadata VALUES('journal-fixture','synthetic')")
@@ -156,7 +156,7 @@ class WindowsFilesystemTests(FilesystemContractTests):
             junction.rmdir()
 
     def test_exclusive_file_in_use_fails_without_mutation(self):
-        from codex_display.platform import _windows
+        from codex_trace.platform import _windows
         fd = self.create("occupied.bin", b"original")
         fs.close(fd)
         handle = _windows._raw_open(str(self.root / "occupied.bin"), _windows._GENERIC_READ, 0)

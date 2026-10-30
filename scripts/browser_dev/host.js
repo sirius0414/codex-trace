@@ -35,7 +35,7 @@ function rpcError(id, message, code = -32603) {
 async function call(name, args) {
   const response = await fetch('/rpc', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Codex-Display-Token': token },
+    headers: { 'Content-Type': 'application/json', 'X-Codex-Trace-Token': token },
     body: JSON.stringify({ name, arguments: args }),
     cache: 'no-store',
     credentials: 'omit',
@@ -53,7 +53,7 @@ async function open() {
   opening = true;
   try {
     // 普通浏览器没有 Codex 当前聊天身份，始终走全局入口的任务选择器。
-    const result = await call('open_codex_display', {});
+    const result = await call('open_codex_trace', {});
     send({ method: 'ui/notifications/tool-result', params: result });
     showStatus(result.isError ? '本地读取失败，请刷新重试。' : '已连接本地服务', result.isError ? 'error' : 'ready');
   } catch {
@@ -72,7 +72,7 @@ window.addEventListener('message', async event => {
     if (!hasId) return;
     send({ id, result: {
       protocolVersion: params?.protocolVersion,
-      hostInfo: { name: 'Codex Display browser development host', version: '1.0.0' },
+      hostInfo: { name: 'Codex Trace browser development host', version: '1.0.0' },
       hostCapabilities: { serverTools: {} },
       hostContext: context(),
     } });

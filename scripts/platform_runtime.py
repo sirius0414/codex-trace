@@ -26,8 +26,8 @@ def state_root(home: Path | None = None) -> Path:
         base = Path(os.environ.get("LOCALAPPDATA", str(home / "AppData/Local")))
         if not base.is_absolute():
             raise ValueError("absolute-localappdata-required")
-        return base / "codex-display/index"
-    return home / ".local/share/codex-display/index"
+        return base / "codex-trace/index"
+    return home / ".local/share/codex-trace/index"
 
 
 def codex_native(shim: Path) -> Path:

@@ -1,8 +1,8 @@
 # 原生 Windows 适配与验收
 
-目标环境为 Windows 10/11、本地 NTFS 卷、Python 3.14+（含 `compression.zstd`）和项目所需的 Node.js/npm。无需 WSL。macOS 继续使用原有运行环境、目录、安装与更新流程。
+目标环境为 Windows 10/11、本地 NTFS 卷、Python 3.14+（含 `compression.zstd`）及原生 Codex，无需 WSL。普通用户使用 [发布包安装指南](INSTALL.md)，无需安装 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。macOS 发布安装也使用同一份指南。
 
-## 安装和开发
+## 从源码开发和本机组包
 
 在 PowerShell 中准备已有依赖；路径可包含中文和空格，无需激活虚拟环境或修改执行策略：
 
@@ -22,21 +22,21 @@ npm run dev:browser:status
 npm run dev:browser:stop
 ```
 
-`--prepare-only` 只生成和验证产物，后续安装按 [README](README.md#安装更新与卸载) 使用输出目录。包绑定本机解释器与 Codex 的绝对路径，不能直接在 macOS 和 Windows 之间复制使用；迁移运行环境后重新打包。启动时不会下载依赖。
+`--prepare-only` 只生成和验证产物，后续安装按 [README](README.md#安装更新与卸载) 使用输出目录。该开发流程生成的本机包绑定解释器与 Codex 的绝对路径，不能直接在 macOS 和 Windows 之间复制使用；迁移运行环境后重新打包。面向其他用户的发布 ZIP 由安装器在目标机器生成这些路径，参见 [安装指南](INSTALL.md)。启动时不会下载依赖。
 
-npm 开发入口通过 `scripts/run_python.mjs` 优先选择 `CODEX_DISPLAY_PYTHON` 或仓库 `.venv`，再查找系统 Python。Windows 包装器只识别标准 npm 安装布局并定位原生 `codex.exe`；自定义 `.cmd`/`.bat` 必须改为传入实际程序。npm 构建通过 Node 运行 npm CLI，用户目录和参数作为独立 argv 传递。后台开发服务需要 PowerShell/CIM 读取进程创建时间与命令行，身份不明或停止超时会保留记录并报错。
+npm 开发入口通过 `scripts/run_python.mjs` 优先选择 `CODEX_TRACE_PYTHON` 或仓库 `.venv`，再查找系统 Python。Windows 包装器只识别标准 npm 安装布局并定位原生 `codex.exe`；自定义 `.cmd`/`.bat` 必须改为传入实际程序。npm 构建通过 Node 运行 npm CLI，用户目录和参数作为独立 argv 传递。后台开发服务需要 PowerShell/CIM 读取进程创建时间与命令行，身份不明或停止超时会保留记录并报错。
 
 | 数据 | Windows 默认位置 |
 | --- | --- |
 | 只读任务来源 | `%USERPROFILE%\.codex\sessions`、`archived_sessions`；可由 `CODEX_HOME` 覆盖 |
-| 派生索引、偏好、回执、临时 ZIP | `%LOCALAPPDATA%\codex-display\index` |
-| 最终导出 | `%USERPROFILE%\Downloads\Codex Display` |
+| 派生索引、偏好、回执、临时 ZIP | `%LOCALAPPDATA%\codex-trace\index` |
+| 最终导出 | `%USERPROFILE%\Downloads\Codex Trace` |
 
-`Downloads` 父目录须已存在。状态和导出根目录可由本机 `CODEX_DISPLAY_STATE_ROOT`、`CODEX_DISPLAY_EXPORT_ROOT` 配置，工具参数和前端不能指定目的地。正式前端回执继续要求 `Downloads\Codex Display` 后缀；隔离测试可注入临时目录。Windows 的文件占用可能导致操作失败，应先释放占用，再核对同一个请求，不能因超时或 `unknown` 另起保存请求。
+`Downloads` 父目录须已存在。状态和导出根目录可由本机 `CODEX_TRACE_STATE_ROOT`、`CODEX_TRACE_EXPORT_ROOT` 配置，工具参数和前端不能指定目的地。正式前端回执继续要求 `Downloads\Codex Trace` 后缀；隔离测试可注入临时目录。Windows 的文件占用可能导致操作失败，应先释放占用，再核对同一个请求，不能因超时或 `unknown` 另起保存请求。
 
 ## 平台边界和保障
 
-`backend/codex_display/platform/` 负责系统差异，原始轨迹分析、业务投影、导出状态机和前端继续共用。
+`backend/codex_trace/platform/` 负责系统差异，原始轨迹分析、业务投影、导出状态机和前端继续共用。
 
 | 边界 | macOS | Windows |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ npm 开发入口通过 `scripts/run_python.mjs` 优先选择 `CODEX_DISPLAY_PYTH
 
 Windows 文件保护使用真实 ACL 和原生文件身份，不把 `chmod`、`Path.resolve()` 或去掉 Unix 标志当成等效保证。普通文件描述符保持二进制模式；按偏移读取使用 `ReOpenFile` 独立文件指针，不改变调用方或其 `dup` 的位置。原始来源只申请读取权限，不加写锁、不收紧来源 ACL。app-server 本身仍可能维护自己的运行缓存。
 
-既有 POSIX 导出路径继续有效；新增 `C:\Users\张 三\Downloads\Codex Display\codex-display-….zip`。Schema 和两个前端导出入口共用测试样例，拒绝相对盘符、UNC、设备命名空间、ADS、遍历、保留设备名及尾部点/空格。后端另核对实际目录与文件身份，不能仅靠前端语法确认安全。
+既有 POSIX 导出路径继续有效；新增 `C:\Users\张 三\Downloads\Codex Trace\codex-trace-….zip`。Schema 和两个前端导出入口共用测试样例，拒绝相对盘符、UNC、设备命名空间、ADS、遍历、保留设备名及尾部点/空格。后端另核对实际目录与文件身份，不能仅靠前端语法确认安全。
 
 不支持网络卷、UNC、junction、符号链接或其他重解析点上的来源/状态/导出目录，包括通过这些机制重定向的用户目录。未验证 FAT/exFAT、ReFS、云同步占位文件及所有长路径组合。Windows 没有本适配层可用的目录 `fsync` 等价物：文件内容刷盘与读回得到检查，但不承诺突然断电后的目录项持久性；未决回执仍须用原请求核对。管理员和 SYSTEM 保留操作系统本身的权限。
 
@@ -82,7 +82,7 @@ git diff --check
 当前开发机为 macOS，未提供 Windows 实机或 Windows VM。实现基于本地提交 `b3a619a`；尝试拉取远端最新代码时 GitHub HTTPS 凭据不可用，无法确认远端是否另有提交。开始时工作区无未提交修改。
 
 - 修改前基线：Python 478 项、前端 288 项通过，构建及契约生成检查通过。
-- 修改后完整回归：Python 共 519 项，506 项通过、13 项 Windows 专属检查跳过；前端 291 项通过；构建、契约类型生成一致性、Python/JavaScript 语法及 `git diff --check` 通过。Python 回归无资源未关闭警告。完整日志保留在本机 `/tmp/codex-display-windows-*.log`。
+- 修改后完整回归：Python 共 519 项，506 项通过、13 项 Windows 专属检查跳过；前端 291 项通过；构建、契约类型生成一致性、Python/JavaScript 语法及 `git diff --check` 通过。Python 回归无资源未关闭警告。完整日志保留在本机 `/tmp/codex-trace-windows-*.log`。
 - 最终 macOS 组包与隔离缓存验证：45 项通过；报告为 `build/windows-compat-final-buqu_rz5/verification.json`，`desktopInstalled=false`、`hostUiVerified=false`、`taskDataRead=false`。验证使用合成任务及临时目录，没有真实插件安装或任务读取。
 - 所有 macOS 测试、Windows 分支模拟、Python 编译检查都不能视为 Windows 实机通过。
 

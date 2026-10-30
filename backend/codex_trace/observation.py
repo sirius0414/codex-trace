@@ -35,7 +35,7 @@ class Observation:
         self._discovery_failures = {}
         if enabled:
             for target in (self._raw_loop, self._api_loop):
-                worker = threading.Thread(target=target, name="codex-display-observer", daemon=True)
+                worker = threading.Thread(target=target, name="codex-trace-observer", daemon=True)
                 self._observe_threads.append(worker)
                 worker.start()
 

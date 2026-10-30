@@ -4,10 +4,10 @@ import os
 
 
 def default_state_root() -> Path:
-    """Windows 使用本用户 LocalAppData，macOS 保留已发布的目录布局。"""
+    """在当前用户的本地数据目录中使用 Codex Trace 独立命名空间。"""
     if os.name == "nt":
         base = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
         if not base.is_absolute():
             raise ValueError("absolute-localappdata-required")
-        return base / "codex-display" / "index"
-    return Path.home() / ".local" / "share" / "codex-display" / "index"
+        return base / "codex-trace" / "index"
+    return Path.home() / ".local" / "share" / "codex-trace" / "index"

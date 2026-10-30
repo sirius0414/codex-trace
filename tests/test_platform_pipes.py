@@ -5,7 +5,7 @@ import sys
 import time
 import unittest
 
-from codex_display.platform.pipes import ThreadPipeTransport
+from codex_trace.platform.pipes import ThreadPipeTransport
 
 
 class PipeCleanupTests(unittest.TestCase):

@@ -1,4 +1,4 @@
-"""Codex Display 正式 MCP 入口，由 ``python -m codex_display.app`` 启动。
+"""Codex Trace 正式 MCP 入口，由 ``python -m codex_trace.app`` 启动。
 
 本模块位于宿主与业务服务之间：向宿主登记工具和离线 UI 资源，把工具请求交给
 TrajectoryService，并把正常结果或受控错误封装成前端可读取的 MCP 响应。
@@ -8,7 +8,7 @@ TrajectoryService，并把正常结果或受控错误封装成前端可读取的
 调用 → 响应 schema 校验 → 私有结果封装。同步文件、数据库和历史 API 操作移到
 工作线程，避免占用 MCP 的 asyncio 事件循环；共享对象仍需由各自的锁保护。
 
-任务正文、来源路径和导出材料只能放在 ``_meta["codex-display/result"]``，由
+任务正文、来源路径和导出材料只能放在 ``_meta["codex-trace/result"]``，由
 frontend/src/bridge/client.ts 读取。content 仅含固定提示，structuredContent
 不承载业务数据；工具可见性声明和实际响应信封都要遵守这一边界。底层异常也不能
 直接回显，以免异常文案携带请求内容或本机路径。
@@ -36,7 +36,7 @@ from .service import TrajectoryService, ServiceError
 from .storage import DerivedStore
 from .export_store import ExportStore
 
-# 源码与安装包都采用 <根目录>/backend/codex_display/app.py 布局，因此可用同一
+# 源码与安装包都采用 <根目录>/backend/codex_trace/app.py 布局，因此可用同一
 # 相对关系定位契约、图标和 UI，不依赖宿主启动进程时的当前工作目录。
 ROOT = Path(__file__).resolve().parents[2]
 # schema 是数据形状的权威定义，tools.json 只映射工具名与输入／输出定义名称。
@@ -45,12 +45,12 @@ CONTRACT = json.loads((ROOT / "contracts/trajectory.schema.json").read_text(enco
 TOOLS = json.loads((ROOT / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
 # 两个入口共用 open 契约及服务方法，但保留不同宿主来源语义和资源 URI。
 # global 要求用户选择任务；thread 可验证宿主候选身份，最终是否绑定由 service.open 决定。
-OPEN = {"open_codex_display": ("global", URI), "open_codex_display_panel": ("thread", PANEL_URI)}
+OPEN = {"open_codex_trace": ("global", URI), "open_codex_trace_panel": ("thread", PANEL_URI)}
 # 同时提供 ui 与 openai/widgetCSP 两套宿主元数据键。资源声明不允许远程连接或
 # 远程资源加载；UI 所需 JS/CSS 已内联，业务请求经宿主 MCP 桥接而非浏览器直连。
 UI_META = {"ui": {"prefersBorder": False, "csp": {"connectDomains": [], "resourceDomains": []}},
            "openai/widgetCSP": {"connect_domains": [], "resource_domains": []}}
-server = Server("codex-display", version=__version__)
+server = Server("codex-trace", version=__version__)
 # 一个 MCP 进程复用一个业务服务，页面级选择与加载范围由服务内部的 View 隔离。
 # 首次工具调用才构造服务；仅列举工具／资源或读取离线 HTML 不启动业务服务。
 _service = None
@@ -108,10 +108,10 @@ class LazyHistory:
 def get_service():
     """在线程安全的首次调用中装配共享业务服务，后续调用复用同一实例。
 
-    CODEX_HOME 决定只读任务来源，默认 ~/.codex；CODEX_DISPLAY_STATE_ROOT
-    与 CODEX_DISPLAY_EXPORT_ROOT 覆盖派生存储及最终导出目录，未设置时由
+    CODEX_HOME 决定只读任务来源，默认 ~/.codex；CODEX_TRACE_STATE_ROOT
+    与 CODEX_TRACE_EXPORT_ROOT 覆盖派生存储及最终导出目录，未设置时由
     对应存储类使用默认目录。
-    CODEX_DISPLAY_CODEX_EXECUTABLE 为必需的运行配置，由安装／开发启动器提供。
+    CODEX_TRACE_CODEX_EXECUTABLE 为必需的运行配置，由安装／开发启动器提供。
     这些配置不接受前端工具参数覆盖，避免把 UI 请求变成任意本地路径访问。
 
     构造成功后才给 _service 赋值；初始化异常交给 call_tool 统一封装。此函数
@@ -121,9 +121,9 @@ def get_service():
     with _creation_lock:
         if _service is None:
             home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).absolute()
-            state_root = os.environ.get("CODEX_DISPLAY_STATE_ROOT")
-            export_root = os.environ.get("CODEX_DISPLAY_EXPORT_ROOT")
-            history = LazyHistory(os.environ["CODEX_DISPLAY_CODEX_EXECUTABLE"])
+            state_root = os.environ.get("CODEX_TRACE_STATE_ROOT")
+            export_root = os.environ.get("CODEX_TRACE_EXPORT_ROOT")
+            history = LazyHistory(os.environ["CODEX_TRACE_CODEX_EXECUTABLE"])
             # 服务拥有这些依赖的生命周期：原始适配器只读两个来源根目录，SQLite
             # 保存派生数据／偏好／回执，ExportStore 负责固定目标目录的文件发布。
             # observe=True 开启共享 raw/API 后台采集，实际观察范围由活跃页面决定。
@@ -136,10 +136,10 @@ def get_service():
 def tool_schema(name):
     """把工具输入定义展开为独立 schema，供宿主声明和入口运行时校验复用。
 
-    OPEN 中两个名称都映射到 open_codex_display 的输入定义。保留完整 $defs，
+    OPEN 中两个名称都映射到 open_codex_trace 的输入定义。保留完整 $defs，
     使请求内部的 Binding 等 $ref 能解析；调用方须先保证工具名在白名单中。
     """
-    definition = TOOLS["open_codex_display" if name in OPEN else name]["input"]
+    definition = TOOLS["open_codex_trace" if name in OPEN else name]["input"]
     return {"$defs": CONTRACT["$defs"], **CONTRACT["$defs"][definition]}
 
 
@@ -219,12 +219,12 @@ async def call_tool(name, arguments):
             data = await asyncio.to_thread(getattr(service, name), arguments)
         # 两个 open 入口也共享输出定义。业务方法即使正常返回，结果不符合契约
         # 仍应作为受控内部错误返回，不能把不完整或错误形状的数据交给客户端。
-        definition = TOOLS["open_codex_display" if name in OPEN else name]["output"]
+        definition = TOOLS["open_codex_trace" if name in OPEN else name]["output"]
         Draft202012Validator({**CONTRACT, "$ref": f"#/$defs/{definition}"}).validate(data)
-        # resource_meta 属于 MCP Apps 资源关联，codex-display/result 才是业务
+        # resource_meta 属于 MCP Apps 资源关联，codex-trace/result 才是业务
         # 载荷；不要为了方便调试再把 data 复制到 content 或 structuredContent。
         return CallToolResult(content=[TextContent(type="text", text="Local observation result is available in the app.")],
-                              _meta={**resource_meta, "codex-display/result": data})
+                              _meta={**resource_meta, "codex-trace/result": data})
     except Exception as error:
         # 只有 ServiceError 约定为可公开给 UI 的稳定错误码／文案。校验异常、
         # 文件错误或上游异常可能带正文和路径，统一替换为固定提示，不拼入 str(error)。
@@ -235,7 +235,7 @@ async def call_tool(name, arguments):
         data = {"viewSessionId": None, "binding": None, "code": code,
                 "retryable": error.retryable if isinstance(error, ServiceError) else True, "message": message}
         return CallToolResult(content=[TextContent(type="text", text="Local observation request could not be completed.")],
-                              isError=True, _meta={**resource_meta, "codex-display/result": data})
+                              isError=True, _meta={**resource_meta, "codex-trace/result": data})
 
 
 @server.list_resources()
@@ -253,13 +253,13 @@ async def read_resource(uri):
     """将固定资源 URI 映射为离线 HTML；两个入口共用同一份界面内容。
 
     默认文件由 package_plugin.py 将构建后的 JS/CSS 内联生成。覆盖配置
-    CODEX_DISPLAY_UI_PATH 仅来自进程环境，便于开发／验证注入资源；客户端
+    CODEX_TRACE_UI_PATH 仅来自进程环境，便于开发／验证注入资源；客户端
     URI 不参与本地路径拼接。
     未知 URI 直接拒绝，资源读取错误交给 MCP 资源协议处理，不经过工具结果封装。
     """
     if str(uri) not in (URI, PANEL_URI):
         raise ValueError("unknown-resource")
-    path = Path(os.environ.get("CODEX_DISPLAY_UI_PATH", str(ROOT / "ui/trajectory-v1.html")))
+    path = Path(os.environ.get("CODEX_TRACE_UI_PATH", str(ROOT / "ui/trajectory-v1.html")))
     return [ReadResourceContents(content=path.read_text(encoding="utf-8"), mime_type="text/html;profile=mcp-app", meta=UI_META)]
 
 

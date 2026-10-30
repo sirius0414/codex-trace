@@ -8,7 +8,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from codex_display.service import TrajectoryService, ServiceError, default_view
+from codex_trace.service import TrajectoryService, ServiceError, default_view
 from contracts.test_contracts import validate
 
 A = "11111111-1111-4111-8111-111111111111"
@@ -175,7 +175,7 @@ class PagedHistory(History):
 
 class AnchorPagingTests(unittest.TestCase):
     def configure(self, count=10000, unknown=None):
-        from codex_display.domain.projection import project as official_project
+        from codex_trace.domain.projection import project as official_project
         self.history = PagedHistory(count, unknown=unknown)
         self.projected_counts = []
         def counted(identifier, raw, items, turns, **kwargs):
@@ -251,7 +251,7 @@ class AnchorPagingTests(unittest.TestCase):
         self.configure(1000)
         tail = self.read()
         anchor = self.event_id(10)
-        with mock.patch("codex_display.service.HISTORY_PAGE_BUDGET", 1):
+        with mock.patch("codex_trace.service.HISTORY_PAGE_BUDGET", 1):
             with self.assertRaises(ServiceError) as failure:
                 self.read(anchor=anchor)
         self.assertEqual(failure.exception.code, "resourceLimit")
@@ -265,7 +265,7 @@ class AnchorPagingTests(unittest.TestCase):
 
     def test_unknown_limited_page_returns_continuation_not_no_more_history(self):
         self.configure(1000, unknown=range(200, 1000))
-        with mock.patch("codex_display.service.HISTORY_PAGE_BUDGET", 1):
+        with mock.patch("codex_trace.service.HISTORY_PAGE_BUDGET", 1):
             result = self.read()
         self.assertEqual(result["events"], [])
         self.assertTrue(result["coverage"]["hasEarlier"])
@@ -292,7 +292,7 @@ class AnchorPagingTests(unittest.TestCase):
     def test_item_limit_does_not_skip_the_page_that_exceeds_budget(self):
         self.configure(1000)
         self.read()
-        with mock.patch("codex_display.service.HISTORY_ITEM_LIMIT", 500):
+        with mock.patch("codex_trace.service.HISTORY_ITEM_LIMIT", 500):
             with self.assertRaises(ServiceError) as failure:
                 self.read(anchor=self.event_id(10))
         self.assertEqual(failure.exception.code, "resourceLimit")
@@ -307,7 +307,7 @@ class AnchorPagingTests(unittest.TestCase):
         self.configure(600)
         self.read()
         cursor = self.service.tasks[A].api_cursor
-        with mock.patch("codex_display.service.HISTORY_TIME_BUDGET_SECONDS", 0):
+        with mock.patch("codex_trace.service.HISTORY_TIME_BUDGET_SECONDS", 0):
             with self.assertRaises(ServiceError) as failure:
                 self.read(anchor=self.event_id(10))
         self.assertEqual(failure.exception.code, "resourceLimit")

@@ -16,9 +16,9 @@ from uuid import UUID
 from platform_fixtures import assert_private_mode, symlink
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from codex_display.platform import filesystem as os
-from codex_display import export_store
-from codex_display.export_store import ExportStore, ExportUnconfirmedError
+from codex_trace.platform import filesystem as os
+from codex_trace import export_store
+from codex_trace.export_store import ExportStore, ExportUnconfirmedError
 
 FIXED_UUID = UUID("11111111-2222-4333-8444-555555555555")
 PAYLOAD = b'{"unknown":true}\r\n\xffbad\n{"partial":'
@@ -39,7 +39,7 @@ def _publish_in_process(root, source, candidate, ready, start, results):
 
 class ExportStoreTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="codex-display-export-store-")
+        self.temp = tempfile.TemporaryDirectory(prefix="codex-trace-export-store-")
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name).resolve()
         self.root = self.base / "exports"
@@ -56,7 +56,7 @@ class ExportStoreTests(unittest.TestCase):
         return self.store.reserve(len(payload), hashlib.sha256(payload).hexdigest())
 
     def test_exact_bytes_hash_permissions_and_no_temporary_files(self):
-        result = self.store.save_bytes(PAYLOAD, "codex-display-test")
+        result = self.store.save_bytes(PAYLOAD, "codex-trace-test")
         saved = Path(result["path"])
         self.assertEqual(saved.parent, self.root)
         self.assertEqual(saved.name, result["filename"])
@@ -82,7 +82,7 @@ class ExportStoreTests(unittest.TestCase):
         payload = b"synthetic published bytes\n" * 10000
         result = self.store.save_bytes(payload)
         saved = Path(result["path"])
-        temporary = self.root / ".codex-display-tmp-concurrent-publisher"
+        temporary = self.root / ".codex-trace-tmp-concurrent-publisher"
         native_os.link(saved, temporary)
         original = saved.stat()
         real_read = os.read
@@ -112,7 +112,7 @@ class ExportStoreTests(unittest.TestCase):
     def test_link_cleanup_retry_rejects_changed_bytes_even_with_restored_mtime(self):
         result = self.store.save_bytes(PAYLOAD)
         saved = Path(result["path"])
-        temporary = self.root / ".codex-display-tmp-concurrent-publisher"
+        temporary = self.root / ".codex-trace-tmp-concurrent-publisher"
         native_os.link(saved, temporary)
         original = saved.stat()
         real_read = os.read
@@ -156,7 +156,7 @@ class ExportStoreTests(unittest.TestCase):
     def test_link_cleanup_retry_is_bounded_and_second_mutation_is_rejected(self):
         result = self.store.save_bytes(PAYLOAD)
         saved = Path(result["path"])
-        temporary = self.root / ".codex-display-tmp-concurrent-publisher"
+        temporary = self.root / ".codex-trace-tmp-concurrent-publisher"
         native_os.link(saved, temporary)
         original = saved.stat()
         real_read = os.read
@@ -239,12 +239,12 @@ class ExportStoreTests(unittest.TestCase):
     def test_default_directory_is_fixed_but_construction_does_not_write_it(self):
         with mock.patch.object(Path, "home", return_value=self.base):
             store = ExportStore()
-        self.assertEqual(store.root, self.base / "Downloads/Codex Display")
+        self.assertEqual(store.root, self.base / "Downloads/Codex Trace")
         self.assertFalse((self.base / "Downloads").exists())
 
     def test_final_collision_never_overwrites_existing_file(self):
         self.root.mkdir()
-        occupied = self.root / f"codex-display-{FIXED_UUID.hex}.zip"
+        occupied = self.root / f"codex-trace-{FIXED_UUID.hex}.zip"
         occupied.write_bytes(b"preserve-existing")
         with mock.patch.object(export_store, "uuid4", return_value=FIXED_UUID):
             with self.assertRaises(FileExistsError):
@@ -254,7 +254,7 @@ class ExportStoreTests(unittest.TestCase):
 
     def test_existing_temporary_name_is_not_owned_or_deleted(self):
         self.root.mkdir()
-        occupied = self.root / f".codex-display-tmp-{FIXED_UUID.hex}"
+        occupied = self.root / f".codex-trace-tmp-{FIXED_UUID.hex}"
         occupied.write_bytes(b"another-owner")
         with mock.patch.object(export_store, "uuid4", return_value=FIXED_UUID):
             with self.assertRaises(FileExistsError):
@@ -266,7 +266,7 @@ class ExportStoreTests(unittest.TestCase):
         self.root.mkdir()
         protected = self.base / "protected"
         protected.write_bytes(b"preserve-target")
-        link = self.root / f"codex-display-{FIXED_UUID.hex}.zip"
+        link = self.root / f"codex-trace-{FIXED_UUID.hex}.zip"
         symlink(self, link, protected)
         with mock.patch.object(export_store, "uuid4", return_value=FIXED_UUID):
             with self.assertRaises(FileExistsError):

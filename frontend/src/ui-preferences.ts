@@ -4,7 +4,7 @@ export type UIStyle = 'classic' | 'soft' | 'terminal';
 export type UIPreferences = { language: Language; uiStyle: UIStyle; showSpanSummary: boolean; showTimelineCursors: boolean };
 type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
-export const UI_PREFERENCES_KEY = 'codex-display.ui-preferences.v1';
+export const UI_PREFERENCES_KEY = 'codex-trace.ui-preferences.v1';
 export const uiStyles: readonly UIStyle[] = ['classic', 'soft', 'terminal'];
 
 // 仅翻译客户端自己的固定异常；来源说明和任意后端错误继续按原文显示。

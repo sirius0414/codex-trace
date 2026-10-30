@@ -30,7 +30,7 @@ MAX_REQUEST_BYTES = 1024 * 1024
 
 def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
                state_root: Path = DEV_ROOT / "index",
-               export_root: Path = DEV_ROOT / "Downloads/Codex Display",
+               export_root: Path = DEV_ROOT / "Downloads/Codex Trace",
                home: Path | None = None, instance_id: str | None = None,
                shutdown_token: str | None = None, shutdown_callback=None):
     """建立开发宿主；MCP 生命周期与 HTTP 服务绑定，工具契约仍由正式入口校验。"""
@@ -49,9 +49,9 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
         authorities.update({"localhost", "127.0.0.1"})
     tools = set(json.loads((ROOT / "contracts/tools.json").read_text(encoding="utf-8"))["tools"])
     environment = {**os.environ, "PYTHONPATH": str(ROOT / "backend"), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1",
-                   "CODEX_DISPLAY_CODEX_EXECUTABLE": str(codex),
-                   "CODEX_DISPLAY_STATE_ROOT": str(state_root.absolute()),
-                   "CODEX_DISPLAY_EXPORT_ROOT": str(export_root.absolute())}
+                   "CODEX_TRACE_CODEX_EXECUTABLE": str(codex),
+                   "CODEX_TRACE_STATE_ROOT": str(state_root.absolute()),
+                   "CODEX_TRACE_EXPORT_ROOT": str(export_root.absolute())}
     if home is not None:
         environment["CODEX_HOME"] = str(home.absolute())
 
@@ -59,7 +59,7 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
     async def lifespan(app):
         # 正式导出器只创建最终目录；开发宿主负责准备独立的 Downloads 祖先目录。
         export_root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        parameters = StdioServerParameters(command=str(python), args=["-m", "codex_display.app"],
+        parameters = StdioServerParameters(command=str(python), args=["-m", "codex_trace.app"],
                                            cwd=str(ROOT), env=environment)
         async with stdio_client(parameters) as (read, write):
             async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=15)) as session:
@@ -68,7 +68,7 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
                 yield
 
     async def index(request):
-        html = (HOST_FILES / "host.html").read_text(encoding="utf-8").replace("__CODEX_DISPLAY_DEV_TOKEN__", json.dumps(token))
+        html = (HOST_FILES / "host.html").read_text(encoding="utf-8").replace("__CODEX_TRACE_DEV_TOKEN__", json.dumps(token))
         return HTMLResponse(html)
 
     async def host_script(request):
@@ -76,11 +76,11 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
 
     async def health(request):
         # 仅确认本开发宿主实例已完成 lifespan 初始化，不读取任务、不创建观察会话。
-        return JSONResponse({"service": "codex-display-dev-browser", "pid": os.getpid(), "instanceId": instance})
+        return JSONResponse({"service": "codex-trace-dev-browser", "pid": os.getpid(), "instanceId": instance})
 
     async def shutdown(request):
         if (not shutdown_token or shutdown_callback is None or not secrets.compare_digest(
-                request.headers.get("x-codex-display-shutdown", ""), shutdown_token)):
+                request.headers.get("x-codex-trace-shutdown", ""), shutdown_token)):
             return JSONResponse({"message": "停止凭据无效。"}, status_code=403)
         shutdown_callback()
         return JSONResponse({"accepted": True}, status_code=202)
@@ -95,7 +95,7 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
             return HTMLResponse("前端构建不可用，请运行 npm run build 后刷新页面。", status_code=503)
 
     async def rpc(request):
-        if not secrets.compare_digest(request.headers.get("x-codex-display-token", ""), token):
+        if not secrets.compare_digest(request.headers.get("x-codex-trace-token", ""), token):
             return JSONResponse({"message": "本地调试凭据已失效，请刷新页面。"}, status_code=403)
         if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
             return JSONResponse({"message": "请求必须使用 JSON。"}, status_code=415)

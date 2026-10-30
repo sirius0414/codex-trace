@@ -3,7 +3,7 @@ from dataclasses import replace
 import errno
 import hashlib
 import json
-from codex_display.platform import filesystem as os
+from codex_trace.platform import filesystem as os
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,8 +11,8 @@ from unittest import mock
 import zipfile
 
 from jsonschema import Draft202012Validator
-from codex_display.adapters.raw import RawAdapter
-from codex_display.raw_export import ExportLimits, RawExportCollector, RawExportError
+from codex_trace.adapters.raw import RawAdapter
+from codex_trace.raw_export import ExportLimits, RawExportCollector, RawExportError
 import test_raw as fixtures
 import test_projection as projection_fixtures
 from platform_fixtures import symlink
@@ -284,7 +284,7 @@ class RawExportTests(unittest.TestCase):
         self.write(A)
         descriptor=os.open(self.destination,os.O_RDWR|os.O_CREAT|os.O_EXCL,0o600)
         self.addCleanup(os.close,descriptor)
-        with mock.patch('codex_display.raw_export.os.write',side_effect=OSError(errno.ENOSPC,'synthetic-full-disk')):
+        with mock.patch('codex_trace.raw_export.os.write',side_effect=OSError(errno.ENOSPC,'synthetic-full-disk')):
             with self.assertRaises(RawExportError) as context:
                 self.collector.collect(A,self.destination,destination_fd=descriptor)
         self.assertEqual(context.exception.code,'private-copy-failed')

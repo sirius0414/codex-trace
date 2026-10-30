@@ -20,9 +20,9 @@ function harness(handler,options={}) {
     }
     if(request.action==='commit')identity.commit=request.requestId;
     const result={...structuredClone(readyFixture),binding:request.binding,createRequestId:identity?.create,exportId:identity?.exportId,
-      filename:`codex-display-${thread}-frozen.zip`,manifest:{...structuredClone(readyFixture.manifest),rootThreadId:thread}};
+      filename:`codex-trace-${thread}-frozen.zip`,manifest:{...structuredClone(readyFixture.manifest),rootThreadId:thread}};
     if(request.action==='commit'||request.action==='result')result.save={...verifiedFixture.save,requestId:request.requestId,filename:result.filename,
-      path:`/Users/synthetic/Downloads/Codex Display/${result.filename}`};
+      path:`/Users/synthetic/Downloads/Codex Trace/${result.filename}`};
     if(request.action==='release'){
       result.status='released';
       if(identity.commit)result.save={status:'pending',requestId:identity.commit};
@@ -43,7 +43,7 @@ test('one click creates and commits distinct stable keys, validates the saved re
   await first;await flush();
   assert.deepEqual(h.calls.map(call=>call.action),['create','commit','release']);
   assert.notEqual(h.calls[0].requestId,h.calls[1].requestId);assert.equal(h.maxActive,1);
-  assert.equal(h.latest.busy,false);assert.match(h.latest.message,/本地导出已校验/);assert.match(h.latest.message,/来源范围不完整/);assert.match(h.latest.message,/Downloads\/Codex Display/);
+  assert.equal(h.latest.busy,false);assert.match(h.latest.message,/本地导出已校验/);assert.match(h.latest.message,/来源范围不完整/);assert.match(h.latest.message,/Downloads\/Codex Trace/);
   const stored=JSON.parse([...h.storage.values.values()][0]);
   assert.deepEqual(Object.keys(stored[0]).sort(),['commitRequestId','createRequestId','exportId','phase','sourceInstanceId','threadId'].sort());
   assert.equal(stored[0].phase,'verified');assert.doesNotMatch(JSON.stringify(stored),/manifest|sha256|Downloads|\.zip|unknown-source/);
@@ -214,7 +214,7 @@ test('128 uncertain intents are never evicted or replaced to admit a new task',a
   const storage=memoryStorage(),intents=Array.from({length:128},(_,index)=>({sourceInstanceId:binding.sourceInstanceId,
     threadId:`uncertain-${index}`,createRequestId:`original-create-${index}`,commitRequestId:`original-commit-${index}`,
     exportId:`original-export-${index}`,phase:'saveUnknown'}));
-  const encoded=JSON.stringify(intents);storage.setItem('codex-display.export-intents.v1',encoded);
+  const encoded=JSON.stringify(intents);storage.setItem('codex-trace.export-intents.v1',encoded);
   const h=harness((request,{reply})=>reply(request),{storage});await h.manager.run();await flush();
   assert.equal(h.latest.busy,false);assert.match(h.latest.message,/待核对导出意图数量已达上限/);
   assert.equal(h.calls.length,0);assert.equal([...storage.values.values()][0],encoded);h.manager.dispose();
@@ -237,12 +237,12 @@ test('receipt validation checks identity, request, filename, size, path, digest 
   const good=structuredClone(verifiedFixture),intent={...binding,createRequestId:good.createRequestId,commitRequestId:good.save.requestId,exportId:good.exportId,phase:'committing'};
   assert.equal(validateExportResult(good,binding,intent),good);
   const mutations=[value=>value.binding.selectionEpoch++,value=>value.createRequestId='wrong-key',value=>value.exportId='wrong-export',
-    value=>value.save.requestId='wrong-key',value=>value.save.filename='codex-display-other.zip',value=>value.save.bytes++,
+    value=>value.save.requestId='wrong-key',value=>value.save.filename='codex-trace-other.zip',value=>value.save.bytes++,
     value=>value.save.sha256='wrong',value=>value.save.verifiedAt=-1,value=>value.save.path='/tmp/'+value.save.filename,
-    value=>value.save.path='/Users/../Downloads/Codex Display/'+value.save.filename,
+    value=>value.save.path='/Users/../Downloads/Codex Trace/'+value.save.filename,
     value=>value.manifest.rootThreadId='other-task',value=>value.manifest.atomicSnapshot=true];
   for(const mutate of mutations){const value=structuredClone(good);mutate(value);assert.throws(()=>validateExportResult(value,binding,intent));}
-  assert.throws(()=>validateExportResult(good,binding,intent,{filename:'codex-display-other.zip',totalBytes:good.totalBytes,manifest:null}));
+  assert.throws(()=>validateExportResult(good,binding,intent,{filename:'codex-trace-other.zip',totalBytes:good.totalBytes,manifest:null}));
   assert.throws(()=>validateExportResult(good,binding,intent,{filename:good.filename,totalBytes:good.totalBytes+1,manifest:null}));
   assert.match(exportScopeMessage(null),/不能确认来源完整性/);
 });
@@ -259,7 +259,7 @@ test('verified reports retain bilingual coverage and receipt details when revisi
   assert.match(report.message,/本地导出已校验/);
   assert.match(report.messageEn,/Local export verified/);assert.match(report.messageEn,/Source coverage is incomplete/);
   assert.match(report.messageEn,/not a simultaneous snapshot across files/);
-  assert.match(report.messageEn,/Downloads\/Codex Display/);assert.match(report.messageEn,/SHA-256 [a-f0-9]{64}/);
+  assert.match(report.messageEn,/Downloads\/Codex Trace/);assert.match(report.messageEn,/SHA-256 [a-f0-9]{64}/);
   h.manager.bind({...binding,threadId:'other-task',selectionEpoch:2});
   h.manager.bind({...binding,selectionEpoch:3});
   assert.equal(h.latest.messageEn,report.messageEn);assert.equal(h.latest.message,report.message);

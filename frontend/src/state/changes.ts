@@ -192,13 +192,13 @@ export class ChangeReader {
 /** 本地验收显式启用的耗时采样，只记录版本/数量/时间元信息，正常界面默认关闭。 */
 declare global {
   interface Window {
-    __CODEX_DISPLAY_TIMING__?: boolean;
-    __CODEX_DISPLAY_TIMINGS__?: Array<ChangeTiming & { phase: 'received' | 'committed' | 'dom'; at: number }>;
+    __CODEX_TRACE_TIMING__?: boolean;
+    __CODEX_TRACE_TIMINGS__?: Array<ChangeTiming & { phase: 'received' | 'committed' | 'dom'; at: number }>;
   }
 }
 export function recordChangeTiming(phase: 'received' | 'committed' | 'dom', timing: ChangeTiming) {
-  if (typeof window === 'undefined' || window.__CODEX_DISPLAY_TIMING__ !== true) return;
-  const records = window.__CODEX_DISPLAY_TIMINGS__ ??= [];
+  if (typeof window === 'undefined' || window.__CODEX_TRACE_TIMING__ !== true) return;
+  const records = window.__CODEX_TRACE_TIMINGS__ ??= [];
   records.push({ ...timing, phase, at: performance.now() });
   if (records.length > 300) records.splice(0, records.length - 300);
 }

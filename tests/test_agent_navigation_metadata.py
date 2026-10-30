@@ -1,7 +1,7 @@
 """协作跳转只采用明确 Thread ID，且不改变已有父子关系证据。"""
 import unittest
 
-from codex_display.domain import project
+from codex_trace.domain import project
 import test_projection as fixtures
 
 

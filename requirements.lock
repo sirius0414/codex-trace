@@ -18,6 +18,7 @@ pydantic==2.14.1
 pydantic-settings==2.16.1
 pydantic_core==2.50.1
 PyJWT==2.15.1
+pywin32==311 ; sys_platform == 'win32'
 python-dotenv==1.2.4
 python-multipart==0.0.32
 referencing==0.37.0

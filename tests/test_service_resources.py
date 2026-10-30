@@ -6,8 +6,8 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
-from codex_display.service import TrajectoryService, ServiceError
-from codex_display.adapters.history import _metadata
+from codex_trace.service import TrajectoryService, ServiceError
+from codex_trace.adapters.history import _metadata
 from test_service import History, Store, Raw, A, B
 from contracts.test_contracts import validate
 
@@ -47,7 +47,7 @@ class ResourceTests(unittest.TestCase):
         self.assertNotIn(cursor, self.service.cursors)
         with self.assertRaises(ServiceError): self.service.read_view_state({'binding':old})
     def test_pressure_reclaims_inactive_session_without_invalidating_active_one(self):
-        with mock.patch('codex_display.service.MAX_VIEWS',2):
+        with mock.patch('codex_trace.service.MAX_VIEWS',2):
             old = self.open(); active = self.open(B)
             self.service.views[old['viewSessionId']].last_seen -= 61
             self.open(C)
@@ -61,7 +61,7 @@ class ResourceTests(unittest.TestCase):
         self.read({**binding,'threadId':B,'selectionEpoch':2})
         self.assertNotIn(cursor,self.service.cursors)
     def test_task_lru_reclaims_previous_selections_and_keeps_current(self):
-        with mock.patch('codex_display.service.MAX_CACHED_TASKS',2):
+        with mock.patch('codex_trace.service.MAX_CACHED_TASKS',2):
             binding = self.open(); self.read(binding)
             self.read({**binding,'threadId':B,'selectionEpoch':2})
             self.read({**binding,'threadId':C,'selectionEpoch':3})
@@ -69,13 +69,13 @@ class ResourceTests(unittest.TestCase):
             self.read({**binding,'threadId':A,'selectionEpoch':4})
             self.assertEqual(set(self.service.tasks),{A,C})
     def test_active_tasks_are_not_silently_evicted_at_limit(self):
-        with mock.patch('codex_display.service.MAX_CACHED_TASKS',2):
+        with mock.patch('codex_trace.service.MAX_CACHED_TASKS',2):
             self.read(self.open(A)); self.read(self.open(B))
             with self.assertRaises(ServiceError) as caught: self.read(self.open(C))
             self.assertEqual(caught.exception.code,'resourceLimit')
             self.assertEqual(set(self.service.tasks),{A,B})
     def test_task_pressure_reclaims_idle_view_before_global_view_limit(self):
-        with mock.patch('codex_display.service.MAX_CACHED_TASKS',2):
+        with mock.patch('codex_trace.service.MAX_CACHED_TASKS',2):
             old = self.open(A); self.read(old)
             active = self.open(B); self.read(active)
             cursor = self.service._cursor('page',old,self.service.tasks[A],before='synthetic')

@@ -2,8 +2,8 @@
 from copy import deepcopy
 import unittest
 
-from codex_display.domain.execution import execution_intervals
-from codex_display.domain.projection import project
+from codex_trace.domain.execution import execution_intervals
+from codex_trace.domain.projection import project
 import test_projection as fixtures
 
 raw = fixtures.raw

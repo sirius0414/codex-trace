@@ -1,4 +1,4 @@
-Codex Display — Third-party software notices
+Codex Trace — Third-party software notices
 
 Full upstream copyright, permission, disclaimer and NOTICE texts are preserved in LICENSES/.
 Declared license identifiers below are informational; the upstream texts govern.
@@ -160,6 +160,14 @@ python: PyJWT 2.15.1
 Declared license: MIT
   LICENSES/python/PyJWT@2.15.1/AUTHORS.rst
   LICENSES/python/PyJWT@2.15.1/LICENSE
+
+python: pywin32 311
+Declared license: PSF
+Platform condition: sys_platform == 'win32'
+  LICENSES/python/pywin32@311/adodbapi/license.txt
+  LICENSES/python/pywin32@311/pythonwin/license.txt
+  LICENSES/python/pywin32@311/win32/license.txt
+  LICENSES/python/pywin32@311/win32com/License.txt
 
 python: python-dotenv 1.2.4
 Declared license: BSD-3-Clause

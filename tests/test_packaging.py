@@ -33,7 +33,7 @@ verification = load_script("verify_install")
 
 class PackagingTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="codex-display-package-test-")
+        self.temporary = tempfile.TemporaryDirectory(prefix="codex-trace-package-test-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.assets = self.root / "assets"
@@ -96,6 +96,19 @@ class PackagingTests(unittest.TestCase):
         lock.write_text("# synthetic exact pins\nmcp==1.30.0\njsonschema==4.25.1\n")
         self.assertEqual(packaging.locked_versions(lock), {"mcp": "1.30.0", "jsonschema": "4.25.1"})
 
+    def test_platform_lock_pins_are_filtered_for_runtime_without_losing_exact_versions(self):
+        lock = self.root / "requirements.lock"
+        lock.write_text("mcp==1.30.0\npywin32==311 ; sys_platform == 'win32'\n")
+        self.assertEqual(packaging.locked_versions(lock, platform="darwin"), {"mcp": "1.30.0"})
+        self.assertEqual(packaging.locked_versions(lock, platform="win32"), {"mcp": "1.30.0", "pywin32": "311"})
+        for unsupported in ('pywin32>=311', 'pywin32==311 ; python_version >= "3.14"',
+                            'pywin32==311 ; sys_platform != "darwin"',
+                            'pywin32==311 ; sys_platform == "win32" or os_name == "nt"'):
+            with self.subTest(pin=unsupported):
+                lock.write_text("mcp==1.30.0\n" + unsupported + "\n")
+                with self.assertRaises(ValueError):
+                    packaging.locked_versions(lock, platform="win32")
+
     def test_runtime_mismatch_is_rejected_before_packaging(self):
         result = subprocess.CompletedProcess([], 0, json.dumps({"python": "3.14.2", "versionInfo": [3, 14, 2], "zstdAvailable": True, "packages": {"mcp": "1.29.0"}}), "")
         with mock.patch.object(packaging.subprocess, "run", return_value=result):
@@ -125,7 +138,7 @@ class PackagingTests(unittest.TestCase):
 
     def prepare_source(self):
         source = self.root / "source"
-        backend = source / "backend/codex_display"
+        backend = source / "backend/codex_trace"
         backend.mkdir(parents=True)
         (backend / "__init__.py").write_text("")
         (backend / "app.py").write_text('from pathlib import Path\nprint(Path(__file__).resolve())\n')
@@ -135,7 +148,7 @@ class PackagingTests(unittest.TestCase):
         (source / "contracts/trajectory.schema.json").write_text('{"type":"object"}')
         manifest = source / "plugin/.codex-plugin"
         manifest.mkdir(parents=True)
-        (manifest / "plugin.json").write_text('{"name":"codex-display","version":"0.0.0-test"}')
+        (manifest / "plugin.json").write_text('{"name":"codex-trace","version":"0.0.0-test"}')
         (source / "requirements.lock").write_text("mcp==1.30.0\n")
         (source / "package-lock.json").write_text('{"packages": {"": {"name": "synthetic"}}}')
         (source / "LICENSE").write_text("synthetic license")
@@ -179,16 +192,16 @@ class PackagingTests(unittest.TestCase):
         shutil.rmtree(source)
         shutil.rmtree(output)
         shutil.rmtree(self.assets)
-        launch = json.loads((cache / ".mcp.json").read_text())["mcpServers"]["codex-display"]
+        launch = json.loads((cache / ".mcp.json").read_text())["mcpServers"]["codex-trace"]
         self.assertEqual(launch["cwd"], "./backend")
-        self.assertEqual(launch["args"], ["-m", "codex_display.app"])
+        self.assertEqual(launch["args"], ["-m", "codex_trace.app"])
         self.assertTrue(Path(launch["command"]).is_absolute())
         self.assertNotIn(str(source), json.dumps(launch))
         environment = dict(os.environ)
         environment.pop("PYTHONPATH", None)
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         result = subprocess.run([launch["command"], *launch["args"]], cwd=cache / launch["cwd"], env=environment, text=True, capture_output=True, check=True, timeout=10)
-        self.assertEqual(Path(result.stdout.strip()), cache / "backend/codex_display/app.py")
+        self.assertEqual(Path(result.stdout.strip()), cache / "backend/codex_trace/app.py")
         shipped = [path.relative_to(cache).as_posix() for path in cache.rglob("*") if path.is_file()]
         self.assertFalse(any("__pycache__" in name or name.endswith(".pyc") for name in shipped))
         self.assertNotIn(".env", shipped)
@@ -233,8 +246,8 @@ class PackagingTests(unittest.TestCase):
         checks = []
         forbidden = self.root / "must-not-be-created"
         with mock.patch.dict(os.environ, {"CODEX_HOME": str(forbidden / "home"),
-                "CODEX_DISPLAY_STATE_ROOT": str(forbidden / "index"), "CODEX_DISPLAY_EXPORT_ROOT": str(forbidden / "exports"),
-                "CODEX_DISPLAY_UI_PATH": str(forbidden / "ui.html"), "PYTHONPATH": str(forbidden / "modules")}):
+                "CODEX_TRACE_STATE_ROOT": str(forbidden / "index"), "CODEX_TRACE_EXPORT_ROOT": str(forbidden / "exports"),
+                "CODEX_TRACE_UI_PATH": str(forbidden / "ui.html"), "PYTHONPATH": str(forbidden / "modules")}):
             report = verification.verify_cache(cache, self.root, checks)
         self.assertTrue(all(c["passed"] for c in checks), checks)
         self.assertGreater(len(checks), 25)
@@ -243,13 +256,13 @@ class PackagingTests(unittest.TestCase):
         self.assertFalse(forbidden.exists())
         self.assertNotIn(verification.SYNTHETIC_BODY, json.dumps(report) + json.dumps(checks))
         self.assertTrue((self.root / "index").is_dir())
-        self.assertEqual(len(list((self.root / "Downloads/Codex Display").glob("*.zip"))), 1)
+        self.assertEqual(len(list((self.root / "Downloads/Codex Trace").glob("*.zip"))), 1)
 
     def test_release_versions_and_lock_metadata_agree(self):
         package = json.loads((ROOT / "package.json").read_text())
         lock = json.loads((ROOT / "package-lock.json").read_text())
         manifest = json.loads((ROOT / "plugin/.codex-plugin/plugin.json").read_text())
-        from codex_display import __version__
+        from codex_trace import __version__
         self.assertEqual({package["version"], lock["version"], lock["packages"][""]["version"], manifest["version"], __version__}, {"0.1.0"})
 
     def test_stderr_privacy_check_scans_whole_stream_without_retaining_text(self):

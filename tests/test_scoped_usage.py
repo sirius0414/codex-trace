@@ -2,7 +2,7 @@
 from copy import deepcopy
 import unittest
 
-from codex_display.domain import project
+from codex_trace.domain import project
 import test_projection as fixtures
 from test_domain_evidence import usage
 

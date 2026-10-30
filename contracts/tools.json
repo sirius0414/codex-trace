@@ -3,7 +3,7 @@
   "schema": "trajectory.schema.json",
   "transport": "Host-validated app-only MCP result metadata; never content or structuredContent",
   "tools": {
-    "open_codex_display": {
+    "open_codex_trace": {
       "input": "OpenRequest",
       "output": "OpenResult"
     },
@@ -36,7 +36,7 @@
       "output": "DownloadResult",
       "delivery": {
         "mode": "localZip",
-        "directory": "~/Downloads/Codex Display/",
+        "directory": "~/Downloads/Codex Trace/",
         "clientSelectsDestination": false,
         "snapshotActions": [
           "create",

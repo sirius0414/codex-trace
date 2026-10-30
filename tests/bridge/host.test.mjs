@@ -104,7 +104,7 @@ test('local export reads only private metadata with a hard RPC deadline and exac
   host.app.callServerTool = async (request, options) => {
     calls.push({ request, options });
     return { content: [{ type: 'text', text: '本地导出请求已处理。' }],
-      structuredContent: { kind: 'untrusted-fallback' }, _meta: { 'codex-display/result': receipt } };
+      structuredContent: { kind: 'untrusted-fallback' }, _meta: { 'codex-trace/result': receipt } };
   };
   assert.equal(await host.privateResult('probe_export_records', args), receipt);
   assert.deepEqual(calls[0].request, { name: 'probe_export_records', arguments: args });
@@ -113,7 +113,7 @@ test('local export reads only private metadata with a hard RPC deadline and exac
   assert.equal(calls[0].options.resetTimeoutOnProgress, false);
   assert.ok(calls[0].options.signal instanceof AbortSignal);
   assert.equal(calls[0].options.signal.aborted, false);
-  host.app.callServerTool = async () => ({ content: [], _meta: { 'codex-display/result': receipt } });
+  host.app.callServerTool = async () => ({ content: [], _meta: { 'codex-trace/result': receipt } });
   assert.equal(await host.privateResult('probe_export_records', args), receipt);
 });
 
@@ -121,8 +121,8 @@ test('private-result RPC never falls back to structured content or leaks invalid
   const host = new HostAdapter(() => {}, () => {});
   host.app.connect = async () => {};
   host.app.getHostContext = () => ({});
-  for (const privateMeta of [undefined, {}, { wrong: {} }, { 'codex-display/result': null },
-    { 'codex-display/result': [] }, { 'codex-display/result': 'PRIVATE_RESPONSE_CONTENT' }]) {
+  for (const privateMeta of [undefined, {}, { wrong: {} }, { 'codex-trace/result': null },
+    { 'codex-trace/result': [] }, { 'codex-trace/result': 'PRIVATE_RESPONSE_CONTENT' }]) {
     host.app.callServerTool = async () => ({ content: [{ type: 'text', text: 'PRIVATE_RESPONSE_CONTENT' }],
       structuredContent: { kind: 'local-export' }, _meta: privateMeta });
     await assert.rejects(host.privateResult('probe_export_records', {}), error => {
@@ -133,7 +133,7 @@ test('private-result RPC never falls back to structured content or leaks invalid
     });
   }
   host.app.callServerTool = async () => ({ content: [{ type: 'text', text: 'PRIVATE_RESPONSE_CONTENT' }],
-    isError: true, _meta: { 'codex-display/result': { kind: 'local-export' } } });
+    isError: true, _meta: { 'codex-trace/result': { kind: 'local-export' } } });
   await assert.rejects(host.privateResult('probe_export_records', {}), error => {
     assert.equal(error.code, 'isError');
     assert.equal(error.message.includes('PRIVATE_RESPONSE_CONTENT'), false);

@@ -10,6 +10,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest import mock
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -21,7 +22,7 @@ finally:
 
 class ThirdPartyLicenseTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="codex-display-licenses-")
+        temporary = tempfile.TemporaryDirectory(prefix="codex-trace-licenses-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.package = self.root / "node_modules/@example/widget"
@@ -58,6 +59,73 @@ class ThirdPartyLicenseTests(unittest.TestCase):
             path.write_bytes(data)
         (directory / "manifest.json").write_text(json.dumps(manifest))
         return manifest, files
+
+    def windows_wheel(self, *, bad_path=False):
+        (self.root / "requirements.lock").write_text("example-py==1.2.3\npywin32==311 ; sys_platform == 'win32'\n")
+        wheelhouse = self.root / "wheelhouse"
+        wheelhouse.mkdir()
+        with zipfile.ZipFile(wheelhouse / "pywin32-311-cp314-cp314-win_amd64.whl", "w") as wheel:
+            wheel.writestr("pywin32-311.dist-info/METADATA", "Metadata-Version: 2.4\nName: pywin32\nVersion: 311\nLicense: PSF\n")
+            wheel.writestr("win32/license.txt", b"Windows upstream license\r\n")
+            wheel.writestr("win32com/License.txt", b"COM upstream license\r\n")
+            if bad_path:
+                wheel.writestr("../license.txt", b"Invalid path")
+        return wheelhouse
+
+    def distribution_for_platform(self, name):
+        if name == "pywin32":
+            raise legal.importlib.metadata.PackageNotFoundError(name)
+        return self.distribution
+
+    def write_snapshot(self, manifest, files):
+        directory = self.root / "third_party"
+        for name, data in files.items():
+            path = directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        (directory / "manifest.json").write_text(json.dumps(manifest))
+
+    def test_missing_platform_license_is_read_from_wheel_and_retained_in_inventory(self):
+        wheelhouse = self.windows_wheel()
+        with mock.patch.object(legal.importlib.metadata, "distribution", side_effect=self.distribution_for_platform):
+            manifest, files = legal.collect(self.root, wheelhouse)
+        component = next(item for item in manifest["components"] if item["name"] == "pywin32")
+        self.assertEqual(component["marker"], "sys_platform == 'win32'")
+        self.assertEqual(component["licenseArtifact"]["filename"], "pywin32-311-cp314-cp314-win_amd64.whl")
+        self.assertEqual(files["LICENSES/python/pywin32@311/win32/license.txt"], b"Windows upstream license\r\n")
+        self.assertEqual(files["LICENSES/python/pywin32@311/win32com/License.txt"], b"COM upstream license\r\n")
+        self.write_snapshot(manifest, files)
+        self.assertEqual(legal.check_snapshot(self.root), manifest)
+        shutil.rmtree(wheelhouse)
+        with mock.patch.object(legal.importlib.metadata, "distribution", side_effect=self.distribution_for_platform):
+            reused_manifest, reused_files = legal.collect(self.root)
+        self.assertEqual(reused_manifest, manifest)
+        self.assertEqual(reused_files, files)
+
+    def test_missing_platform_wheel_without_snapshot_explains_wheelhouse(self):
+        self.windows_wheel()
+        with mock.patch.object(legal.importlib.metadata, "distribution", side_effect=self.distribution_for_platform):
+            with self.assertRaisesRegex(ValueError, "--wheelhouse"):
+                legal.collect(self.root)
+
+    def test_wheel_legal_paths_cannot_escape_snapshot(self):
+        wheelhouse = self.windows_wheel(bad_path=True)
+        with mock.patch.object(legal.importlib.metadata, "distribution", side_effect=self.distribution_for_platform):
+            with self.assertRaisesRegex(ValueError, "Invalid third-party document path"):
+                legal.collect(self.root, wheelhouse)
+
+    def test_changed_platform_marker_or_corrupt_snapshot_cannot_be_reused(self):
+        wheelhouse = self.windows_wheel()
+        with mock.patch.object(legal.importlib.metadata, "distribution", side_effect=self.distribution_for_platform):
+            manifest, files = legal.collect(self.root, wheelhouse)
+            self.write_snapshot(manifest, files)
+            (self.root / "requirements.lock").write_text("example-py==1.2.3\npywin32==311 ; sys_platform == 'darwin'\n")
+            with self.assertRaisesRegex(ValueError, "--wheelhouse"):
+                legal.collect(self.root)
+            (self.root / "requirements.lock").write_text("example-py==1.2.3\npywin32==311 ; sys_platform == 'win32'\n")
+            (self.root / "third_party/LICENSES/python/pywin32@311/win32/license.txt").write_text("changed")
+            with self.assertRaisesRegex(ValueError, "missing or changed"):
+                legal.collect(self.root)
 
     def test_collects_full_license_notice_and_nested_texts_without_trusting_spdx_hint(self):
         manifest, files = self.snapshot()

@@ -3,8 +3,8 @@ from copy import deepcopy
 import unittest
 
 from jsonschema import Draft202012Validator
-from codex_display.domain import compose_group_status, unknown_status
-from codex_display.domain.evidence import state
+from codex_trace.domain import compose_group_status, unknown_status
+from codex_trace.domain.evidence import state
 import test_projection as fixtures
 
 

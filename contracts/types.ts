@@ -485,7 +485,7 @@ export type OpenResult = {
     "reason": "missing" | "conflict" | "invalid" | "unverified";
     "explanation": string;
   });
-  "uiResourceUri": "ui://codex-display/trajectory-v1.html";
+  "uiResourceUri": "ui://codex-trace/trajectory-v1.html";
 };
 
 export type ListThreadsRequest = {

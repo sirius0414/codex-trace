@@ -1,12 +1,12 @@
 import hashlib
 import json
-from codex_display.platform import filesystem as os
+from codex_trace.platform import filesystem as os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from codex_display.adapters.raw import RawAdapter, RawError
+from codex_trace.adapters.raw import RawAdapter, RawError
 from platform_fixtures import symlink
 
 A = '11111111-1111-4111-8111-111111111111'
@@ -334,7 +334,7 @@ class RawTests(unittest.TestCase):
                 changed = True
                 path.write_bytes(path.read_bytes().replace(b'"role": "user"', b'"role": "tool"'))
             return value
-        with mock.patch('codex_display.adapters.raw.os.pread', rewrite):
+        with mock.patch('codex_trace.adapters.raw.os.pread', rewrite):
             snapshot = self.read(path)
         self.assertEqual(snapshot.records, [])
         self.assertIn('source-changed-during-read', snapshot.issues)

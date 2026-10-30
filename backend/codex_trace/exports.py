@@ -61,7 +61,7 @@ class ExportManager:
         self.directory_identity = _identity(os.fstat(self.directory))
         self.ttl_ms, self.max_snapshots = ttl_ms, max_snapshots
         self.stop = threading.Event()
-        self.janitor = threading.Thread(target=self._janitor, name='codex-display-export-cleanup', daemon=True)
+        self.janitor = threading.Thread(target=self._janitor, name='codex-trace-export-cleanup', daemon=True)
         self.janitor.start()
 
     def _janitor(self):
@@ -283,7 +283,7 @@ class ExportManager:
                 raise ValueError('snapshot-replaced')
             _verify_bytes(fd, result['bytes'], result['sha256'])
             candidate = self.destination.reserve(result['bytes'], result['sha256'],
-                prefix='codex-display-' + binding['threadId'] + '-' + str(state['createdAt']))
+                prefix='codex-trace-' + binding['threadId'] + '-' + str(state['createdAt']))
             state.update(status='ready', manifest=result['manifest'], bytes=result['bytes'], sha256=result['sha256'],
                          candidate=candidate, mtimeNs=info.st_mtime_ns, ctimeNs=info.st_ctime_ns)
             if self._read('export-release:' + export_id):

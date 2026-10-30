@@ -21,8 +21,8 @@ from package_plugin import executable, locked_versions, verify_runtime
 from platform_runtime import IS_WINDOWS, npm_command, state_root, venv_python
 
 ROOT = Path(__file__).resolve().parents[1]
-MARKET = "codex-display-local"
-PLUGIN = "codex-display"
+MARKET = "codex-trace-local"
+PLUGIN = "codex-trace"
 SELECTOR = f"{PLUGIN}@{MARKET}"
 
 
@@ -146,7 +146,7 @@ def install(output: Path) -> dict:
     verify_runtime(python, locked_versions(package / "requirements.lock"))
     manifest = json.loads((package / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
     if manifest.get("name") != PLUGIN:
-        raise ValueError("只能更新 codex-display。")
+        raise ValueError("只能更新 codex-trace。")
     previous = next((entry for entry in cli_json(codex, "plugin", "marketplace", "list", "--json")["marketplaces"]
                      if entry["name"] == MARKET), None)
     if previous and previous.get("marketplaceSource", {}).get("sourceType") != "local":

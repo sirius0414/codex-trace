@@ -1,6 +1,6 @@
 """跨平台测试资源；只跳过缺少 Windows 符号链接权限的单个链接用例。"""
 import os
-from codex_display.platform import filesystem
+from codex_trace.platform import filesystem
 
 
 def assert_private_mode(test, path, expected):

@@ -27,7 +27,7 @@ finally:
 
 class UpdatePluginTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="codex-display-update-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="codex-trace-update-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
         self.home = self.root / "codex-home"
@@ -38,14 +38,14 @@ class UpdatePluginTests(unittest.TestCase):
         self.output = self.root / "update"
         self.package = self.output / "plugin"
         self.package.mkdir(parents=True)
-        self.launch = {"command": sys.executable, "args": ["-m", "codex_display.app"],
+        self.launch = {"command": sys.executable, "args": ["-m", "codex_trace.app"],
                        "cwd": "./backend", "env": {"PYTHONDONTWRITEBYTECODE": "1"}}
         files = {
             ".codex-plugin/plugin.json": json.dumps({"name": update.PLUGIN, "version": "0.1.0"}),
             ".mcp.json": json.dumps({"mcpServers": {update.PLUGIN: self.launch}}),
             "requirements.lock": "mcp==1.30.0\n",
             "ui/trajectory-v1.html": "<html>new UI</html>",
-            "backend/codex_display/app.py": "# synthetic app\n",
+            "backend/codex_trace/app.py": "# synthetic app\n",
         }
         for relative, content in files.items():
             path = self.package / relative
@@ -56,7 +56,7 @@ class UpdatePluginTests(unittest.TestCase):
         self.catalog = self.marketplace / ".agents/plugins/marketplace.json"
         self.catalog.parent.mkdir(parents=True)
         update.write_json(self.catalog, {"name": update.MARKET, "plugins": [{"name": update.PLUGIN,
-            "source": {"source": "local", "path": "./plugins/codex-display"}}]})
+            "source": {"source": "local", "path": "./plugins/codex-trace"}}]})
         self.expected = update.fingerprints(self.package)
         update.write_json(self.output / "verification.json", {"passed": True})
         update.write_json(self.output / "update-plan.json", {"schemaVersion": 1,

@@ -21,7 +21,7 @@ SECRET = "PRIVATE_SYNTHETIC_TEXT_ONLY_APP_MAY_READ"
 
 class AppTests(unittest.TestCase):
     def test_production_read_and_error_envelopes_keep_bodies_private(self):
-        with tempfile.TemporaryDirectory(prefix="codex-display-app-test-") as temp:
+        with tempfile.TemporaryDirectory(prefix="codex-trace-app-test-") as temp:
             root = Path(temp).resolve()
             source = root / "home/sessions" / f"rollout-2026-10-22T00-00-00-{THREAD}.jsonl"
             source.parent.mkdir(parents=True)
@@ -41,9 +41,9 @@ for line in sys.stdin:
   print(json.dumps({{"id":r["id"],"error":{{"code":-32601,"message":"unsupported"}}}}),flush=True); continue
  print(json.dumps({{"id":r["id"],"result":v}}),flush=True)
 ''')
-            params = StdioServerParameters(command=sys.executable, args=["-m", "codex_display.app"], cwd=ROOT,
+            params = StdioServerParameters(command=sys.executable, args=["-m", "codex_trace.app"], cwd=ROOT,
                 env={"PYTHONPATH": str(ROOT / "backend"), "CODEX_HOME": str(root / "home"),
-                     "CODEX_DISPLAY_STATE_ROOT": str(root / "index"), "CODEX_DISPLAY_CODEX_EXECUTABLE": str(executable)})
+                     "CODEX_TRACE_STATE_ROOT": str(root / "index"), "CODEX_TRACE_CODEX_EXECUTABLE": str(executable)})
 
             async def run():
                 with (root / "stderr.txt").open("w+") as err:
@@ -54,7 +54,7 @@ for line in sys.stdin:
                             self.assertEqual(len(listing.tools), 10)
                             self.assertTrue(all(t.meta["ui"]["visibility"] == ["app"] for t in listing.tools))
                             for tool in listing.tools:
-                                if tool.name in ("open_codex_display", "open_codex_display_panel"):
+                                if tool.name in ("open_codex_trace", "open_codex_trace_panel"):
                                     self.assertEqual(len(tool.icons), 1)
                                     icon = tool.icons[0]
                                     self.assertEqual(icon.mimeType, "image/svg+xml")
@@ -64,29 +64,29 @@ for line in sys.stdin:
                                                      (ROOT / "plugin/assets/icon.svg").read_bytes())
                                 else:
                                     self.assertIsNone(tool.icons)
-                            opened = await session.call_tool("open_codex_display_panel", {}, meta={"threadId": THREAD})
+                            opened = await session.call_tool("open_codex_trace_panel", {}, meta={"threadId": THREAD})
                             self.assertFalse(opened.isError)
-                            view = opened.meta["codex-display/result"]
+                            view = opened.meta["codex-trace/result"]
                             binding = {"schemaVersion": "1.0.0", "sourceInstanceId": view["sourceInstanceId"],
                                        "viewSessionId": view["viewSessionId"], "selectionEpoch": 1, "threadId": THREAD}
                             reply = await session.call_tool("read_trajectory", {"binding": binding, "cursor": None, "anchorEventId": None})
                             self.assertFalse(reply.isError)
                             self.assertIsNone(reply.structuredContent)
                             self.assertNotIn(SECRET, json.dumps([c.model_dump() for c in reply.content]))
-                            snapshot = reply.meta["codex-display/result"]
+                            snapshot = reply.meta["codex-trace/result"]
                             self.assertTrue(snapshot["events"])
                             self.assertIn(SECRET, json.dumps(snapshot))
                             exported = await session.call_tool('download_records', {
                                 'action': 'create', 'binding': binding, 'requestId': str(uuid4())})
                             self.assertFalse(exported.isError, exported.model_dump_json())
-                            export = exported.meta['codex-display/result']
+                            export = exported.meta['codex-trace/result']
                             self.assertEqual(export['status'], 'ready')
                             self.assertEqual(export['save']['status'], 'notRequested')
                             downloaded = await session.call_tool('download_records', {
                                 'action': 'read', 'binding': binding, 'exportId': export['exportId'], 'cursor': None})
                             self.assertFalse(downloaded.isError)
                             self.assertNotIn(SECRET, json.dumps([c.model_dump() for c in downloaded.content]))
-                            chunk = downloaded.meta['codex-display/result']['chunk']
+                            chunk = downloaded.meta['codex-trace/result']['chunk']
                             self.assertIsNone(chunk['nextCursor'])
                             with zipfile.ZipFile(io.BytesIO(base64.b64decode(chunk['base64']))) as archive:
                                 records = [n for n in archive.namelist() if n.startswith('records/')]
@@ -94,7 +94,7 @@ for line in sys.stdin:
                                 self.assertEqual(archive.read(records[0]), source.read_bytes())
                             released = await session.call_tool('download_records', {
                                 'action': 'release', 'binding': binding, 'exportId': export['exportId']})
-                            self.assertEqual(released.meta['codex-display/result']['status'], 'released')
+                            self.assertEqual(released.meta['codex-trace/result']['status'], 'released')
                             invalid = await session.call_tool("read_trajectory", {"binding": binding, "forbidden": SECRET})
                             self.assertTrue(invalid.isError)
                             self.assertNotIn(SECRET, invalid.model_dump_json())

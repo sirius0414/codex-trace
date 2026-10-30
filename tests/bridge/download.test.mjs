@@ -103,7 +103,7 @@ test('multi-chunk download preserves binary bytes, validates hashes and reports 
   }, expectedFor(content), phase => phases.push(phase));
   assert.deepEqual(Buffer.from(result.bytes), content);
   assert.equal(result.hash, digest(content));
-  assert.equal(result.filename, 'codex-display-m0-local-download.zip');
+  assert.equal(result.filename, 'codex-trace-m0-local-download.zip');
   assert.deepEqual(offsets, [0, 4, 8]);
   assert.deepEqual(phases, Array(3).fill(['download-start', 'chunk-received', 'chunk-verified']).flat());
 });

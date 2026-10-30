@@ -24,9 +24,9 @@ export function isLocalOutputPath(value, filename, maximum = 8192) {
   return Boolean(parts && parts.at(-1) === filename);
 }
 
-/** 正式导出固定在 home 下的 Downloads/Codex Display，不接受 UI 提供的目的地。 */
+/** 正式导出固定在 home 下的 Downloads/Codex Trace，不接受 UI 提供的目的地。 */
 export function isExportReceiptPath(value, filename) {
   const parts = components(value, 4096);
   return Boolean(parts && parts.length >= 3 && parts.at(-3) === 'Downloads'
-    && parts.at(-2) === 'Codex Display' && parts.at(-1) === filename);
+    && parts.at(-2) === 'Codex Trace' && parts.at(-1) === filename);
 }

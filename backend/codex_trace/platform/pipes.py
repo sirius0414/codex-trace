@@ -126,7 +126,7 @@ class ThreadPipeTransport:
             os.set_blocking(stdin.fileno(), False)
             os.set_blocking(stdout.fileno(), False)
         startup = [(target, name, threading.Event()) for target, name in (
-            (self._reader, "codex-display-pipe-read"), (self._writer, "codex-display-pipe-write"))]
+            (self._reader, "codex-trace-pipe-read"), (self._writer, "codex-trace-pipe-write"))]
         errors = []
         self.threads = [threading.Thread(target=self._run, args=(target, ready, errors), name=name, daemon=True)
                         for target, name, ready in startup]

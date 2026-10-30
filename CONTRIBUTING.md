@@ -26,9 +26,9 @@ CR 时重点检查这些约束是否能从实现及就近注释中确认：
 
 | 关注点 | 主要入口 |
 | --- | --- |
-| MCP 注册、宿主身份和私有结果 | `backend/codex_display/app.py`、`service.py` |
-| 历史／原始来源、证据投影、共享观察 | `backend/codex_display/adapters/`、`domain/`、`observation.py` |
-| 冻结导出、持久回执和本地发布 | `backend/codex_display/raw_export.py`、`exports.py`、`export_store.py` |
+| MCP 注册、宿主身份和私有结果 | `backend/codex_trace/app.py`、`service.py` |
+| 历史／原始来源、证据投影、共享观察 | `backend/codex_trace/adapters/`、`domain/`、`observation.py` |
+| 冻结导出、持久回执和本地发布 | `backend/codex_trace/raw_export.py`、`exports.py`、`export_store.py` |
 | 前端请求调度、状态合并及恢复 | `frontend/src/main.tsx`、`bridge/`、`state/` |
 | 列表分组、概览和阅读锚点 | `frontend/src/components/model.ts`、`EventList.tsx`、`Overview.tsx` |
 | 构建、离线打包、更新及隔离验证 | `vite.config.ts`、`scripts/` |

@@ -63,7 +63,7 @@ export default function TraceUI(props: TraceUIProps) {
   const { language, uiStyle, showSpanSummary, showTimelineCursors, setLanguage, setUiStyle, setShowSpanSummary, setShowTimelineCursors, t } = usePreferences();
   const kindLabels = localizedKindLabels(language), statusLabels = localizedStatusLabels(language);
   const time = (value: number | null | undefined) => clockTime(value, language);
-  const versionDescription = [`Codex Display ${versionLabel}`, buildInfo.sourceHash && `${t('源码指纹', 'Source fingerprint')}: ${buildInfo.sourceHash}`, buildInfo.builtAt && `${t('构建时间', 'Built at')}: ${buildInfo.builtAt}`].filter(Boolean).join('\n');
+  const versionDescription = [`Codex Trace ${versionLabel}`, buildInfo.sourceHash && `${t('源码指纹', 'Source fingerprint')}: ${buildInfo.sourceHash}`, buildInfo.builtAt && `${t('构建时间', 'Built at')}: ${buildInfo.builtAt}`].filter(Boolean).join('\n');
   const styleLabels = { classic: t('经典', 'Classic'), soft: t('柔和', 'Soft'), terminal: t('终端', 'Terminal') };
   const styleNotes = { classic: t('简洁、清晰的默认界面', 'Clean and familiar'), soft: t('柔和配色与圆角控件', 'Soft colors and rounded controls'), terminal: t('等宽字体与利落边框', 'Monospace type and crisp borders') };
   const [popover, setPopover] = useState<'usage' | 'reading' | 'tasks' | 'settings' | null>(null);

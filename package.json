@@ -1,5 +1,5 @@
 {
-  "name": "codex-display",
+  "name": "codex-trace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,6 +11,7 @@
     "dev:browser:stop": "node scripts/run_python.mjs manage_dev_browser.py stop",
     "dev:browser:restart": "node scripts/run_python.mjs manage_dev_browser.py restart",
     "dev:browser:status": "node scripts/run_python.mjs manage_dev_browser.py status",
+    "release:build": "node scripts/run_python.mjs build_release.py",
     "plugin:update": "node scripts/run_python.mjs update_plugin.py"
   },
   "dependencies": {

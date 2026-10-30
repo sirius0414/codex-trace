@@ -24,8 +24,8 @@ from pydantic import AnyUrl
 
 
 ROOT = Path(__file__).resolve().parents[1]
-URI = "ui://codex-display/trajectory-v1.html"
-PANEL_URI = "ui://codex-display/trajectory-panel-v1.html"
+URI = "ui://codex-trace/trajectory-v1.html"
+PANEL_URI = "ui://codex-trace/trajectory-panel-v1.html"
 THREAD_A = "11111111-1111-4111-8111-111111111111"
 THREAD_B = "22222222-2222-4222-8222-222222222222"
 SECRET = "SYNTHETIC_PRIVATE_VALUE_MUST_NOT_BE_EXPORTED"
@@ -34,7 +34,7 @@ HTML = '<!doctype html><html><head><style>body{margin:0}</style></head><body>M0 
 
 class ServerTests(unittest.TestCase):
     def run_session(self, scenario):
-        with tempfile.TemporaryDirectory(prefix="codex-display-sdk-test-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="codex-trace-sdk-test-") as temporary:
             root = Path(temporary).resolve()
             ui = root / "ui.html"
             ui.write_text(HTML)
@@ -68,11 +68,11 @@ class ServerTests(unittest.TestCase):
                     print(json.dumps({{"id": request["id"], "result": result}}), flush=True)
             '''))
             params = StdioServerParameters(
-                command=sys.executable, args=["-m", "codex_display.server"], cwd=ROOT,
+                command=sys.executable, args=["-m", "codex_trace.server"], cwd=ROOT,
                 env={"PYTHONPATH": str(ROOT / "backend"), "PYTHONDONTWRITEBYTECODE": "1",
-                     "CODEX_DISPLAY_UI_PATH": str(ui), "CODEX_DISPLAY_AUDIT_PATH": str(audit),
-                     "CODEX_DISPLAY_EXPORT_ROOT": str(root / "exports"),
-                     "CODEX_DISPLAY_CODEX_EXECUTABLE": str(executable), "CODEX_HOME": str(home)},
+                     "CODEX_TRACE_UI_PATH": str(ui), "CODEX_TRACE_AUDIT_PATH": str(audit),
+                     "CODEX_TRACE_EXPORT_ROOT": str(root / "exports"),
+                     "CODEX_TRACE_CODEX_EXECUTABLE": str(executable), "CODEX_HOME": str(home)},
             )
 
             async def run():
@@ -91,16 +91,16 @@ class ServerTests(unittest.TestCase):
         async def scenario(session, *_):
             listing = await session.list_tools()
             tools = {tool.name: tool for tool in listing.tools}
-            self.assertEqual(set(tools), {"open_codex_display", "open_codex_display_panel", "probe_host_observation", "probe_diagnostic_event", "probe_thread_identity", "probe_local_download", "probe_export_records"})
+            self.assertEqual(set(tools), {"open_codex_trace", "open_codex_trace_panel", "probe_host_observation", "probe_diagnostic_event", "probe_thread_identity", "probe_local_download", "probe_export_records"})
             self.assertFalse(tools["probe_export_records"].annotations.readOnlyHint)
             for tool in tools.values():
                 self.assertEqual(tool.meta["ui"]["visibility"], ["app"])
                 self.assertEqual(tool.meta["openai/visibility"], "private")
-            entrypoint = tools["open_codex_display"]
+            entrypoint = tools["open_codex_trace"]
             self.assertEqual(entrypoint.meta["openai/ui"]["entrypoints"], [{"type": "global"}])
             self.assertEqual(entrypoint.meta["ui"]["resourceUri"], URI)
             self.assertTrue(entrypoint.annotations.readOnlyHint)
-            panel = tools["open_codex_display_panel"]
+            panel = tools["open_codex_trace_panel"]
             self.assertEqual(panel.title, "执行轨迹")
             self.assertEqual(panel.meta["openai/ui"]["entrypoints"], [{"type": "thread"}])
             self.assertEqual(panel.meta["ui"]["resourceUri"], PANEL_URI)
@@ -123,7 +123,7 @@ class ServerTests(unittest.TestCase):
             activation_ids = []
             server_ids = []
             for metadata, expected_id, reason in cases:
-                reply = await session.call_tool("open_codex_display", {}, meta=metadata)
+                reply = await session.call_tool("open_codex_trace", {}, meta=metadata)
                 self.assertFalse(reply.isError)
                 result = reply.structuredContent
                 self.assertEqual(result["candidateThreadId"], expected_id)
@@ -153,8 +153,8 @@ class ServerTests(unittest.TestCase):
 
     def test_opening_surface_is_selected_by_tool_name_and_never_reads_history(self):
         async def scenario(session, root, audit):
-            for name, surface, uri in (("open_codex_display", "global", URI),
-                                       ("open_codex_display_panel", "thread", PANEL_URI)):
+            for name, surface, uri in (("open_codex_trace", "global", URI),
+                                       ("open_codex_trace_panel", "thread", PANEL_URI)):
                 opposite = "thread" if surface == "global" else "global"
                 reply = await session.call_tool(name, {}, meta={"thread_id": THREAD_A, "entrypoint": opposite,
                                                                 "serverVersion": "fake", "privateValue": SECRET})
@@ -198,7 +198,7 @@ class ServerTests(unittest.TestCase):
 
     def test_download_hash_and_raw_fixture_bytes_roundtrip(self):
         async def scenario(session, *_):
-            opened = (await session.call_tool("open_codex_display", {})).structuredContent
+            opened = (await session.call_tool("open_codex_trace", {})).structuredContent
             downloaded = await session.call_tool("probe_local_download", {"offset": 0})
             self.assertFalse(downloaded.isError)
             result = downloaded.structuredContent
@@ -226,12 +226,12 @@ class ServerTests(unittest.TestCase):
 
     def test_local_export_is_verified_private_and_idempotent_without_history_reads(self):
         async def scenario(session, root, audit):
-            opened = (await session.call_tool("open_codex_display_panel", {}, meta={"thread_id": THREAD_A})).structuredContent
+            opened = (await session.call_tool("open_codex_trace_panel", {}, meta={"thread_id": THREAD_A})).structuredContent
             arguments = {"activationId": opened["activationId"], "uiInstanceId": str(uuid4()), "requestId": str(uuid4())}
             reply = await session.call_tool("probe_export_records", arguments)
             self.assertFalse(reply.isError)
             self.assertIsNone(reply.structuredContent)
-            result = reply.meta["codex-display/result"]
+            result = reply.meta["codex-trace/result"]
             self.assertEqual(result["kind"], "local-export")
             self.assertEqual(result["requestId"], arguments["requestId"])
             self.assertTrue(result["verified"])
@@ -243,7 +243,7 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(saved.read_bytes()).hexdigest(), opened["downloadExpectedSha256"])
             self.assertNotIn(result["path"], json.dumps([item.model_dump() for item in reply.content]))
             retry = await session.call_tool("probe_export_records", arguments)
-            self.assertEqual(retry.meta["codex-display/result"], result)
+            self.assertEqual(retry.meta["codex-trace/result"], result)
             self.assertEqual(list(saved.parent.iterdir()), [saved])
             invalid = await session.call_tool("probe_export_records", {**arguments, "path": str(root / "unapproved")})
             self.assertTrue(invalid.isError)
@@ -257,7 +257,7 @@ class ServerTests(unittest.TestCase):
 
     def test_diagnostic_tool_is_bounded_and_schema_errors_do_not_echo_private_values(self):
         async def scenario(session, root, audit):
-            opened = (await session.call_tool("open_codex_display", {})).structuredContent
+            opened = (await session.call_tool("open_codex_trace", {})).structuredContent
             required = {"activationId": opened["activationId"], "uiInstanceId": str(uuid4()), "phase": "page-ready"}
             valid = await session.call_tool("probe_diagnostic_event", {
                 **required, "code": "save-requested", "elapsedMs": 0, "visibility": "visible",
@@ -297,7 +297,7 @@ class ServerTests(unittest.TestCase):
 
     def test_internal_diagnostic_failure_returns_no_original_exception_message(self):
         sys.path.insert(0, str(ROOT / "backend"))
-        from codex_display import server as module
+        from codex_trace import server as module
         with mock.patch.object(module.service, "audit", side_effect=OSError(SECRET)):
             reply = asyncio.run(module.call_tool("probe_local_download", {"offset": 0}))
         self.assertTrue(reply.isError)

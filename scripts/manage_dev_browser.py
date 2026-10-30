@@ -29,7 +29,7 @@ from platform_dev import IS_WINDOWS, exclusive_lock, spawn_options, windows_proc
 ROOT = Path(__file__).resolve().parents[1]
 DEV_ROOT = ROOT / "build/dev-browser"
 SERVER = ROOT / "scripts/dev_browser.py"
-SERVICE = "codex-display-dev-browser"
+SERVICE = "codex-trace-dev-browser"
 
 
 class ManagerError(RuntimeError):
@@ -220,7 +220,7 @@ class ServiceManager:
             raise ManagerError("服务缺少安全停止凭据，请在原启动终端使用 Ctrl+C。")
         client = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         request = urllib.request.Request(f"http://127.0.0.1:{record['port']}/_dev/shutdown", data=b"",
-            headers={"X-Codex-Display-Shutdown": token}, method="POST")
+            headers={"X-Codex-Trace-Shutdown": token}, method="POST")
         try:
             with client.open(request, timeout=2) as response:
                 if response.status != 202:

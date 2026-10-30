@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import unittest
 from jsonschema import Draft202012Validator
-from codex_display.domain.projection import project, statistics
+from codex_trace.domain.projection import project, statistics
 
 SCHEMA = json.loads((Path(__file__).resolve().parents[1] / 'contracts/trajectory.schema.json').read_text())
 

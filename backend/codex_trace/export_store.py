@@ -107,7 +107,7 @@ class ExportStore:
 
     def __init__(self, root: Path | None = None):
         # root 只允许在构造时由本地配置或测试注入，不能来自工具请求或前端。
-        self.root = Path(root) if root is not None else Path.home() / "Downloads" / "Codex Display"
+        self.root = Path(root) if root is not None else Path.home() / "Downloads" / "Codex Trace"
         if not self.root.is_absolute() or ".." in self.root.parts or self.root == Path(self.root.anchor):
             raise ValueError("invalid-export-directory")
 
@@ -143,7 +143,7 @@ class ExportStore:
                 or type(result.get("verified")) is not bool):
             raise ValueError("invalid-export-result")
 
-    def reserve(self, size: int, sha256: str, prefix: str = "codex-display") -> dict:
+    def reserve(self, size: int, sha256: str, prefix: str = "codex-trace") -> dict:
         """选择唯一候选文件名，由调用方先持久化，再调用 publish_file。
 
         此处不创建目录或文件；同一保存请求重试时必须复用原候选，不能再次分配。
@@ -231,7 +231,7 @@ class ExportStore:
 
         return self._publish(candidate, copy_source, existing_ok=True)
 
-    def save_bytes(self, payload: bytes, prefix: str = "codex-display") -> dict:
+    def save_bytes(self, payload: bytes, prefix: str = "codex-trace") -> dict:
         """兼容小型 M0 合成探针；正式导出使用文件描述符流式复制。"""
         if not isinstance(payload, bytes):
             raise TypeError("export-payload-must-be-bytes")
@@ -245,7 +245,7 @@ class ExportStore:
     def _publish(self, candidate_result: dict, copy, *, existing_ok: bool) -> dict:
         """临时写入、fsync、核验、无覆盖发布、最终读回；发布后异常必须保留目标。"""
         filename, size, checksum = candidate_result["filename"], candidate_result["bytes"], candidate_result["sha256"]
-        temporary_name = f".codex-display-tmp-{uuid4().hex}"
+        temporary_name = f".codex-trace-tmp-{uuid4().hex}"
         directory = self._open_directory()
         directory_identity = _identity(os.fstat(directory))
         owned = None

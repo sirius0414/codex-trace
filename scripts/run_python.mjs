@@ -8,8 +8,8 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const venv = fileURLToPath(new URL(windows ? '../.venv/Scripts/python.exe' : '../.venv/bin/python', import.meta.url));
 const [script, ...arguments_] = process.argv.slice(2);
 if (!script || !/^[A-Za-z0-9_-]+\.py$/.test(script)) throw new Error('Expected a repository Python script name');
-const candidates = process.env.CODEX_DISPLAY_PYTHON
-  ? [[process.env.CODEX_DISPLAY_PYTHON]]
+const candidates = process.env.CODEX_TRACE_PYTHON
+  ? [[process.env.CODEX_TRACE_PYTHON]]
   : [...(existsSync(venv) ? [[venv]] : []), ...(windows ? [['py', '-3.14'], ['python']] : [['python3']])];
 let result;
 for (const command of candidates) {
@@ -18,6 +18,6 @@ for (const command of candidates) {
   if (result.error?.code !== 'ENOENT') break;
 }
 if (result?.error) {
-  console.error(`Unable to start Python: ${result.error.message}. Set CODEX_DISPLAY_PYTHON to an existing interpreter.`);
+  console.error(`Unable to start Python: ${result.error.message}. Set CODEX_TRACE_PYTHON to an existing interpreter.`);
   process.exitCode = 1;
 } else process.exitCode = result?.status ?? 1;

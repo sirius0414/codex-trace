@@ -33,7 +33,7 @@ verification = load_script("verify_install")
 
 class DevBrowserTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="codex-display-browser-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="codex-trace-browser-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
         self.assets = self.root / "assets"
@@ -41,7 +41,7 @@ class DevBrowserTests(unittest.TestCase):
         (self.assets / "app.js").write_text('document.getElementById("root").textContent="synthetic UI";')
         (self.assets / "style.css").write_text("body{margin:0}")
         codex, self.source, self.methods = verification.synthetic_history(self.root, sys.executable)
-        self.export_root = self.root / "Downloads/Codex Display"
+        self.export_root = self.root / "Downloads/Codex Trace"
         self.app = development.create_app(Path(sys.executable), codex, 8765,
             assets=self.assets, state_root=self.root / "index", export_root=self.export_root,
             home=self.root / "codex-home")
@@ -57,26 +57,26 @@ class DevBrowserTests(unittest.TestCase):
         client = TestClient(app, base_url="http://localhost:8765")
         self.assertEqual(client.post("/_dev/shutdown").status_code, 403)
         self.assertEqual(client.post("/_dev/shutdown", headers={
-            "X-Codex-Display-Shutdown": "separate-shutdown-capability", "Origin": "https://elsewhere.invalid"}).status_code, 403)
+            "X-Codex-Trace-Shutdown": "separate-shutdown-capability", "Origin": "https://elsewhere.invalid"}).status_code, 403)
         self.assertFalse(stopped)
         self.assertEqual(client.post("/_dev/shutdown", headers={
-            "X-Codex-Display-Shutdown": "separate-shutdown-capability"}).status_code, 202)
+            "X-Codex-Trace-Shutdown": "separate-shutdown-capability"}).status_code, 202)
         self.assertEqual(stopped, [True])
 
     def call(self, client, name, arguments):
         response = client.post("/rpc", json={"name": name, "arguments": arguments},
-            headers={"X-Codex-Display-Token": self.app.state.token, "Origin": "http://localhost:8765"})
+            headers={"X-Codex-Trace-Token": self.app.state.token, "Origin": "http://localhost:8765"})
         self.assertEqual(response.status_code, 200, response.text)
         result = response.json()
         self.assertFalse(result.get("isError"), result)
         self.assertNotIn(verification.SYNTHETIC_BODY, json.dumps(result.get("content")))
         self.assertIsNone(result.get("structuredContent"))
-        return result["_meta"]["codex-display/result"]
+        return result["_meta"]["codex-trace/result"]
 
     def test_real_mcp_selection_trajectory_and_local_export(self):
         with self.client() as client:
-            opened = self.call(client, "open_codex_display", {})
-            second = self.call(client, "open_codex_display", {})
+            opened = self.call(client, "open_codex_trace", {})
+            second = self.call(client, "open_codex_trace", {})
             self.assertEqual(opened["identity"]["state"], "selectionRequired")
             self.assertNotEqual(opened["viewSessionId"], second["viewSessionId"])
             listing = self.call(client, "list_threads", {"viewSessionId": opened["viewSessionId"],
@@ -106,7 +106,7 @@ class DevBrowserTests(unittest.TestCase):
             invalid = client.post("/rpc", json={"name": "read_trajectory", "arguments": {
                 "binding": binding, "cursor": None, "anchorEventId": None,
                 "forbidden": verification.SYNTHETIC_BODY}},
-                headers={"X-Codex-Display-Token": self.app.state.token})
+                headers={"X-Codex-Trace-Token": self.app.state.token})
             self.assertEqual(invalid.status_code, 200)
             self.assertTrue(invalid.json()["isError"])
             self.assertNotIn(verification.SYNTHETIC_BODY, invalid.text)
@@ -115,12 +115,12 @@ class DevBrowserTests(unittest.TestCase):
         self.assertLessEqual(observed, verification.READ_METHODS)
 
     def test_http_access_requires_local_host_origin_and_startup_token(self):
-        request = {"name": "open_codex_display", "arguments": {}}
-        token = {"X-Codex-Display-Token": self.app.state.token}
+        request = {"name": "open_codex_trace", "arguments": {}}
+        token = {"X-Codex-Trace-Token": self.app.state.token}
         with self.client() as client:
             self.assertEqual(client.post("/rpc", json=request).status_code, 403)
             self.assertEqual(client.post("/rpc", json=request,
-                headers={"X-Codex-Display-Token": "wrong"}).status_code, 403)
+                headers={"X-Codex-Trace-Token": "wrong"}).status_code, 403)
             self.assertEqual(client.post("/rpc", json=request,
                 headers={**token, "Origin": "https://example.com"}).status_code, 403)
             self.assertEqual(client.post("/rpc", json=request,
@@ -132,13 +132,13 @@ class DevBrowserTests(unittest.TestCase):
                 headers={**token, "Content-Type": "application/json"}).status_code, 413)
             self.assertEqual(client.post("/rpc", content="{",
                 headers={**token, "Content-Type": "application/json"}).status_code, 400)
-            for payload in (None, [], {"name": "open_codex_display"},
-                    {"name": [], "arguments": {}}, {"name": "open_codex_display", "arguments": []},
+            for payload in (None, [], {"name": "open_codex_trace"},
+                    {"name": [], "arguments": {}}, {"name": "open_codex_trace", "arguments": []},
                     {**request, "meta": {"threadId": verification.SYNTHETIC_THREAD}}):
                 with self.subTest(payload=payload):
                     self.assertEqual(client.post("/rpc", content=json.dumps(payload),
                         headers={**token, "Content-Type": "application/json"}).status_code, 400)
-            for name in ("thread/start", "__class__", "open_codex_display_panel"):
+            for name in ("thread/start", "__class__", "open_codex_trace_panel"):
                 with self.subTest(name=name):
                     self.assertEqual(client.post("/rpc", json={"name": name, "arguments": {}},
                         headers=token).status_code, 404)
@@ -147,7 +147,7 @@ class DevBrowserTests(unittest.TestCase):
         with self.client() as client:
             health = client.get("/_dev/health")
             self.assertEqual(health.status_code, 200)
-            self.assertEqual(health.json()["service"], "codex-display-dev-browser")
+            self.assertEqual(health.json()["service"], "codex-trace-dev-browser")
             self.assertIsInstance(health.json()["pid"], int)
             self.assertTrue(health.json()["instanceId"])
             self.assertNotIn(self.app.state.token, health.text)
@@ -155,7 +155,7 @@ class DevBrowserTests(unittest.TestCase):
             host = client.get("/")
             self.assertEqual(host.status_code, 200)
             self.assertIn(self.app.state.token, host.text)
-            self.assertNotIn("__CODEX_DISPLAY_DEV_TOKEN__", host.text)
+            self.assertNotIn("__CODEX_TRACE_DEV_TOKEN__", host.text)
             self.assertEqual(client.get("/host.js").status_code, 200)
             first = client.get("/app.html")
             self.assertEqual(first.status_code, 200)
@@ -163,7 +163,7 @@ class DevBrowserTests(unittest.TestCase):
             self.assertIn("no-store", first.headers["cache-control"])
             (self.assets / "app.js").write_text('document.getElementById("root").textContent="rebuilt UI";')
             self.assertIn("rebuilt UI", client.get("/app.html").text)
-            for path in ("/backend/codex_display/app.py", "/contracts/tools.json", "/runtime.json", "/.env"):
+            for path in ("/backend/codex_trace/app.py", "/contracts/tools.json", "/runtime.json", "/.env"):
                 with self.subTest(path=path):
                     self.assertEqual(client.get(path).status_code, 404)
 

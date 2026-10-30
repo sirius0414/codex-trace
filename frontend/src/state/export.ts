@@ -2,9 +2,9 @@ import type { Binding, DownloadRequest, DownloadResult, ExportManifest } from '.
 import { sameBinding } from './binding.mjs';
 import { isExportReceiptPath } from '../bridge/local-path.mjs';
 
-const STORAGE_KEY = 'codex-display.export-intents.v1';
+const STORAGE_KEY = 'codex-trace.export-intents.v1';
 const KEY = /^[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/;
-const FILENAME = /^codex-display-[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/;
+const FILENAME = /^codex-trace-[A-Za-z0-9][A-Za-z0-9._-]*\.zip$/;
 const HASH = /^[0-9a-f]{64}$/;
 // create/commit 分别使用稳定请求 ID；Unknown 仍是待核对状态，只有终态允许新建意图。
 const phases = ['creating', 'collecting', 'ready', 'committing', 'pending', 'createUnknown', 'saveUnknown', 'verified', 'failed', 'released'] as const;

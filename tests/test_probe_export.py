@@ -8,8 +8,8 @@ import unittest
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from codex_display.probe import ProbeService
-from codex_display.export_store import ExportUnconfirmedError
+from codex_trace.probe import ProbeService
+from codex_trace.export_store import ExportUnconfirmedError
 
 
 class Store:

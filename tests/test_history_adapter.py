@@ -13,7 +13,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from backend.codex_display.adapters.history import HistoryAdapter, HistoryError
+from backend.codex_trace.adapters.history import HistoryAdapter, HistoryError
 
 
 THREAD_A = "11111111-1111-4111-8111-111111111111"

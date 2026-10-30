@@ -13,7 +13,7 @@ export type Activation = {
 /** M0 宿主接入诊断适配器；正式轨迹使用 client.ts，二者结果信封不可混用。 */
 export class HostAdapter {
   readonly instanceId = crypto.randomUUID();
-  readonly app = new App({ name: 'Codex Display', version: APP_VERSION },
+  readonly app = new App({ name: 'Codex Trace', version: APP_VERSION },
     { availableDisplayModes: ['fullscreen', 'inline'] }, { autoResize: false });
   private context: Record<string, unknown> = {};
   private connection: Promise<Record<string, unknown>> | null = null;
@@ -50,7 +50,7 @@ export class HostAdapter {
   }
   async privateResult<T>(name: string, args: Record<string, unknown>): Promise<T> {
     const result = await this.request(name, args);
-    const data = result._meta?.['codex-display/result'];
+    const data = result._meta?.['codex-trace/result'];
     if (!data || typeof data !== 'object' || Array.isArray(data))
       throw new HostCallError('invalid-envelope', '本地工具响应缺少应用私有结果，导出结果尚未确认。');
     return data as T;

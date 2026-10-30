@@ -1,9 +1,9 @@
 {
-  "name": "codex-display",
+  "name": "codex-trace",
   "version": "0.1.0",
   "description": "Local, read-only Codex execution trajectory viewer with verified local ZIP export.",
   "author": {
-    "name": "Codex Display contributors"
+    "name": "Codex Trace contributors"
   },
   "license": "MIT",
   "mcpServers": "./.mcp.json",

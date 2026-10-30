@@ -17,8 +17,8 @@ import zipfile
 from . import __version__
 from .export_store import ExportUnconfirmedError
 
-URI = "ui://codex-display/trajectory-v1.html"
-PANEL_URI = "ui://codex-display/trajectory-panel-v1.html"
+URI = "ui://codex-trace/trajectory-v1.html"
+PANEL_URI = "ui://codex-trace/trajectory-panel-v1.html"
 DIAGNOSTIC_PHASES = (
     "download-start", "chunk-received", "chunk-verified", "blob-requested",
     "download-error", "context-change", "visibility-change", "page-ready",
@@ -132,7 +132,7 @@ class ProbeService:
             if len(self.exports) >= 256:
                 raise ValueError("export-request-limit")
             try:
-                saved = store.save_bytes(self.download, prefix="codex-display-m0")
+                saved = store.save_bytes(self.download, prefix="codex-trace-m0")
             except ExportUnconfirmedError as error:
                 candidate = {"kind": "local-export", "requestId": request_id,
                              **error.candidate_result, "synthetic": True}
@@ -220,7 +220,7 @@ class ProbeService:
         self.audit("download-read", {"offset": offset, "bytes": len(chunk),
                                      "sha256": hashlib.sha256(self.download).hexdigest(),
                                      "chunkSha256": hashlib.sha256(chunk).hexdigest()})
-        return {"filename": "codex-display-m0-local-download.zip", "offset": offset,
+        return {"filename": "codex-trace-m0-local-download.zip", "offset": offset,
                 "data": base64.b64encode(chunk).decode(), "nextOffset": offset + len(chunk),
                 "totalBytes": len(self.download), "sha256": hashlib.sha256(self.download).hexdigest(),
                 "chunkSha256": hashlib.sha256(chunk).hexdigest(), "synthetic": True,

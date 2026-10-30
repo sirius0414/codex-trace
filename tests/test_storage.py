@@ -13,7 +13,7 @@ import tempfile
 import unittest
 from uuid import UUID
 
-from backend.codex_display.storage import DerivedStore, StorageError
+from backend.codex_trace.storage import DerivedStore, StorageError
 from platform_fixtures import assert_private_mode, symlink
 
 

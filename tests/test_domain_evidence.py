@@ -1,7 +1,7 @@
 """Evidence semantics regression cases: no real messages or execution side effects."""
 from copy import deepcopy
 import unittest
-from codex_display.domain import project, resolve_relationships
+from codex_trace.domain import project, resolve_relationships
 import test_projection as fixtures
 
 raw, api = fixtures.raw, fixtures.api

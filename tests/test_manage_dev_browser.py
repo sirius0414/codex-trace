@@ -26,7 +26,7 @@ finally:
 @unittest.skipIf(sys.platform == "win32", "POSIX process-group fixtures; Windows manager has separate tests")
 class ManageDevBrowserTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="codex-display-manager-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="codex-trace-manager-test-")
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name).resolve()
         self.manager = management.ServiceManager(self.directory, startup_timeout=0.05, stop_timeout=0.05)
@@ -68,7 +68,7 @@ class ManageDevBrowserTests(unittest.TestCase):
         for pid, child in self.children.items():
             command = child["command"]
             if child["alive"] and int(command[command.index("--port") + 1]) == port:
-                return {"service": "codex-display-dev-browser", "pid": pid,
+                return {"service": "codex-trace-dev-browser", "pid": pid,
                         "instanceId": command[command.index("--instance-id") + 1]}
         return None
 

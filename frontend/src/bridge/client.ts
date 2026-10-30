@@ -2,7 +2,7 @@ import { App } from '@modelcontextprotocol/ext-apps';
 import type { OpenResult } from '../../../contracts/types';
 import { HostCallError, withDeadline } from './deadline.mjs';
 
-const PRIVATE_RESULT = 'codex-display/result';
+const PRIVATE_RESULT = 'codex-trace/result';
 
 /** 正式轨迹只读取 app-only 私有结果，模型可见的 content/structuredContent 不承载任务数据。 */
 export function readPrivateResult<T>(result: { isError?: boolean; _meta?: Record<string, unknown> }): T {
@@ -28,7 +28,7 @@ export function isOpenResult(data: unknown): data is OpenResult {
 
 /** 正式界面的宿主边界：只通过公开 App SDK 读工具结果，不写聊天或模型上下文。 */
 export class TrajectoryClient {
-  readonly app = new App({ name: 'Codex Display', version: '0.1.0' },
+  readonly app = new App({ name: 'Codex Trace', version: '0.1.0' },
     { availableDisplayModes: ['fullscreen', 'inline'] }, { autoResize: false });
   private connection: Promise<Record<string, unknown>> | null = null;
   private context: Record<string, unknown> = {};

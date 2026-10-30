@@ -15,15 +15,15 @@ import unittest
 from uuid import uuid4
 import zipfile
 
-from codex_display.adapters.history import HistoryAdapter, HistoryError
-from codex_display.adapters.raw import RawAdapter
-from codex_display.export_store import ExportStore
-from codex_display.exports import ExportManager
-from codex_display.platform import filesystem as fs
-from codex_display.platform.locks import lock_exclusive, unlock
-from codex_display.platform.pipes import ThreadPipeTransport
-from codex_display.storage import DerivedStore
-from codex_display.raw_export import RawExportCollector
+from codex_trace.adapters.history import HistoryAdapter, HistoryError
+from codex_trace.adapters.raw import RawAdapter
+from codex_trace.export_store import ExportStore
+from codex_trace.exports import ExportManager
+from codex_trace.platform import filesystem as fs
+from codex_trace.platform.locks import lock_exclusive, unlock
+from codex_trace.platform.pipes import ThreadPipeTransport
+from codex_trace.storage import DerivedStore
+from codex_trace.raw_export import RawExportCollector
 
 
 _THREAD = "11111111-1111-4111-8111-111111111111"
@@ -74,7 +74,7 @@ def _try_lock(path):
 
 class PortableRuntimeTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="codex display 中文 ")
+        self.temporary = tempfile.TemporaryDirectory(prefix="codex trace 中文 ")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
 
@@ -206,7 +206,7 @@ class PortableRuntimeTests(unittest.TestCase):
 
         raw = RawAdapter([sessions])
         store = DerivedStore(self.root / "状态 空格")
-        destination = ExportStore(self.root / "Downloads" / "Codex Display")
+        destination = ExportStore(self.root / "Downloads" / "Codex Trace")
         destination.root.parent.mkdir()
         collector = RawExportCollector(History(), raw)
         manager = ExportManager(store, collector, destination)

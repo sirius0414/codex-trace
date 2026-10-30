@@ -60,5 +60,5 @@ export async function prepareDownload(call, expected, progress, isCurrent = () =
   if (offset !== expectedBytes || hash !== expectedHash)
     throw new DownloadError('checksum-mismatch', '下载长度或完整文件校验失败，尚未请求保存。');
   assertCurrent();
-  return { bytes, hash, filename: 'codex-display-m0-local-download.zip' };
+  return { bytes, hash, filename: 'codex-trace-m0-local-download.zip' };
 }

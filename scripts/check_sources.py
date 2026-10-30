@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from codex_display.server import verify_thread
+from codex_trace.server import verify_thread
 from platform_runtime import executable
 
 
@@ -24,7 +24,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     args.codex = executable(args.codex)
-    os.environ["CODEX_DISPLAY_CODEX_EXECUTABLE"] = str(args.codex.absolute())
+    os.environ["CODEX_TRACE_CODEX_EXECUTABLE"] = str(args.codex.absolute())
     checks = []
     for thread_id in args.thread_id:
         try:

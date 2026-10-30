@@ -189,14 +189,14 @@ class ContractTests(unittest.TestCase):
 
     def test_receipt_path_and_filename_are_local_zip_outputs(self):
         for path in (
-            "https://example.test/file.zip", "~/Downloads/Codex Display/codex-display-a.zip",
-            "/Users/synthetic/Desktop/codex-display-a.zip",
-            "/Users/synthetic/../other/Downloads/Codex Display/codex-display-a.zip",
-            "/Users/synthetic/Downloads/Codex Display/codex-display-a.zip\n",
+            "https://example.test/file.zip", "~/Downloads/Codex Trace/codex-trace-a.zip",
+            "/Users/synthetic/Desktop/codex-trace-a.zip",
+            "/Users/synthetic/../other/Downloads/Codex Trace/codex-trace-a.zip",
+            "/Users/synthetic/Downloads/Codex Trace/codex-trace-a.zip\n",
         ):
             with self.subTest(path=path), self.assertRaises(ValidationError):
                 validate("LocalExportPath", path)
-        for name in ("../codex-display-a.zip", "codex-display-a.txt", "codex-display-a.zip\n"):
+        for name in ("../codex-trace-a.zip", "codex-trace-a.txt", "codex-trace-a.zip\n"):
             with self.subTest(name=name), self.assertRaises(ValidationError):
                 validate("ExportFilename", name)
 
@@ -220,7 +220,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(ready["save"], {"status": "notRequested", "requestId": None})
         for name in ("export-save-pending.json", "export-save-unknown.json", "export-save-failed.json"):
             result = read(name)
-            result["save"]["path"] = "/Users/synthetic/Downloads/Codex Display/codex-display-a.zip"
+            result["save"]["path"] = "/Users/synthetic/Downloads/Codex Trace/codex-trace-a.zip"
             with self.subTest(fixture=name), self.assertRaises(ValidationError):
                 validate("DownloadResult", result)
         failed = read("export-save-failed.json")
@@ -251,7 +251,7 @@ class ContractTests(unittest.TestCase):
     def test_download_tool_preserves_one_interface_and_declares_fixed_delivery(self):
         tools = json.loads((CONTRACTS / "tools.json").read_text())["tools"]
         delivery = tools["download_records"]["delivery"]
-        self.assertEqual(delivery["directory"], "~/Downloads/Codex Display/")
+        self.assertEqual(delivery["directory"], "~/Downloads/Codex Trace/")
         self.assertFalse(delivery["clientSelectsDestination"])
         self.assertEqual(delivery["saveActions"], ["commit", "result"])
         self.assertEqual(delivery["successCondition"], "save.status == verified")

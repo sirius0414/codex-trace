@@ -17,7 +17,7 @@ export function createBuildInfo(root = projectRoot) {
   }
   // Hash actual source bytes, including uncommitted edits. Generated bundles,
   // timestamps, local documents, and Git state do not change the source identity.
-  for (const source of ['frontend/src', 'backend/codex_display', 'contracts', 'plugin',
+  for (const source of ['frontend/src', 'backend/codex_trace', 'contracts', 'plugin',
     'package.json', 'package-lock.json', 'requirements.lock', 'tsconfig.json',
     'vite.config.ts', 'scripts/build-info.mjs', 'scripts/package_plugin.py', 'scripts/platform_runtime.py',
     'LICENSE', 'NOTICE', 'third_party', 'scripts/third_party_licenses.py']) collect(source);
@@ -29,5 +29,6 @@ export function createBuildInfo(root = projectRoot) {
   }
   const sourceHash = hash.digest('hex');
   return { version: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
-    buildId: sourceHash.slice(0, 8), sourceHash, builtAt: new Date().toISOString() };
+    buildId: sourceHash.slice(0, 8), sourceHash, builtAt: process.env.SOURCE_DATE_EPOCH === undefined ? new Date().toISOString()
+      : new Date(Number(process.env.SOURCE_DATE_EPOCH) * 1000).toISOString() };
 }

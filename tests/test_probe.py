@@ -16,9 +16,9 @@ import zipfile
 from platform_fixtures import assert_private_mode, symlink
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from codex_display.platform import filesystem as os
-from codex_display import __version__
-from codex_display.probe import (DIAGNOSTIC_CODES, DIAGNOSTIC_PHASES, MAX_DIAGNOSTIC_ELAPSED_MS,
+from codex_trace.platform import filesystem as os
+from codex_trace import __version__
+from codex_trace.probe import (DIAGNOSTIC_CODES, DIAGNOSTIC_PHASES, MAX_DIAGNOSTIC_ELAPSED_MS,
                                  ProbeService, candidate_identity, inspect_source, probe_zip)
 
 THREAD_A = "12345678-1234-1234-1234-123456789abc"
