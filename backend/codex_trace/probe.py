@@ -150,13 +150,25 @@ class ProbeService:
         """追加调用方已筛选的诊断元数据；落盘文件拒绝符号链接并限制为当前用户可读写。"""
         if self.audit_path is None:
             return
-        self.audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        fd = os.open(self.audit_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, "a", encoding="utf-8") as output:
-            if not stat.S_ISREG(os.fstat(output.fileno()).st_mode):
-                raise ValueError("invalid-audit-file")
-            os.fchmod(output.fileno(), 0o600)
-            output.write(json.dumps({"atMs": int(time.time() * 1000), "kind": kind, **fields}) + "\n")
+        directory = None
+        if os.name == "nt":
+            # Path.mkdir 的 mode 在 Windows 不会建立私有 DACL；追加时同时固定祖先。
+            directory = os.open_directory(self.audit_path.absolute().parent, create=True, private=True)
+        else:
+            # 保留 POSIX 对系统临时目录别名（macOS /var、/tmp）的既有处理。
+            self.audit_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            fd = os.open(self.audit_path.name if directory is not None else self.audit_path,
+                         os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW,
+                         0o600, dir_fd=directory)
+            with os.fdopen(fd, "a", encoding="utf-8") as output:
+                if not stat.S_ISREG(os.fstat(output.fileno()).st_mode):
+                    raise ValueError("invalid-audit-file")
+                os.fchmod(output.fileno(), 0o600)
+                output.write(json.dumps({"atMs": int(time.time() * 1000), "kind": kind, **fields}) + "\n")
+        finally:
+            if directory is not None:
+                os.close(directory)
 
     def activate(self, metadata: dict, *, entrypoint: str = "global") -> dict:
         """签发仅在本进程有效的激活身份，只记录字段名和候选 ID，不声称自动绑定成功。"""
@@ -274,5 +286,8 @@ def inspect_source(path_string: str | None, thread_id: str, codex_home: Path) ->
                     "hasHistoryBase": bool(payload.get("history_base")),
                     "coverage": "selected physical segment header only; lineage not traversed",
                     "readOnlyLiveEvents": False}
+    except IsADirectoryError:
+        # Windows 在打开普通文件时已拒绝目录，与 POSIX 打开后检查类型保持同一诊断结果。
+        return {"readable": False, "reason": "not-regular"}
     except (OSError, ValueError, TypeError, AttributeError, RecursionError):
         return {"readable": False, "reason": "unreadable-or-unsupported-header"}

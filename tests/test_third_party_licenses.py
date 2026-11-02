@@ -29,7 +29,7 @@ class ThirdPartyLicenseTests(unittest.TestCase):
         self.package.mkdir(parents=True)
         (self.package / "package.json").write_text(json.dumps({"name": "@example/widget", "version": "2.0.0", "license": "MIT"}))
         (self.package / "LICENSE").write_bytes(b"Upstream combined Apache and MIT terms\r\nCopyright Example\r\n")
-        (self.package / "NOTICE").write_text("Required widget attribution\n")
+        (self.package / "NOTICE").write_bytes(b"Required widget attribution\n")
         (self.package / "LICENSES").mkdir()
         (self.package / "LICENSES/vendor.txt").write_text("Nested upstream vendor terms\n")
         (self.root / "NOTICE").write_text("Independent project and reference acknowledgments\n")
@@ -142,7 +142,8 @@ class ThirdPartyLicenseTests(unittest.TestCase):
         shutil.rmtree(self.root / "node_modules")
         shutil.rmtree(self.root / "installed")
         path = self.root / "requirements.lock"
-        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        # 明确从规范化文本生成 CRLF，避免 Windows 夹具已有 CRLF 被转成 CRCRLF。
+        path.write_bytes(path.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8"))
         self.assertEqual(legal.check_snapshot(self.root), manifest)
 
     def test_changed_dependency_requires_refresh(self):

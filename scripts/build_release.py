@@ -72,7 +72,10 @@ def audit_payload(files: dict[str, bytes], root: Path) -> None:
     This complements the source allowlist; it is not a general secret scanner.
     Generic executable discovery paths in code (e.g. /Applications) are portable.
     """
-    private_roots = {str(root).encode(), str(Path.home()).encode()}
+    # Windows 路径写入 Python/JSON 时常被反斜杠转义；仍然属于本机路径泄漏。
+    roots = {value for path in (root, Path.home()) for value in (str(path), path.as_posix())}
+    private_roots = {variant.encode("utf-8") for value in roots for variant in (
+        value, json.dumps(value, ensure_ascii=False)[1:-1], json.dumps(value)[1:-1])}
     secret = re.compile(rb"(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-(?:proj-|svcacct-)[A-Za-z0-9_-]{12,}|\bgh[pousr]_[A-Za-z0-9]{20,})")
     workstation = re.compile(rb"(?:/Users/[^/\s\"']+/|/home/[^/\s\"']+/|[A-Za-z]:[\\/]Users[\\/][^\\/\s\"']+[\\/])")
     for name, data in files.items():

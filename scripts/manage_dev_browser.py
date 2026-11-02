@@ -24,7 +24,7 @@ import urllib.request
 from uuid import uuid4
 
 from update_plugin import runtime_paths
-from platform_dev import IS_WINDOWS, exclusive_lock, spawn_options, windows_process_info
+from platform_dev import IS_WINDOWS, exclusive_lock, python_spawn_options, windows_process_info
 
 ROOT = Path(__file__).resolve().parents[1]
 DEV_ROOT = ROOT / "build/dev-browser"
@@ -67,7 +67,8 @@ def probe_health(port: int) -> dict | None:
     """绕过代理检查本机实例；不创建观察会话或读取用户任务。"""
     try:
         client = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with client.open(f"http://127.0.0.1:{port}/_dev/health", timeout=0.5) as response:
+        # Windows 首次接受连接可能慢于 0.5 秒；避免探测过早断连触发 Proactor AcceptEx 错误。
+        with client.open(f"http://127.0.0.1:{port}/_dev/health", timeout=2) as response:
             value = json.loads(response.read(4096))
         return value if isinstance(value, dict) else None
     except (OSError, ValueError, urllib.error.URLError):
@@ -253,11 +254,12 @@ class ServiceManager:
             command.append("--skip-build")
         if shutdown_token:
             command.extend(["--shutdown-token", shutdown_token])
+        options = python_spawn_options(python)
         fd = os.open(self.log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         with os.fdopen(fd, "ab", buffering=0) as log:
             log.write(f"\n[{datetime.now(timezone.utc).isoformat()}] Starting local browser service\n".encode())
             process = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log,
-                                       stderr=subprocess.STDOUT, **spawn_options())
+                                       stderr=subprocess.STDOUT, **options)
         try:
             info = process_info(process.pid)
             if info is None:

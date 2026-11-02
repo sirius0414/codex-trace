@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import sys
 import tempfile
 import unittest
@@ -51,7 +51,7 @@ class ReleaseBuildTests(unittest.TestCase):
         legal = {"LICENSES/python/mcp@1.30.0/LICENSE": b"Synthetic upstream license\r\n",
                  "THIRD_PARTY_NOTICES.txt": b"Synthetic dependency notices\n"}
         manifest = {"schemaVersion": 1,
-            "lockfiles": {name: hashlib.sha256((self.source / name).read_bytes()).hexdigest() for name in ("package-lock.json", "requirements.lock")},
+            "lockfiles": {name: hashlib.sha256((self.source / name).read_text(encoding="utf-8").encode("utf-8")).hexdigest() for name in ("package-lock.json", "requirements.lock")},
             "components": [{"ecosystem": "python", "location": "mcp", "name": "mcp", "version": "1.30.0",
                             "files": ["LICENSES/python/mcp@1.30.0/LICENSE"]}],
             "files": {name: hashlib.sha256(data).hexdigest() for name, data in legal.items()}}
@@ -122,6 +122,15 @@ class ReleaseBuildTests(unittest.TestCase):
         (self.source / "third_party/LICENSES/python/mcp@1.30.0/LICENSE").write_text("changed", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "license validation failed"):
             self.build()
+
+    def test_audit_rejects_windows_checkout_paths_in_source_and_json(self):
+        root = PureWindowsPath("E:/开发目录/checkout")
+        for value in (str(root), repr(str(root)), root.as_posix(),
+                      json.dumps(str(root)), json.dumps(str(root), ensure_ascii=False)):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "absolute path"):
+                    release.audit_payload({"backend/app.py": value.encode("utf-8")}, root)
+        release.audit_payload({"backend/app.py": b'ROOT = "relative/path"'}, root)
 
 
 if __name__ == "__main__":

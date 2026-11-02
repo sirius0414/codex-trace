@@ -157,7 +157,7 @@ class PackagingTests(unittest.TestCase):
                        "LICENSES/python/mcp@1.30.0/NOTICE": b"Synthetic upstream attribution\n",
                        "THIRD_PARTY_NOTICES.txt": b"Synthetic third-party inventory\n"}
         inventory = {"schemaVersion": 1,
-                     "lockfiles": {name: hashlib.sha256((source / name).read_bytes()).hexdigest() for name in ("package-lock.json", "requirements.lock")},
+                     "lockfiles": {name: hashlib.sha256((source / name).read_text(encoding="utf-8").encode("utf-8")).hexdigest() for name in ("package-lock.json", "requirements.lock")},
                      "components": [{"ecosystem": "python", "location": "mcp", "name": "mcp", "version": "1.30.0",
                                      "files": [name for name in legal_files if name.startswith("LICENSES/")]}],
                      "files": {name: hashlib.sha256(data).hexdigest() for name, data in legal_files.items()}}

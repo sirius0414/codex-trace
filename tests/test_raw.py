@@ -394,10 +394,11 @@ class RawTests(unittest.TestCase):
     def test_rewrite_with_restored_mtime_is_detected_via_ctime(self):
         path, _ = self.write()
         first = self.read(path)
-        info = path.stat()
+        # 平台适配返回 NTFS ChangeTime；Windows pathlib 的 st_ctime_ns 是创建时间。
+        info = os.stat(path)
         path.write_bytes(path.read_bytes().replace(b'"role": "user"', b'"role": "tool"'))
         os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
-        self.assertNotEqual(path.stat().st_ctime_ns, info.st_ctime_ns)
+        self.assertNotEqual(os.stat(path).st_ctime_ns, info.st_ctime_ns)
         changed = self.read(path)
         self.assertGreater(changed.generation, first.generation)
         self.assertEqual(changed.records[-1]["record"]["payload"]["role"], "tool")

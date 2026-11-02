@@ -320,7 +320,12 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
         receipt = committed["save"]
         saved = Path(receipt.get("path", ""))
         check("synthetic_export_saved_only_in_temporary_destination", receipt["status"] == "verified" and saved.parent == root / "Downloads/Codex Trace"
-              and saved.is_file() and saved.read_bytes() == archive_bytes and saved.stat().st_mode & 0o777 == 0o600)
+              and saved.is_file() and saved.read_bytes() == archive_bytes)
+        # 从缓存后端检查权限：Windows 的 Path.stat() 不表达真实 owner SID/DACL。
+        permissions = subprocess.run([launch["command"], "-c",
+            "import sys;from codex_trace.platform import filesystem as fs;print(fs.stat(sys.argv[1],follow_symlinks=False).st_mode & 0o777)", str(saved)],
+            cwd=cwd, env=runtime_env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
+        check("synthetic_export_permissions_are_private", int(permissions.stdout.strip()) == 0o600)
         check("saved_bytes_match_receipt", receipt["bytes"] == len(archive_bytes) and receipt["sha256"] == hashlib.sha256(archive_bytes).hexdigest())
         retry = call("download_records", commit_request)
         check("commit_retry_reuses_verified_file", all(retry["save"].get(k) == receipt[k] for k in ("status", "requestId", "filename", "path", "bytes", "sha256")) and len(list((root / "Downloads/Codex Trace").glob("*.zip"))) == 1)

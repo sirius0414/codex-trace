@@ -22,8 +22,8 @@ def exclusive_lock(stream):
     """同一管理文件上的非阻塞进程锁；离开上下文才释放。"""
     if IS_WINDOWS:
         import msvcrt
-        stream.seek(0)
-        if not stream.read(1):
+        # Windows 字节锁也禁止其他进程读取锁区；不能先 read 再尝试抢锁。
+        if os.fstat(stream.fileno()).st_size == 0:
             stream.write(b"\0")
             stream.flush()
         stream.seek(0)
@@ -45,6 +45,34 @@ def exclusive_lock(stream):
             fcntl.flock(stream, fcntl.LOCK_UN)
 
 
+def windows_process_exited(pid: int) -> bool:
+    """只在内核证明进程已退出或 PID 不存在时返回 True；访问受限仍报错。"""
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel.WaitForSingleObject.restype = wintypes.DWORD
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.CloseHandle.restype = wintypes.BOOL
+    handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE，不申请终止权限。
+    if not handle:
+        error = ctypes.get_last_error()
+        if error == 87:  # ERROR_INVALID_PARAMETER：该 PID 已不存在。
+            return True
+        raise ctypes.WinError(error)
+    try:
+        state = kernel.WaitForSingleObject(handle, 0)
+        if state == 0:  # WAIT_OBJECT_0
+            return True
+        if state == 258:  # WAIT_TIMEOUT
+            return False
+        raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def windows_process_info(pid: int) -> dict | None:
     """只读 CIM 获取创建时间和完整命令行；不确定时抛错并保留管理回执。"""
     if type(pid) is not int or pid <= 1:
@@ -57,16 +85,20 @@ def windows_process_info(pid: int) -> dict | None:
               f"$p=Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}';"
               "if($null -ne $p){[pscustomobject]@{started=$p.CreationDate.ToUniversalTime().ToString('o');"
               "command=$p.CommandLine}|ConvertTo-Json -Compress}")
-    result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-Command", script],
-                            capture_output=True, text=True, encoding="utf-8", timeout=5, check=True)
-    if not result.stdout.strip():
-        return None
-    value = json.loads(result.stdout.lstrip("\ufeff"))
-    if not isinstance(value, dict) or any(not isinstance(value.get(key), str) or not value[key]
-                                         for key in ("started", "command")):
-        raise OSError("Cannot verify Windows process identity")
-    value.update({"group": pid, "argv": windows_argv(value["command"])})
-    return value
+    try:
+        result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-Command", script],
+                                capture_output=True, text=True, encoding="utf-8", timeout=5, check=True)
+        value = json.loads(result.stdout.lstrip("\ufeff")) if result.stdout.strip() else None
+        if not isinstance(value, dict) or any(not isinstance(value.get(key), str) or not value[key]
+                                             for key in ("started", "command")):
+            raise OSError("Cannot verify Windows process identity")
+        value.update({"group": pid, "argv": windows_argv(value["command"])})
+        return value
+    except (OSError, ValueError, subprocess.SubprocessError):
+        # 正常停止可在 CIM 读取属性时结束进程；失败本身不能证明进程已退出。
+        if windows_process_exited(pid):
+            return None
+        raise
 
 
 def windows_argv(command: str) -> list[str]:
@@ -92,6 +124,28 @@ def spawn_options() -> dict:
     if IS_WINDOWS:
         return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP, "close_fds": True}
     return {"start_new_session": True, "close_fds": True}
+
+
+def python_spawn_options(python: Path) -> dict:
+    """绕过 Windows venv redirector，使 Popen PID 就是实际服务的 PID。"""
+    options = spawn_options()
+    if not IS_WINDOWS:
+        return options
+    probe = subprocess.run([str(python), "-c",
+        "import json,sys;print(json.dumps([sys._base_executable,sys.prefix != sys.base_prefix]))"],
+        capture_output=True, text=True, encoding="utf-8", timeout=15, check=True)
+    value = json.loads(probe.stdout)
+    if (not isinstance(value, list) or len(value) != 2
+            or not isinstance(value[0], str) or not value[0] or type(value[1]) is not bool):
+        raise ValueError("Cannot identify the selected Python runtime")
+    if value[1]:
+        base = Path(value[0])
+        if not base.is_absolute() or not base.is_file():
+            raise ValueError("Cannot locate the selected virtual environment's base Python")
+        # CreateProcess 直接执行基础解释器，命令行仍保留 venv argv[0] 供身份核对。
+        # CPython 消费该变量来恢复 sys.executable/sys.prefix 和 venv 依赖搜索路径。
+        options.update(executable=str(base), env={**os.environ, "__PYVENV_LAUNCHER__": str(python)})
+    return options
 
 
 def protect_windows_children():

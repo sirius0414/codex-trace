@@ -7,11 +7,14 @@ import io
 from pathlib import Path
 import shlex
 import signal
+import socket
+import subprocess
 import sys
 import tempfile
 import unittest
 from unittest import mock
 from uuid import uuid4
+import venv
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -260,6 +263,88 @@ class ManageDevBrowserTests(unittest.TestCase):
         with self.assertRaises(management.ManagerError):
             self.manager.start(port=18771)
         self.assertEqual(self.spawn.call_count, 1)
+
+
+@unittest.skipUnless(sys.platform == "win32", "requires native Windows process and venv identity")
+class WindowsNativeManagerTests(unittest.TestCase):
+    def test_venv_manager_start_status_restart_stop_matches_real_http_pid(self):
+        # 使用独立 venv 和临时 HTTP fixture，不读取真实 Codex 数据或启动正式开发服务。
+        with tempfile.TemporaryDirectory(prefix="codex-trace-manager-中文-") as temporary:
+            root = Path(temporary).resolve()
+            environment = root / "虚拟 环境"
+            venv.EnvBuilder(with_pip=False).create(environment)
+            python = environment / "Scripts/python.exe"
+            server = root / "合成 服务.py"
+            server.write_text('''import argparse, json, os, threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+parser = argparse.ArgumentParser()
+for key in ("port", "python", "codex", "instance-id", "shutdown-token"):
+    parser.add_argument("--" + key)
+parser.add_argument("--skip-build", action="store_true")
+args = parser.parse_args()
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def do_GET(self):
+        value = {"service":"codex-trace-dev-browser", "pid":os.getpid(), "instanceId":args.instance_id}
+        data = json.dumps(value).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+    def do_POST(self):
+        if self.headers.get("X-Codex-Trace-Shutdown") != args.shutdown_token:
+            self.send_error(403)
+            return
+        self.send_response(202)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        threading.Thread(target=self.server.shutdown, daemon=True).start()
+with ThreadingHTTPServer(("127.0.0.1", int(args.port)), Handler) as http:
+    http.serve_forever(poll_interval=0.05)
+''', encoding="utf-8")
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            manager = management.ServiceManager(root / "state", startup_timeout=15, stop_timeout=10)
+            children = []
+            popen = subprocess.Popen
+
+            def spawn(*args, **kwargs):
+                process = popen(*args, **kwargs)
+                children.append(process)
+                return process
+
+            with mock.patch.object(management, "SERVER", server), \
+                    mock.patch.object(management, "runtime_paths", return_value=(python, Path(sys.executable))), \
+                    mock.patch.object(management.subprocess, "Popen", side_effect=spawn):
+                try:
+                    first = manager.start(port=port, skip_build=True)
+                    self.assertEqual(first["state"], "running")
+                    first_record = first["record"]
+                    self.assertEqual(management.probe_health(port)["pid"], first_record["pid"])
+                    self.assertTrue(manager.owns(first_record))
+                    self.assertEqual(manager.status()["state"], "running")
+                    self.assertTrue(manager.start(port=port)["alreadyRunning"])
+                    second = manager.restart()
+                    self.assertEqual(second["state"], "running")
+                    self.assertNotEqual(second["record"]["instanceId"], first_record["instanceId"])
+                    self.assertEqual(second["record"]["python"], str(python))
+                    self.assertEqual(management.probe_health(port)["pid"], second["record"]["pid"])
+                    self.assertFalse(manager.owns(first_record))
+                    self.assertEqual(manager.stop()["state"], "stopped")
+                    self.assertEqual(manager.stop()["state"], "stopped")
+                    self.assertEqual(manager.status()["state"], "stopped")
+                    self.assertFalse(manager.record_path.exists())
+                    self.assertFalse(management.port_busy(port))
+                except Exception:
+                    if manager.log_path.exists():
+                        print(manager.log_path.read_text(encoding="utf-8"), file=sys.stderr)
+                    raise
+                finally:
+                    for process in children:
+                        if process.poll() is None:
+                            process.terminate()
+                        process.wait(timeout=5)
 
 
 if __name__ == "__main__":

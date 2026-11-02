@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+import venv
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -115,6 +116,62 @@ with pathlib.Path(sys.argv[2]).open('a+b') as lock:
 
 @unittest.skipUnless(sys.platform == "win32", "requires a native Windows host; never counted as simulated success")
 class WindowsNativeScriptTests(unittest.TestCase):
+    def test_cim_query_failure_after_process_exit_is_confirmed_by_kernel(self):
+        for output in (None, "", '{"started":null,"command":null}'):
+            with self.subTest(output=output), subprocess.Popen(
+                    [sys.executable, "-c", "import time;time.sleep(30)"],
+                    **platform_dev.python_spawn_options(Path(sys.executable))) as process:
+                def query_during_exit(*args, **kwargs):
+                    process.terminate()
+                    process.wait(timeout=5)
+                    if output is None:
+                        raise subprocess.CalledProcessError(1, args[0])
+                    return subprocess.CompletedProcess(args[0], 0, stdout=output)
+
+                try:
+                    with mock.patch.object(platform_dev.subprocess, "run", side_effect=query_during_exit):
+                        self.assertIsNone(platform_dev.windows_process_info(process.pid))
+                finally:
+                    if process.poll() is None:
+                        process.terminate()
+
+    def test_cim_query_failures_for_a_live_process_remain_errors(self):
+        with subprocess.Popen([sys.executable, "-c", "import time;time.sleep(30)"],
+                **platform_dev.python_spawn_options(Path(sys.executable))) as process:
+            try:
+                with mock.patch.object(platform_dev.subprocess, "run",
+                        side_effect=subprocess.CalledProcessError(1, ["powershell"])):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        platform_dev.windows_process_info(process.pid)
+                for output in ("", '{"started":null,"command":null}'):
+                    with self.subTest(output=output), mock.patch.object(platform_dev.subprocess, "run",
+                            return_value=subprocess.CompletedProcess([], 0, stdout=output)):
+                        with self.assertRaises(OSError):
+                            platform_dev.windows_process_info(process.pid)
+            finally:
+                process.terminate()
+
+    def test_venv_service_pid_and_dependencies_survive_direct_base_launch(self):
+        with tempfile.TemporaryDirectory(prefix="codex-trace-中文 runtime-") as temporary:
+            environment = Path(temporary) / "虚拟 环境"
+            venv.EnvBuilder(with_pip=False).create(environment)
+            python = runtime.venv_python(environment)
+            (environment / "Lib/site-packages/selected_env_dependency.py").write_text(
+                "VALUE = 'selected virtual environment'\n", encoding="utf-8")
+            code = ("import json,os,sys,selected_env_dependency;"
+                    "print(json.dumps({'pid':os.getpid(),'executable':sys.executable,"
+                    "'prefix':sys.prefix,'dependency':selected_env_dependency.VALUE}))")
+            with subprocess.Popen([str(python), "-c", code], stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                    **platform_dev.python_spawn_options(python)) as process:
+                output, errors = process.communicate(timeout=10)
+                self.assertEqual(process.returncode, 0, errors)
+                result = json.loads(output)
+                self.assertEqual(result["pid"], process.pid)
+                self.assertEqual(Path(result["executable"]), python)
+                self.assertEqual(Path(result["prefix"]), environment)
+                self.assertEqual(result["dependency"], "selected virtual environment")
+
     def test_command_line_roundtrip_preserves_chinese_spaces_and_shell_characters(self):
         argv = [sys.executable, r"C:\中文 空格\script.py", "a&b", "%PATH%", "quote\"value", "ends\\"]
         self.assertEqual(platform_dev.windows_argv(subprocess.list2cmdline(argv)), argv)
