@@ -19,7 +19,7 @@ from uuid import uuid4
 
 from package_plugin import offline_html
 from platform_runtime import npm_command
-from platform_dev import protect_windows_children
+from platform_dev import private_browser_launch, protect_windows_children
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "dist/ui"
@@ -68,8 +68,8 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
                 yield
 
     async def index(request):
-        html = (HOST_FILES / "host.html").read_text(encoding="utf-8").replace("__CODEX_TRACE_DEV_TOKEN__", json.dumps(token))
-        return HTMLResponse(html)
+        # 回环地址上的其他 OS 用户也能 GET；HTTP 只能返回不含凭据的页面。
+        return HTMLResponse((HOST_FILES / "host.html").read_text(encoding="utf-8"))
 
     async def host_script(request):
         return Response((HOST_FILES / "host.js").read_text(encoding="utf-8"), media_type="text/javascript")
@@ -129,9 +129,14 @@ def create_app(python: Path, codex: Path, port: int, *, assets: Path = ASSETS,
     async def local_boundary(request, call_next):
         authority = request.headers.get("host", "")
         origin = request.headers.get("origin")
+        # file:// 私有入口的顶层跳转可被浏览器标成 cross-site。只允许无 Origin
+        # 的 GET 文档导航取得不含凭据的根页面；资源及 RPC 仍保留原同源边界。
+        public_navigation = (request.method == "GET" and request.url.path == "/" and origin is None
+                             and request.headers.get("sec-fetch-mode") == "navigate"
+                             and request.headers.get("sec-fetch-dest") == "document")
         # 即使绑定回环地址仍校验 Host/Origin，防止其他网页借本机服务读取会话。
         if (authority not in authorities or (origin is not None and origin != f"http://{authority}")
-                or request.headers.get("sec-fetch-site") == "cross-site"):
+                or (request.headers.get("sec-fetch-site") == "cross-site" and not public_navigation)):
             return JSONResponse({"message": "仅允许本机同源访问。"}, status_code=403)
         response = await call_next(request)
         response.headers.update({"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
@@ -173,14 +178,17 @@ def main() -> int:
 
         windows_job = protect_windows_children()
 
-        print(f"本地调试入口：http://localhost:{args.port}/", flush=True)
-        print(f"调试数据：{DEV_ROOT}\nCtrl+C 停止服务；正式插件无需更新。", flush=True)
-        app = create_app(python, codex, args.port, instance_id=args.instance_id,
+        instance = args.instance_id or str(uuid4())
+        app = create_app(python, codex, args.port, instance_id=instance,
                          shutdown_token=args.shutdown_token,
                          shutdown_callback=lambda: setattr(server, "should_exit", True))
         server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=args.port,
                     access_log=False, log_level="warning", proxy_headers=False, timeout_graceful_shutdown=5))
-        server.run()
+        # fragment 不随 HTTP 请求发送；终端/管理器只输出私有文件 URI，不输出凭据。
+        with private_browser_launch(DEV_ROOT, instance, args.port, app.state.token) as launch:
+            print(f"本地调试入口：{launch.as_uri()}", flush=True)
+            print(f"调试数据：{DEV_ROOT}\nCtrl+C 停止服务；正式插件无需更新。", flush=True)
+            server.run()
         return 0
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"本地调试服务启动失败：{error}", file=sys.stderr)

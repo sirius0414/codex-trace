@@ -24,7 +24,7 @@ import urllib.request
 from uuid import uuid4
 
 from update_plugin import runtime_paths
-from platform_dev import IS_WINDOWS, exclusive_lock, python_spawn_options, windows_process_info
+from platform_dev import IS_WINDOWS, browser_launch_path, exclusive_lock, python_spawn_options, windows_process_info
 
 ROOT = Path(__file__).resolve().parents[1]
 DEV_ROOT = ROOT / "build/dev-browser"
@@ -320,7 +320,12 @@ def main() -> int:
         record = result.get("record", {})
         state = result["state"]
         if state == "running":
-            print(f"服务{'已在运行' if result.get('alreadyRunning') else '运行中'}：http://localhost:{record['port']}/（PID {record['pid']}）")
+            launch = browser_launch_path(manager.directory, record["instanceId"])
+            print(f"服务{'已在运行' if result.get('alreadyRunning') else '运行中'}（PID {record['pid']}）")
+            if launch.is_file():
+                print(f"本地调试入口：{launch.as_uri()}")
+            else:
+                print("私有入口不可用，请运行 restart 重新生成。")
         elif state == "unhealthy":
             print(f"服务进程仍在，但未通过就绪检查（PID {record['pid']}），请重启或查看日志。")
         elif state == "stale":

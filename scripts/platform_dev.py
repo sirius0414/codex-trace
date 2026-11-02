@@ -1,4 +1,4 @@
-"""仅供本地开发服务的进程归属与锁；生产轨迹服务不依赖本模块。
+"""仅供本地开发服务的私有浏览器入口、进程归属与锁；生产服务不依赖本模块。
 
 POSIX 保留 flock/进程组行为。Windows 使用字节范围锁、进程创建时间和
 CommandLineToArgvW 核对身份，通过 HTTP 请求正常退出；服务持有 Job Object，
@@ -7,14 +7,69 @@ CommandLineToArgvW 核对身份，通过 HTTP 请求正常退出；服务持有 
 from __future__ import annotations
 
 from contextlib import contextmanager
+from html import escape
 import json
 import os
 from pathlib import Path
+import re
 import shutil
+import stat
 import subprocess
 import sys
+from uuid import UUID
 
 IS_WINDOWS = sys.platform == "win32"
+
+
+def browser_launch_path(directory: Path, instance_id: str) -> Path:
+    """入口名称绑定一个规范实例 ID，不能把命令行参数解释成路径。"""
+    if str(UUID(instance_id)) != instance_id:
+        raise ValueError("invalid-browser-instance")
+    return directory / f"launch-{instance_id}.html"
+
+
+@contextmanager
+def private_browser_launch(directory: Path, instance_id: str, port: int, token: str):
+    """凭据只落入当前用户的私有入口文件，不进入 HTTP、进程参数或日志。
+
+    复用后端的 nofollow/Windows DACL 实现，已有公开目录也必须先收紧权限。
+    持有目录句柄直到服务退出；清理只删除身份未变的本实例文件。
+    """
+    if type(port) is not int or not 1 <= port <= 65535 or not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
+        raise ValueError("invalid-browser-launch")
+    path = browser_launch_path(directory, instance_id)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+    try:
+        from codex_trace.platform import filesystem as fs
+    finally:
+        sys.path.pop(0)
+    handle = fs.open_directory(directory, create=True, private=True)
+    owned = None
+    try:
+        descriptor = fs.open(path.name, fs.O_WRONLY | fs.O_CREAT | fs.O_EXCL | fs.O_NOFOLLOW,
+                             0o600, dir_fd=handle)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            info = fs.fstat(output.fileno())
+            owned = info.st_dev, info.st_ino
+            fs.fchmod(output.fileno(), 0o600)
+            # 必须与监听地址逐字一致；localhost 可能先解析到另一用户占用的 ::1。
+            url = escape(f"http://127.0.0.1:{port}/#token={token}", quote=True)
+            output.write('<!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer">'
+                         f'<meta http-equiv="refresh" content="0;url={url}">'
+                         f'<a href="{url}">打开执行轨迹</a>\n')
+            output.flush()
+            fs.fsync(output.fileno())
+        yield path
+    finally:
+        try:
+            if owned is not None:
+                current = fs.stat(path.name, dir_fd=handle, follow_symlinks=False)
+                if stat.S_ISREG(current.st_mode) and (current.st_dev, current.st_ino) == owned:
+                    fs.unlink(path.name, dir_fd=handle)
+        except FileNotFoundError:
+            pass
+        finally:
+            fs.close(handle)
 
 
 @contextmanager

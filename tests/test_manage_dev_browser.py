@@ -264,6 +264,25 @@ class ManageDevBrowserTests(unittest.TestCase):
             self.manager.start(port=18771)
         self.assertEqual(self.spawn.call_count, 1)
 
+    def test_start_status_and_restart_print_private_instance_launcher(self):
+        from platform_dev import private_browser_launch
+        secret = "synthetic_private_browser_token_".ljust(43, "x")
+        for action, reused in (("start", False), ("start", True), ("status", False), ("restart", False)):
+            record = {"pid": 47000, "port": 8765, "instanceId": str(uuid4())}
+            manager = mock.Mock(directory=self.directory, log_path=self.directory / "server.log")
+            getattr(manager, action).return_value = {"state": "running", "record": record, "alreadyRunning": reused}
+            output = io.StringIO()
+            with self.subTest(action=action, reused=reused), \
+                    private_browser_launch(self.directory, record["instanceId"], record["port"], secret) as launch, \
+                    mock.patch.object(management, "ServiceManager", return_value=manager), \
+                    mock.patch.object(sys, "argv", ["manage_dev_browser.py", action]), \
+                    contextlib.redirect_stdout(output):
+                self.assertEqual(management.main(), 0)
+                self.assertIn(launch.as_uri(), output.getvalue())
+                self.assertNotIn(secret, output.getvalue())
+                self.assertNotIn("#token=", output.getvalue())
+            self.assertFalse(launch.exists())
+
 
 @unittest.skipUnless(sys.platform == "win32", "requires native Windows process and venv identity")
 class WindowsNativeManagerTests(unittest.TestCase):
