@@ -2,12 +2,17 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import io
 import json
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from uuid import uuid4
+from urllib.parse import parse_qs, urlsplit
 import zipfile
 
 from starlette.testclient import TestClient
@@ -45,6 +50,11 @@ class DevBrowserTests(unittest.TestCase):
         self.app = development.create_app(Path(sys.executable), codex, 8765,
             assets=self.assets, state_root=self.root / "index", export_root=self.export_root,
             home=self.root / "codex-home")
+        self.launch = self.enterContext(development.private_browser_launch(self.root / "browser", str(uuid4()),
+            8765, self.app.state.token))
+        url = re.search(r'href="([^"]+)"', self.launch.read_text(encoding="utf-8"))[1]
+        self.token = parse_qs(urlsplit(url).fragment)["token"][0]
+        self.assertEqual(urlsplit(url).query, "")
 
     def client(self):
         return TestClient(self.app, base_url="http://localhost:8765")
@@ -65,7 +75,7 @@ class DevBrowserTests(unittest.TestCase):
 
     def call(self, client, name, arguments):
         response = client.post("/rpc", json={"name": name, "arguments": arguments},
-            headers={"X-Codex-Trace-Token": self.app.state.token, "Origin": "http://localhost:8765"})
+            headers={"X-Codex-Trace-Token": self.token, "Origin": "http://localhost:8765"})
         self.assertEqual(response.status_code, 200, response.text)
         result = response.json()
         self.assertFalse(result.get("isError"), result)
@@ -143,6 +153,80 @@ class DevBrowserTests(unittest.TestCase):
                     self.assertEqual(client.post("/rpc", json={"name": name, "arguments": {}},
                         headers=token).status_code, 404)
 
+    def test_anonymous_http_cannot_obtain_or_substitute_the_rpc_capability(self):
+        """另一个 OS 账户的原生客户端能设置浏览器头，但不能取得启动凭据。"""
+        with self.client() as client:
+            for path in ("/", "/host.js", "/app.html", "/_dev/health", "/missing", "/" + self.launch.name):
+                with self.subTest(path=path):
+                    response = client.get(path)
+                    self.assertNotIn(self.app.state.token, response.text)
+            self.assertNotIn(self.app.state.token, client.head("/").text)
+            for headers in ({}, {"Origin": "http://localhost:8765", "Sec-Fetch-Site": "same-origin"}):
+                with self.subTest(headers=headers):
+                    response = client.post("/rpc", json={"name": "open_codex_trace", "arguments": {}},
+                        headers=headers)
+                    self.assertEqual(response.status_code, 403)
+                    self.assertNotIn(self.app.state.token, response.text)
+            # 查询参数、cookie 或其他实例的凭据不能替代专用请求头。
+            client.cookies.set("codex-trace-token", self.app.state.token)
+            response = client.post("/rpc", params={"token": self.app.state.token},
+                json={"name": "open_codex_trace", "arguments": {}})
+            self.assertEqual(response.status_code, 403)
+            self.assertFalse(self.methods.exists())
+
+    def test_restart_rotates_rpc_capability(self):
+        """旧入口即使仍在浏览器标签页中，也不能授权新实例。"""
+        rotated = development.create_app(Path(sys.executable), Path(sys.executable), 8765,
+            assets=self.assets, state_root=self.root / "rotated-index", export_root=self.export_root,
+            home=self.root / "codex-home")
+        self.assertNotEqual(rotated.state.token, self.token)
+        with TestClient(rotated, base_url="http://localhost:8765") as client:
+            response = client.post("/rpc", json={"name": "open_codex_trace", "arguments": {}},
+                headers={"X-Codex-Trace-Token": self.token})
+            self.assertEqual(response.status_code, 403)
+            self.assertFalse(self.methods.exists())
+
+    def test_private_file_navigation_can_load_only_the_token_free_shell(self):
+        """file:// 入口的顶层导航可能带 cross-site；它不能放行资源或 RPC。"""
+        navigation = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+        with self.client() as client:
+            response = client.get("/", headers=navigation)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn(self.token, response.text)
+            for path in ("/host.js", "/app.html", "/_dev/health"):
+                self.assertEqual(client.get(path, headers=navigation).status_code, 403)
+            for extra in ({"Sec-Fetch-Dest": "iframe"}, {"Sec-Fetch-Mode": "cors"},
+                          {"Origin": "null"}, {"Host": "attacker.invalid:8765"}):
+                self.assertEqual(client.get("/", headers={**navigation, **extra}).status_code, 403)
+            self.assertEqual(client.post("/rpc", headers={**navigation, "X-Codex-Trace-Token": self.token},
+                json={"name": "open_codex_trace", "arguments": {}}).status_code, 403)
+            self.assertFalse(self.methods.exists())
+
+    def test_foreground_prints_private_launcher_without_logging_token(self):
+        updates = load_script("update_plugin")
+        output = io.StringIO()
+        entrypoints = []
+
+        def run_server():
+            launch, = (self.root / "foreground").glob("launch-*.html")
+            self.assertIn(self.token, launch.read_text(encoding="utf-8"))
+            entrypoints.append(launch)
+
+        with mock.patch.dict(sys.modules, {"update_plugin": updates}), \
+                mock.patch.object(updates, "runtime_paths", return_value=(Path(sys.executable), Path(sys.executable))), \
+                mock.patch("package_plugin.verify_runtime"), \
+                mock.patch.object(development, "offline_html"), \
+                mock.patch.object(development, "create_app", return_value=self.app), \
+                mock.patch.object(development, "protect_windows_children"), \
+                mock.patch.object(development, "DEV_ROOT", self.root / "foreground"), \
+                mock.patch.object(sys, "argv", ["dev_browser.py", "--skip-build"]), \
+                mock.patch("uvicorn.Server") as server, contextlib.redirect_stdout(output):
+            server.return_value.run.side_effect = run_server
+            self.assertEqual(development.main(), 0)
+        self.assertIn(entrypoints[0].as_uri(), output.getvalue())
+        self.assertNotIn(self.token, output.getvalue())
+        self.assertFalse(entrypoints[0].exists())
+
     def test_only_explicit_assets_are_served_and_ui_rebuild_is_visible(self):
         with self.client() as client:
             health = client.get("/_dev/health")
@@ -154,8 +238,8 @@ class DevBrowserTests(unittest.TestCase):
             self.assertFalse(self.methods.exists())  # 健康检查不启动历史读取进程。
             host = client.get("/")
             self.assertEqual(host.status_code, 200)
-            self.assertIn(self.app.state.token, host.text)
-            self.assertNotIn("__CODEX_TRACE_DEV_TOKEN__", host.text)
+            self.assertNotIn(self.app.state.token, host.text)
+            self.assertNotIn("dev-token", host.text)
             self.assertEqual(client.get("/host.js").status_code, 200)
             first = client.get("/app.html")
             self.assertEqual(first.status_code, 200)

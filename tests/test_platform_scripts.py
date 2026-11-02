@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -111,6 +112,74 @@ with pathlib.Path(sys.argv[2]).open('a+b') as lock:
             result = subprocess.run([sys.executable, "-c", code, str(ROOT / "scripts"), str(lock_path)],
                 capture_output=True, text=True, encoding="utf-8", timeout=10, check=True)
         self.assertEqual(result.stdout.strip(), "busy")
+
+
+class PrivateBrowserLaunchTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="codex-trace-private-browser-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.directory = self.root / "browser"
+        self.instance = str(uuid4())
+        self.token = "synthetic_private_browser_token_".ljust(43, "x")
+
+    def test_private_launcher_contains_only_fragment_capability_and_cleans_up(self):
+        from codex_trace.platform import filesystem as fs
+        self.directory.mkdir(mode=0o755)
+        with platform_dev.private_browser_launch(self.directory, self.instance, 8765, self.token) as path:
+            self.assertEqual(path, platform_dev.browser_launch_path(self.directory, self.instance))
+            self.assertIn(f"http://127.0.0.1:8765/#token={self.token}", path.read_text(encoding="utf-8"))
+            self.assertNotIn("localhost", path.read_text(encoding="utf-8"))
+            directory = fs.open_directory(self.directory)
+            try:
+                self.assertEqual(fs.fstat(directory).st_mode & 0o777, 0o700)
+                info = fs.stat(path.name, dir_fd=directory, follow_symlinks=False)
+                self.assertEqual(info.st_mode & 0o777, 0o600)
+                self.assertEqual(info.st_uid, fs.getuid())
+                self.assertEqual(info.st_nlink, 1)
+            finally:
+                fs.close(directory)
+        self.assertFalse(path.exists())
+
+    def test_failure_cleans_only_its_owned_file(self):
+        path = platform_dev.browser_launch_path(self.directory, self.instance)
+        with self.assertRaisesRegex(RuntimeError, "synthetic server failure"):
+            with platform_dev.private_browser_launch(self.directory, self.instance, 8765, self.token):
+                raise RuntimeError("synthetic server failure")
+        self.assertFalse(path.exists())
+        with platform_dev.private_browser_launch(self.directory, self.instance, 8765, self.token):
+            path.rename(self.directory / "moved-original.html")
+            path.write_text("replacement belongs to another operation", encoding="utf-8")
+        self.assertEqual(path.read_text(encoding="utf-8"), "replacement belongs to another operation")
+
+    def test_existing_entry_is_never_overwritten_or_deleted(self):
+        self.directory.mkdir()
+        path = platform_dev.browser_launch_path(self.directory, self.instance)
+        original = self.root / "original"
+        original.write_text("unrelated file", encoding="utf-8")
+        path.hardlink_to(original)
+        with self.assertRaises(FileExistsError):
+            with platform_dev.private_browser_launch(self.directory, self.instance, 8765, self.token):
+                self.fail("Existing launcher must not be accepted")
+        self.assertEqual(original.read_text(encoding="utf-8"), "unrelated file")
+        self.assertTrue(path.exists())
+
+    def test_symlinked_parent_cannot_redirect_private_credential(self):
+        target = self.root / "target"
+        target.mkdir()
+        try:
+            self.directory.symlink_to(target, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"Symlink privileges unavailable: {error}")
+        with self.assertRaises(OSError):
+            with platform_dev.private_browser_launch(self.directory, self.instance, 8765, self.token):
+                self.fail("Symlinked directory must not be accepted")
+        self.assertEqual(list(target.iterdir()), [])
+
+    def test_instance_id_cannot_select_another_path(self):
+        for value in ("../other", self.instance.upper(), self.instance + "\n"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                platform_dev.browser_launch_path(self.directory, value)
 
 
 @unittest.skipUnless(sys.platform == "win32", "requires a native Windows host; never counted as simulated success")

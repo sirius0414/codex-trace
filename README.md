@@ -152,7 +152,7 @@ npm run dev:browser:status
 npm run dev:browser:stop
 ```
 
-启动后访问命令输出的地址，默认是 [http://localhost:8765/](http://localhost:8765/)。该入口使用正式前后端，任务来源遵循 `CODEX_HOME`，默认读取本机 Codex 记录；仅监听 `127.0.0.1`。调试索引、日志及导出位于 `build/dev-browser/`。
+启动后打开命令输出的 `file://` 本地入口文件；`status` 可再次显示入口。该文件仅当前 OS 用户可读，通过不发送到 HTTP 的 URL fragment 将启动凭据交给页面。直接访问 `http://localhost:8765/` 不会取得凭据；重启服务后须重新打开入口文件。同一标签页刷新会保留凭据，请勿分享入口文件。该入口使用正式前后端，任务来源遵循 `CODEX_HOME`，默认读取本机 Codex 记录；仅监听 `127.0.0.1`。调试索引、日志及导出位于 `build/dev-browser/`。
 
 修改前端后执行 `npm run build` 并刷新页面；修改后端后执行 `npm run dev:browser:restart`。也可用 `npm run dev:browser` 在前台运行。需要指定环境时：
 

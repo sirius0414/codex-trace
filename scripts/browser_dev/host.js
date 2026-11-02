@@ -2,7 +2,26 @@
 const frame = document.querySelector('#app');
 const surface = document.querySelector('#surface');
 const status = document.querySelector('#status');
-const token = JSON.parse(document.querySelector('#dev-token').textContent);
+// 凭据来自 OS 私有入口的 fragment；不经 HTTP 获取，也不传给 iframe。
+// 清除地址栏后仅保留在本标签页的同源 sessionStorage，使刷新仍能恢复。
+const TOKEN_KEY = 'codex-trace-dev-token';
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+function bootstrapToken() {
+  const fragment = location.hash;
+  if (fragment) history.replaceState(null, '', location.pathname + location.search);
+  if (fragment) {
+    const match = /^#token=([A-Za-z0-9_-]{43})$/.exec(fragment);
+    try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* 存储被禁用不影响本次私有入口。 */ }
+    if (!match) return null;
+    try { sessionStorage.setItem(TOKEN_KEY, match[1]); } catch { /* 本次仍可使用内存凭据。 */ }
+    return match[1];
+  }
+  try {
+    const saved = sessionStorage.getItem(TOKEN_KEY);
+    return typeof saved === 'string' && TOKEN.test(saved) ? saved : null;
+  } catch { return null; }
+}
+const token = bootstrapToken();
 const colorScheme = matchMedia('(prefers-color-scheme: dark)');
 let initialized = false;
 let opening = false;
@@ -33,6 +52,7 @@ function rpcError(id, message, code = -32603) {
 }
 
 async function call(name, args) {
+  if (!token) throw new Error('private-launch-required');
   const response = await fetch('/rpc', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Codex-Trace-Token': token },
@@ -109,8 +129,9 @@ colorScheme.addEventListener('change', updateContext);
 new ResizeObserver(updateContext).observe(surface);
 document.querySelector('#refresh').addEventListener('click', () => location.reload());
 setTimeout(() => {
-  if (!initialized) showStatus('界面连接超时，请确认开发服务仍在运行，然后刷新。', 'error');
+  if (token && !initialized) showStatus('界面连接超时，请确认开发服务仍在运行，然后刷新。', 'error');
 }, 15000);
 
-// 先安装消息监听，再加载 SDK，避免丢失初始化请求。
-frame.src = '/app.html';
+// 匿名页面不激活轨迹应用；先安装监听，再加载持有凭据的界面，避免丢失握手。
+if (token) frame.src = '/app.html';
+else showStatus('请打开启动命令输出的本地入口文件；服务重启后需重新打开。', 'error');
