@@ -37,9 +37,9 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
   const turn = snapshot?.turns.find(item => item.turnId === event?.turnId && item.threadId === event?.threadId);
   const relatedAgents = snapshot && event && props.onAgentNavigate ? interactionTargets(snapshot, event) : [];
   useLayoutEffect(() => {
-    // 窄屏覆盖详情需接管焦点；宽屏分栏保持行焦点，让方向键仍能连续浏览列表。
+    // 初次进入窄屏详情时移入焦点；切换记录不抢回焦点，让列表可以连续浏览。
     if (props.overlay && !panel.current?.contains(document.activeElement)) closeButton.current?.focus({ preventScroll: true });
-  }, [props.overlay, view.selectedEventId]);
+  }, [props.overlay]);
   function close() {
     props.onSelect(null);
     requestAnimationFrame(() => {
@@ -48,16 +48,6 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
       else if (opener.current instanceof HTMLElement && opener.current.isConnected) opener.current.focus({ preventScroll: true });
       else document.querySelector<HTMLElement>('.cx-scroll')?.focus({ preventScroll: true });
     });
-  }
-  function containTab(event: React.KeyboardEvent<HTMLElement>) {
-    // 只在覆盖详情时约束 Tab，宽屏分栏允许在列表和详情间正常移动。
-    if (!props.overlay || event.key !== 'Tab') return;
-    const focusable = [...panel.current!.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],[tabindex]')]
-      .filter(element => element.tabIndex >= 0 && !element.hasAttribute('disabled') && !element.closest('[inert]') && element.getClientRects().length > 0);
-    if (!focusable.length) { event.preventDefault(); panel.current?.focus(); return; }
-    const first = focusable[0], last = focusable.at(-1)!;
-    if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) { event.preventDefault(); last.focus(); }
-    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
   }
   async function copy(text: string) {
     try {
@@ -110,7 +100,7 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
     if (!parts.length) return <p className="cx-data-note">{props.detailLoading ? t('正在读取内容…', 'Loading content…') : t('该记录尚无可读取正文。', 'This record has no readable content yet.')}</p>;
     return <>{parts.map(part => content(part, item.kind === 'compaction' ? t('已记录的压缩摘要', 'Recorded compaction summary') : t('内容', 'Content'), detail?.parts[part]))}{available('error') && content('error', t('错误', 'Error'), detail?.parts.error)}</>;
   }
-  return <aside ref={panel} id="cx-record-details" className={`cx-inspector ${resize.resizing ? 'resizing' : ''}`} style={{ width: resize.width }} role={props.overlay ? 'dialog' : undefined} aria-label={t('所选记录详情', 'Selected record details')} tabIndex={-1} onKeyDown={containTab}>
+  return <aside ref={panel} id="cx-record-details" className={`cx-inspector ${resize.resizing ? 'resizing' : ''}`} style={{ width: resize.width }} role={props.overlay ? 'dialog' : undefined} aria-label={t('所选记录详情', 'Selected record details')} tabIndex={-1}>
     <div className="cx-inspector-resizer" role="separator" tabIndex={0} aria-orientation="vertical" aria-controls="cx-record-details"
       aria-label={t('调整内容预览宽度', 'Resize content preview')} aria-valuemin={resize.min} aria-valuemax={resize.max} aria-valuenow={resize.width}
       aria-valuetext={t(`${resize.width} 像素`, `${resize.width} pixels`)} title={t('拖动调整预览宽度；方向键微调，双击或 Enter 恢复默认', 'Drag to resize preview; use arrow keys to adjust, double-click or press Enter to reset')}

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventKind, TimeRange } from '../../../contracts/types';
 import type { TraceUIProps } from '../ui-types';
 import { buildInfo, versionLabel } from '../build-info';
@@ -106,15 +106,6 @@ export default function TraceUI(props: TraceUIProps) {
     media.addEventListener('change', change); change();
     return () => media.removeEventListener('change', change);
   }, []);
-  useLayoutEffect(() => {
-    const ledger = root.current?.querySelector<HTMLElement>('.cx-ledger');
-    if (!ledger || !narrow || !view.selectedEventId) return;
-    // 窄屏详情覆盖列表时，底层列表退出键盘与读屏导航；关闭后恢复原有属性。
-    const wasInert = ledger.inert, wasHidden = ledger.getAttribute('aria-hidden');
-    ledger.inert = true;
-    ledger.setAttribute('aria-hidden', 'true');
-    return () => { ledger.inert = wasInert; if (wasHidden == null) ledger.removeAttribute('aria-hidden'); else ledger.setAttribute('aria-hidden', wasHidden); };
-  }, [narrow, view.selectedEventId]);
   useEffect(() => {
     if (popover === 'tasks') taskInput.current?.focus();
     if (popover === 'settings') root.current?.querySelector<HTMLInputElement>('.cx-settings input')?.focus();
@@ -160,6 +151,7 @@ export default function TraceUI(props: TraceUIProps) {
       </select><button className="cx-button cx-error-filter" aria-pressed={view.filters.failedOnly} onClick={() => filter({ failedOnly: !view.filters.failedOnly })}><Icon name="alert" />{t('仅失败', 'Failed only')}</button>
     </div>
     <div id="cx-agent-page" role="tabpanel" aria-labelledby={activeAgent ? `cx-agent-tab-${activeAgent}` : undefined} className={`cx-work ${view.selectedEventId ? 'has-detail' : ''}`}>
+      {/* 窄屏详情是非模态覆盖层，露出的列表仍可直接点击、键盘切换及读屏浏览。 */}
       <EventList key={`${snapshot?.binding.threadId ?? 'empty'}:${activeAgent}`} {...pageProps} visible={visible} highlightedEvents={highlightedEvents} onCount={setRowCount} />
       {view.selectedEventId && <Inspector {...pageProps} overlay={narrow} preferredWidth={inspectorWidth} onResize={setInspectorWidth} />}
     </div>
