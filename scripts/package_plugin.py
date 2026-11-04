@@ -98,7 +98,14 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".codex-trace-package-", dir=output.parent) as temporary:
         staged = Path(temporary) / "plugin"
-        shutil.copytree(ROOT / "plugin", staged, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
+        def ignore_local_plugin_files(directory, names):
+            ignored = set(shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")(directory, names))
+            # 本机开发包只生成 .mcp.json。根级新版清单会让宿主改找 mcp.json，
+            # 因此只排除便携包入口；必须保留 .codex-plugin/plugin.json。
+            if Path(directory) == ROOT / "plugin":
+                ignored.update({"plugin.json", "launch.py"})
+            return ignored
+        shutil.copytree(ROOT / "plugin", staged, ignore=ignore_local_plugin_files)
         shutil.copytree(backend, staged / "backend" / "codex_trace", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(ROOT / "contracts", staged / "contracts", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         (staged / "ui").mkdir()

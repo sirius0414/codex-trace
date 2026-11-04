@@ -1,15 +1,31 @@
 {
   "name": "codex-trace",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local, read-only Codex execution trajectory viewer with verified local ZIP export.",
   "author": {
     "name": "Codex Trace contributors"
   },
   "license": "MIT",
+  "homepage": "https://github.com/sirius0414/codex-trace",
+  "repository": "https://github.com/sirius0414/codex-trace",
+  "requires_local_executor": true,
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "执行轨迹",
     "shortDescription": "只读查看本地 Codex 已保存的执行轨迹。",
+    "longDescription": "Codex Trace 在本机 Codex 桌面应用中展示已保存的任务执行轨迹。按轮次浏览消息、模型与工具输入输出，搜索已加载记录，追踪已确认的子 Agent，并将当前任务及已确认子任务的原始记录导出为包含来源清单和 SHA-256 的本地 ZIP。插件只读访问 Codex 任务来源；派生摘要、阅读偏好、导出回执和临时快照会保存在本机。需要受支持的本地 Codex CLI。社区 GitHub Marketplace 版本需要 Git 和 uv，由 uv 准备 Python 3.14.2 与锁定依赖，首次准备需要联网；安装器版本需要本机 Python 3.14+，可选离线平台包内置运行时。本项目未经 OpenAI 官方公共目录审核或认可。不支持云端任务或网页端执行；缺失记录与未知状态会明确标注，导出校验成功不代表来源完整。",
+    "developerName": "Codex Trace contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "浏览本地 Codex 已保存的消息与工具输入输出",
+      "搜索、筛选和定位已加载的执行记录",
+      "沿已确认的关系查看子 Agent 轨迹",
+      "导出带来源清单与 SHA-256 校验的本地原始记录 ZIP"
+    ],
+    "websiteURL": "https://github.com/sirius0414/codex-trace",
+    "supportURL": "https://github.com/sirius0414/codex-trace/issues",
+    "privacyPolicyURL": "https://github.com/sirius0414/codex-trace/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/sirius0414/codex-trace/blob/main/TERMS.md",
     "composerIcon": "./assets/icon.svg",
     "composerIconDark": "./assets/icon-dark.svg",
     "logo": "./assets/logo.svg",

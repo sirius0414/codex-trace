@@ -4,7 +4,7 @@
 
 Codex Trace 通过本地 Python MCP 服务和随包提供的 React 界面运行。安装后，在聊天的 **New Tab → 执行轨迹** 打开面板；无法确认当前任务时，会显示任务选择器。全局入口也会先让你选择任务。
 
-[下载安装](https://github.com/sirius0414/codex-trace/releases) · [安装指南](INSTALL.md) · [Windows 说明](WINDOWS.md) · [贡献指南](CONTRIBUTING.md)
+[社区安装](INSTALL.md#社区市场安装) · [可选发行附件](https://github.com/sirius0414/codex-trace/releases) · [安装指南](INSTALL.md) · [Windows 说明](WINDOWS.md) · [贡献指南](CONTRIBUTING.md)
 
 ## 功能
 
@@ -22,65 +22,49 @@ Codex Trace 通过本地 Python MCP 服务和随包提供的 React 界面运行�
 | --- | --- |
 | macOS | 本机 Codex 桌面应用及可用的配套 CLI |
 | Windows | Windows 10/11、原生 Codex、本地 NTFS 卷，无需 WSL |
-| Python | 3.14+，包含 `venv`、`pip` 和 `compression.zstd` |
-| Codex CLI | 支持 `plugin marketplace`、`plugin add/remove` 和所需的只读 app-server API |
-| 网络 | 创建独立环境时需要获取锁定的 Python 依赖；插件日常启动不安装依赖 |
+| Python | 社区市场由 uv 管理固定的 3.14.2；可选安装器／源码方式需本机 3.14+ |
+| Codex CLI | 0.153.0 或更高兼容版本，支持 `plugin marketplace`、`plugin add/remove` 和所需的只读 app-server API |
+| Git / uv | 社区市场注册需要 Git；插件启动需要可从 Codex 进程 PATH 找到 uv |
+| 网络 | 社区市场首次准备、依赖变化或缓存缺失时由 uv 获取 Python 与锁定依赖；注册和更新市场需要访问 GitHub |
 
-普通用户无需安装 Node.js、Git 或克隆源码。安装器会检测本机环境，并在缺少前置条件时给出指引。Linux、WSL、云端执行，以及 Windows 网络卷、UNC 和重解析点上的数据目录不在当前支持范围内。
+社区市场用户无需 Node.js、手工克隆源码或构建前端；Git 与 uv 为前置条件。可选安装器的前置条件另见安装指南。Linux、WSL、云端执行，以及 Windows 网络卷、UNC 和重解析点上的数据目录不在当前支持范围内。
 
 Windows 已有原生实现和 CI 验证流程；是否通过特定版本的原生测试，应以该版本的 CI 报告和桌面验收结果为准，不能用 macOS 测试代替。详细边界见 [Windows 适配与验收](WINDOWS.md)。
 
 ## 安装、更新与卸载
 
-普通用户使用下面的发布包流程；贡献者可直接查看[从源码更新开发插件](#从源码更新开发插件)。
+社区分发通过本 GitHub 仓库的插件市场 `codex-trace-community` 安装 `codex-trace`。仓库目前为私有，安装者须具备 Git 读取权限并配置有效凭据。需要 **Git、uv 和支持插件市场的 Codex CLI 0.153.0 或更高兼容版本**；无需 Node.js、手工克隆源码或构建前端。安装步骤与网络、缓存说明见 [INSTALL.md](INSTALL.md)，维护发布流程见 [MARKETPLACE.md](MARKETPLACE.md)。
 
-当前使用**发布 ZIP 安装器注册本地插件市场**的方式安装。公共插件目录的一键直装尚未完成；发布工作流也不会代替公共目录的提交、审核和上架。详见[插件市场与公开上架](INSTALL.md#插件市场与公开上架)。
-
-### 首次安装
-
-从 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 下载同一版本的 `codex-trace-版本.zip` 和 `SHA256SUMS`。使用 Release 附件，不要使用自动生成的 **Source code** ZIP；后者没有构建好的前端。如果尚无已发布 Release，请等待发布，或按下文从源码生成安装包。
-
-以下以当前清单版本 `0.1.0` 为例，在下载目录执行。
-
-**macOS：**
+### 社区市场首次安装
 
 ```sh
-shasum -a 256 -c SHA256SUMS
-# 确认校验通过后再解压、安装。
-unzip codex-trace-0.1.0.zip
-cd codex-trace-0.1.0
-sh ./install.sh
+codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
+codex plugin add codex-trace@codex-trace-community
 ```
 
-**Windows PowerShell：**
+插件目录已包含前端、后端、契约和授权文本。首次启动时，uv 准备固定的 Python 3.14.2 及 `requirements.lock` 依赖；首次准备、依赖变化或缓存缺失时需要网络。Python、环境及下载缓存由 uv 在插件目录外管理。
 
-```powershell
-(Get-FileHash .\codex-trace-0.1.0.zip -Algorithm SHA256).Hash
-Get-Content .\SHA256SUMS
-# 确认 ZIP 的 SHA-256 与清单一致后再继续。
-Expand-Archive .\codex-trace-0.1.0.zip -DestinationPath .
-Set-Location .\codex-trace-0.1.0
-powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+首次使用或依赖变化时，先按 [安装与依赖预热](INSTALL.md#首次使用与依赖预热) 准备运行环境；冷下载可能超过宿主默认的启动等待时间。预热成功后重启 Codex 或开启新会话，再通过 **New Tab → 执行轨迹** 打开。保留未确认导出的原请求，确认结果后再关闭旧面板。仓库市场由用户主动注册，与 OpenAI 公共目录审核和上架是不同渠道。
+
+### 社区市场更新与卸载
+
+```sh
+codex plugin marketplace upgrade codex-trace-community
+codex plugin add codex-trace@codex-trace-community
 ```
 
-安装器会校验包内容、创建独立 Python 环境、安装锁定依赖、生成本机配置，并注册和安装 `codex-trace@codex-trace`。发布包包含已构建前端、后端、契约及授权文件；本机运行路径在安装时生成，不依赖开发者目录或下载包目录。
+更新后完成 [依赖预热](INSTALL.md#首次使用与依赖预热)，再重启 Codex 或开启新会话。卸载插件并移除该市场注册：
 
-完成后重新加载插件资源；若入口尚未刷新，在方便时重启 Codex。安装器不会主动重启应用或终止会话。自定义 Python/Codex 路径、组织脚本策略等情况，请参阅[完整安装指南](INSTALL.md)。
+```sh
+codex plugin remove codex-trace@codex-trace-community
+codex plugin marketplace remove codex-trace-community
+```
 
-### 更新、恢复与卸载
+移除插件不自动删除派生索引、阅读偏好、导出回执或最终 ZIP，也不负责清理 uv 的共享缓存。清理前先核对未决导出、停止插件服务并关闭相关页面，详见 [隐私与数据清理说明](PRIVACY.md)。
 
-下载并校验新版本，在新解压目录中执行更新命令，无需先卸载。重复安装会重新准备并验证环境。
+### 可选安装方式
 
-| 操作 | macOS | Windows PowerShell |
-| --- | --- | --- |
-| 更新或重新安装 | `sh ./install.sh update` | `py -3.14 .\install.py update` |
-| 查看安装状态 | `sh ./install.sh status` | `py -3.14 .\install.py status` |
-| 恢复未完成操作 | `sh ./install.sh recover` | `py -3.14 .\install.py recover` |
-| 卸载 | `sh ./install.sh uninstall` | `py -3.14 .\install.py uninstall` |
-
-安装记录中的 `journal.json` 保存操作状态，`current.json` 保存最近确认成功的安装。切换失败时会尝试恢复之前的版本；需要人工处理时，先查看状态及事务目录的日志，修复原因后执行 `recover`，再按提示重试安装。
-
-卸载仅移除本插件和对应市场注册，保留用户导出的文件、索引、安装记录及旧运行环境。若曾使用 `--root` 或自定义 `CODEX_HOME`，更新、恢复和卸载必须使用相同配置。更多处理方式见[故障排查](INSTALL.md#故障排查)。
+需要独立安装器的用户可按 [发布 ZIP 安装器流程](INSTALL.md#可选发布-zip-安装器) 使用 `codex-trace-0.2.0.zip` 和校验和；该方式要求本机 Python，注册的是 `codex-trace` 市场。维护者也可构建按系统和架构分发的[内置运行时离线候选包](MARKETPLACE.md#可选原生离线插件包)。不要同时启用社区、安装器和开发市场中的同名插件。下载及实际发布状态以 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 为准。
 
 ### 从 Codex Display 切换
 
@@ -95,11 +79,11 @@ Codex Trace 只读观察 Codex 已保存的任务记录，不通过 app-server �
 | 数据 | macOS 默认位置 | Windows 默认位置 |
 | --- | --- | --- |
 | Codex 来源 | `~/.codex` | `%USERPROFILE%\.codex` |
-| 安装记录与独立环境 | `~/.local/share/codex-trace/installations/<标识>/` | `%LOCALAPPDATA%\codex-trace\installations\<标识>\` |
+| 可选安装器的记录与独立环境 | `~/.local/share/codex-trace/installations/<标识>/` | `%LOCALAPPDATA%\codex-trace\installations\<标识>\` |
 | 索引、偏好与回执 | `~/.local/share/codex-trace/index/` | `%LOCALAPPDATA%\codex-trace\index\` |
 | 最终导出 | `~/Downloads/Codex Trace/` | `%USERPROFILE%\Downloads\Codex Trace\` |
 
-`CODEX_HOME` 可指定 Codex 来源；安装目录标识由其路径计算。不要移动正在使用的安装目录或其中的虚拟环境。
+`CODEX_HOME` 可指定 Codex 来源；可选安装器的目录标识由其路径计算。社区插件程序由 Codex 缓存，Python 和依赖由 uv 在外部管理。不要移动正在使用的运行环境。
 
 导出独立枚举当前任务的已知来源和已确认子任务，当前页面的搜索、筛选、折叠及分页不会缩小导出范围。ZIP 的 manifest 记录来源、采集范围、哈希及缺失部分；未知类型和不完整原始行按来源保留。运行中任务的多个文件可能在不同时间采集，因此成功保存不等于来源完整。
 
@@ -178,6 +162,8 @@ npm run plugin:update -- --install-prepared build/update-实际目录
 
 ## 发布流程
 
+社区 GitHub 仓库市场的目录生成、验证与发布见 [MARKETPLACE.md](MARKETPLACE.md)。以下是仍保留的可选发布 ZIP 安装器流程，不表示相应版本已经公开发布。
+
 ### 生成安装包
 
 完成开发环境准备后执行：
@@ -190,7 +176,7 @@ npm run release:build
 
 ```text
 build/releases/
-├── codex-trace-0.1.0.zip
+├── codex-trace-0.2.0.zip
 └── SHA256SUMS
 ```
 
@@ -210,11 +196,11 @@ npm run release:build -- --output build/reproduce
 
 ```sh
 .venv/bin/python scripts/smoke_release.py \
-  --archive build/releases/codex-trace-0.1.0.zip \
+  --archive build/releases/codex-trace-0.2.0.zip \
   --report build/release-smoke.json
 ```
 
-Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.1.0.zip --report build/release-smoke.json`。需要指定 CLI 时加 `--codex`；离线测试可用 `--wheelhouse DIR` 提供预先下载的依赖。验证不会读取真实会话或修改真实插件配置，但 CLI/MCP 测试不能代替桌面入口的人工验收。
+Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`。需要指定 CLI 时加 `--codex`；离线测试可用 `--wheelhouse DIR` 提供预先下载的依赖。验证不会读取真实会话或修改真实插件配置，但 CLI/MCP 测试不能代替桌面入口的人工验收。
 
 ### GitHub Release
 
@@ -232,7 +218,9 @@ Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive 
 
 | 文档 | 内容 |
 | --- | --- |
-| [INSTALL.md](INSTALL.md) | 完整安装步骤、重命名迁移、恢复、卸载及故障排查 |
+| [INSTALL.md](INSTALL.md) | 社区市场安装与更新、可选安装器、迁移及故障排查 |
+| [MARKETPLACE.md](MARKETPLACE.md) | GitHub 社区市场发布、原生离线候选包与验证边界 |
+| [PRIVACY.md](PRIVACY.md)、[SUPPORT.md](SUPPORT.md)、[TERMS.md](TERMS.md) | 数据保存与清理、支持渠道和许可边界 |
 | [WINDOWS.md](WINDOWS.md) | 原生 Windows 实现、文件系统边界与验收方法 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 开发约束、代码规范和评审入口 |
 | [contracts/README.md](contracts/README.md) | MCP 数据契约与导出语义 |

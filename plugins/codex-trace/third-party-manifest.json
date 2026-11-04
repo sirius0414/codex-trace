@@ -1,0 +1,831 @@
+{
+  "schemaVersion": 1,
+  "lockfiles": {
+    "package-lock.json": "ed2f909afa7d0c7be998fb15ee9c3363d2a5c0dd2d439fe92b4245d790c58101",
+    "requirements.lock": "ef54dbe8dbc400ab5fcf7ecfea17d668e8617a323f770c0bad1a0c471d0983c5"
+  },
+  "components": [
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/@modelcontextprotocol/client",
+      "name": "@modelcontextprotocol/client",
+      "version": "2.3.1",
+      "declaredLicense": "Apache-2.0",
+      "source": {
+        "type": "git",
+        "url": "git+https://github.com/modelcontextprotocol/typescript-sdk.git"
+      },
+      "files": [
+        "LICENSES/npm/@modelcontextprotocol/client@2.3.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/@modelcontextprotocol/core",
+      "name": "@modelcontextprotocol/core",
+      "version": "2.3.1",
+      "declaredLicense": "Apache-2.0",
+      "source": {
+        "type": "git",
+        "url": "git+https://github.com/modelcontextprotocol/typescript-sdk.git"
+      },
+      "files": [
+        "LICENSES/npm/@modelcontextprotocol/core@2.3.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/@modelcontextprotocol/ext-apps",
+      "name": "@modelcontextprotocol/ext-apps",
+      "version": "2.0.3",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git+https://github.com/modelcontextprotocol/ext-apps.git"
+      },
+      "files": [
+        "LICENSES/npm/@modelcontextprotocol/ext-apps@2.0.3/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/@standard-schema/spec",
+      "name": "@standard-schema/spec",
+      "version": "1.1.0",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/standard-schema/standard-schema"
+      },
+      "files": [
+        "LICENSES/npm/@standard-schema/spec@1.1.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/cross-spawn",
+      "name": "cross-spawn",
+      "version": "7.0.6",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git@github.com:moxystudio/node-cross-spawn.git"
+      },
+      "files": [
+        "LICENSES/npm/cross-spawn@7.0.6/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/eventsource",
+      "name": "eventsource",
+      "version": "3.0.7",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git://git@github.com/EventSource/eventsource.git"
+      },
+      "files": [
+        "LICENSES/npm/eventsource@3.0.7/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/eventsource-parser",
+      "name": "eventsource-parser",
+      "version": "3.1.1",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git+ssh://git@github.com/rexxars/eventsource-parser.git"
+      },
+      "files": [
+        "LICENSES/npm/eventsource-parser@3.1.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/highlight.js",
+      "name": "highlight.js",
+      "version": "11.11.1",
+      "declaredLicense": "BSD-3-Clause",
+      "source": {
+        "type": "git",
+        "url": "git://github.com/highlightjs/highlight.js.git"
+      },
+      "files": [
+        "LICENSES/npm/highlight.js@11.11.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/isexe",
+      "name": "isexe",
+      "version": "2.0.0",
+      "declaredLicense": "ISC",
+      "source": {
+        "type": "git",
+        "url": "git+https://github.com/isaacs/isexe.git"
+      },
+      "files": [
+        "LICENSES/npm/isexe@2.0.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/jose",
+      "name": "jose",
+      "version": "6.2.13",
+      "declaredLicense": "MIT",
+      "source": "panva/jose",
+      "files": [
+        "LICENSES/npm/jose@6.2.13/LICENSE.md"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/marked",
+      "name": "marked",
+      "version": "15.0.12",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git://github.com/markedjs/marked.git"
+      },
+      "files": [
+        "LICENSES/npm/marked@15.0.12/LICENSE.md"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/path-key",
+      "name": "path-key",
+      "version": "3.1.1",
+      "declaredLicense": "MIT",
+      "source": "sindresorhus/path-key",
+      "files": [
+        "LICENSES/npm/path-key@3.1.1/license"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/pkce-challenge",
+      "name": "pkce-challenge",
+      "version": "5.0.1",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git+https://github.com/crouchcd/pkce-challenge.git"
+      },
+      "files": [
+        "LICENSES/npm/pkce-challenge@5.0.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/react",
+      "name": "react",
+      "version": "19.3.1",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/react/react.git",
+        "directory": "packages/react"
+      },
+      "files": [
+        "LICENSES/npm/react@19.3.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/react-dom",
+      "name": "react-dom",
+      "version": "19.3.1",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/react/react.git",
+        "directory": "packages/react-dom"
+      },
+      "files": [
+        "LICENSES/npm/react-dom@19.3.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/scheduler",
+      "name": "scheduler",
+      "version": "0.28.0",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/react/react.git",
+        "directory": "packages/scheduler"
+      },
+      "files": [
+        "LICENSES/npm/scheduler@0.28.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/shebang-command",
+      "name": "shebang-command",
+      "version": "2.0.0",
+      "declaredLicense": "MIT",
+      "source": "kevva/shebang-command",
+      "files": [
+        "LICENSES/npm/shebang-command@2.0.0/license"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/shebang-regex",
+      "name": "shebang-regex",
+      "version": "3.0.0",
+      "declaredLicense": "MIT",
+      "source": "sindresorhus/shebang-regex",
+      "files": [
+        "LICENSES/npm/shebang-regex@3.0.0/license"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/which",
+      "name": "which",
+      "version": "2.0.2",
+      "declaredLicense": "ISC",
+      "source": {
+        "type": "git",
+        "url": "git://github.com/isaacs/node-which.git"
+      },
+      "files": [
+        "LICENSES/npm/which@2.0.2/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/zod",
+      "name": "zod",
+      "version": "4.6.7",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git+https://github.com/colinhacks/zod.git"
+      },
+      "files": [
+        "LICENSES/npm/zod@4.6.7/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "annotated-types",
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://github.com/annotated-types/annotated-types",
+        "Source, https://github.com/annotated-types/annotated-types",
+        "Changelog, https://github.com/annotated-types/annotated-types/releases"
+      ],
+      "files": [
+        "LICENSES/python/annotated-types@0.8.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "anyio",
+      "name": "anyio",
+      "version": "4.15.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Documentation, https://anyio.readthedocs.io/en/latest/",
+        "Changelog, https://anyio.readthedocs.io/en/stable/versionhistory.html",
+        "Source code, https://github.com/agronholm/anyio",
+        "Issue tracker, https://github.com/agronholm/anyio/issues"
+      ],
+      "files": [
+        "LICENSES/python/anyio@4.15.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "attrs",
+      "name": "attrs",
+      "version": "26.1.0",
+      "declaredLicense": "MIT",
+      "source": [
+        "Documentation, https://www.attrs.org/",
+        "Changelog, https://www.attrs.org/en/stable/changelog.html",
+        "GitHub, https://github.com/python-attrs/attrs",
+        "Funding, https://github.com/sponsors/hynek",
+        "Tidelift, https://tidelift.com/subscription/pkg/pypi-attrs?utm_source=pypi-attrs&utm_medium=pypi"
+      ],
+      "files": [
+        "LICENSES/python/attrs@26.1.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "certifi",
+      "name": "certifi",
+      "version": "2026.10.19",
+      "declaredLicense": "MPL-2.0",
+      "source": [
+        "Source, https://github.com/certifi/python-certifi"
+      ],
+      "files": [
+        "LICENSES/python/certifi@2026.10.19/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "cffi",
+      "name": "cffi",
+      "version": "2.1.1",
+      "declaredLicense": "MIT-0",
+      "source": [
+        "Documentation, https://cffi.readthedocs.io/",
+        "Changelog, https://cffi.readthedocs.io/en/latest/whatsnew.html",
+        "Download, https://github.com/python-cffi/cffi/releases",
+        "Contact, https://groups.google.com/forum/#!forum/python-cffi",
+        "Source Code, https://github.com/python-cffi/cffi",
+        "Issue Tracker, https://github.com/python-cffi/cffi/issues"
+      ],
+      "files": [
+        "LICENSES/python/cffi@2.1.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "click",
+      "name": "click",
+      "version": "8.5.0",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Changes, https://click.palletsprojects.com/page/changes/",
+        "Chat, https://discord.gg/pallets",
+        "Documentation, https://click.palletsprojects.com/",
+        "Donate, https://palletsprojects.com/donate",
+        "Source, https://github.com/pallets/click/"
+      ],
+      "files": [
+        "LICENSES/python/click@8.5.0/LICENSE.txt"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "cryptography",
+      "name": "cryptography",
+      "version": "50.0.2",
+      "declaredLicense": "Apache-2.0 OR BSD-3-Clause",
+      "source": [
+        "changelog, https://cryptography.io/en/latest/changelog/",
+        "documentation, https://cryptography.io/",
+        "homepage, https://github.com/pyca/cryptography",
+        "issues, https://github.com/pyca/cryptography/issues",
+        "source, https://github.com/pyca/cryptography/"
+      ],
+      "files": [
+        "LICENSES/python/cryptography@50.0.2/LICENSE",
+        "LICENSES/python/cryptography@50.0.2/LICENSE.APACHE",
+        "LICENSES/python/cryptography@50.0.2/LICENSE.BSD"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "h11",
+      "name": "h11",
+      "version": "0.16.0",
+      "declaredLicense": "MIT",
+      "source": "https://github.com/python-hyper/h11",
+      "files": [
+        "LICENSES/python/h11@0.16.0/LICENSE.txt"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "httpcore",
+      "name": "httpcore",
+      "version": "1.0.9",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Documentation, https://www.encode.io/httpcore",
+        "Homepage, https://www.encode.io/httpcore/",
+        "Source, https://github.com/encode/httpcore"
+      ],
+      "files": [
+        "LICENSES/python/httpcore@1.0.9/LICENSE.md"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "httpx",
+      "name": "httpx",
+      "version": "0.28.1",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Changelog, https://github.com/encode/httpx/blob/master/CHANGELOG.md",
+        "Documentation, https://www.python-httpx.org",
+        "Homepage, https://github.com/encode/httpx",
+        "Source, https://github.com/encode/httpx"
+      ],
+      "files": [
+        "LICENSES/python/httpx@0.28.1/LICENSE.md"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "httpx-sse",
+      "name": "httpx-sse",
+      "version": "0.4.3",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://github.com/florimondmanca/httpx-sse"
+      ],
+      "files": [
+        "LICENSES/python/httpx-sse@0.4.3/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "idna",
+      "name": "idna",
+      "version": "3.20",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Changelog, https://github.com/kjd/idna/blob/master/HISTORY.md",
+        "Issue tracker, https://github.com/kjd/idna/issues",
+        "Source, https://github.com/kjd/idna"
+      ],
+      "files": [
+        "LICENSES/python/idna@3.20/LICENSE.md"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "jsonschema",
+      "name": "jsonschema",
+      "version": "4.25.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://github.com/python-jsonschema/jsonschema",
+        "Documentation, https://python-jsonschema.readthedocs.io/",
+        "Issues, https://github.com/python-jsonschema/jsonschema/issues/",
+        "Funding, https://github.com/sponsors/Julian",
+        "Tidelift, https://tidelift.com/subscription/pkg/pypi-jsonschema?utm_source=pypi-jsonschema&utm_medium=referral&utm_campaign=pypi-link",
+        "Changelog, https://github.com/python-jsonschema/jsonschema/blob/main/CHANGELOG.rst",
+        "Source, https://github.com/python-jsonschema/jsonschema"
+      ],
+      "files": [
+        "LICENSES/python/jsonschema@4.25.1/COPYING"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "jsonschema-specifications",
+      "name": "jsonschema-specifications",
+      "version": "2025.9.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Documentation, https://jsonschema-specifications.readthedocs.io/",
+        "Homepage, https://github.com/python-jsonschema/jsonschema-specifications",
+        "Issues, https://github.com/python-jsonschema/jsonschema-specifications/issues/",
+        "Funding, https://github.com/sponsors/Julian",
+        "Tidelift, https://tidelift.com/subscription/pkg/pypi-jsonschema-specifications?utm_source=pypi-jsonschema-specifications&utm_medium=referral&utm_campaign=pypi-link",
+        "Source, https://github.com/python-jsonschema/jsonschema-specifications"
+      ],
+      "files": [
+        "LICENSES/python/jsonschema-specifications@2025.9.1/COPYING"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "mcp",
+      "name": "mcp",
+      "version": "1.30.0",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://modelcontextprotocol.io",
+        "Documentation, https://py.sdk.modelcontextprotocol.io/v1/",
+        "Repository, https://github.com/modelcontextprotocol/python-sdk",
+        "Issues, https://github.com/modelcontextprotocol/python-sdk/issues"
+      ],
+      "files": [
+        "LICENSES/python/mcp@1.30.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "pycparser",
+      "name": "pycparser",
+      "version": "3.11",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Homepage, https://github.com/eliben/pycparser"
+      ],
+      "files": [
+        "LICENSES/python/pycparser@3.11/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "pydantic",
+      "name": "pydantic",
+      "version": "2.14.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://github.com/pydantic/pydantic",
+        "Documentation, https://pydantic.dev/docs/validation/latest/get-started/",
+        "Funding, https://github.com/sponsors/samuelcolvin",
+        "Source, https://github.com/pydantic/pydantic",
+        "Changelog, https://pydantic.dev/docs/validation/latest/get-started/changelog/"
+      ],
+      "files": [
+        "LICENSES/python/pydantic@2.14.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "pydantic-settings",
+      "name": "pydantic-settings",
+      "version": "2.16.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://github.com/pydantic/pydantic-settings",
+        "Funding, https://github.com/sponsors/samuelcolvin",
+        "Source, https://github.com/pydantic/pydantic-settings",
+        "Changelog, https://github.com/pydantic/pydantic-settings/releases",
+        "Documentation, https://docs.pydantic.dev/dev-v2/concepts/pydantic_settings/"
+      ],
+      "files": [
+        "LICENSES/python/pydantic-settings@2.16.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "pydantic_core",
+      "name": "pydantic_core",
+      "version": "2.50.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Funding, https://github.com/sponsors/samuelcolvin",
+        "Homepage, https://github.com/pydantic",
+        "Source, https://github.com/pydantic/pydantic/tree/main/pydantic-core"
+      ],
+      "files": [
+        "LICENSES/python/pydantic_core@2.50.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "PyJWT",
+      "name": "PyJWT",
+      "version": "2.15.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://github.com/jpadilla/pyjwt"
+      ],
+      "files": [
+        "LICENSES/python/PyJWT@2.15.1/AUTHORS.rst",
+        "LICENSES/python/PyJWT@2.15.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "pywin32",
+      "name": "pywin32",
+      "version": "311",
+      "marker": "sys_platform == 'win32'",
+      "declaredLicense": "PSF",
+      "source": [
+        "Homepage, https://github.com/mhammond/pywin32",
+        "Changes, https://github.com/mhammond/pywin32/blob/main/CHANGES.txt",
+        "Docs, https://mhammond.github.io/pywin32/",
+        "Bugs, https://github.com/mhammond/pywin32/issues",
+        "Support Requests, https://github.com/mhammond/pywin32/discussions",
+        "Mailing List, https://mail.python.org/mailman/listinfo/python-win32"
+      ],
+      "licenseArtifact": {
+        "filename": "pywin32-311-cp314-cp314-win_amd64.whl",
+        "sha256": "3aca44c046bd2ed8c90de9cb8427f581c479e594e99b5c0bb19b29c10fd6cb87"
+      },
+      "files": [
+        "LICENSES/python/pywin32@311/adodbapi/license.txt",
+        "LICENSES/python/pywin32@311/pythonwin/license.txt",
+        "LICENSES/python/pywin32@311/win32/license.txt",
+        "LICENSES/python/pywin32@311/win32com/License.txt"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "python-dotenv",
+      "name": "python-dotenv",
+      "version": "1.2.4",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Source, https://github.com/theskumar/python-dotenv"
+      ],
+      "files": [
+        "LICENSES/python/python-dotenv@1.2.4/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "python-multipart",
+      "name": "python-multipart",
+      "version": "0.0.32",
+      "declaredLicense": "Apache-2.0",
+      "source": [
+        "Homepage, https://github.com/Kludex/python-multipart",
+        "Documentation, https://kludex.github.io/python-multipart/",
+        "Changelog, https://github.com/Kludex/python-multipart/blob/master/CHANGELOG.md",
+        "Source, https://github.com/Kludex/python-multipart"
+      ],
+      "files": [
+        "LICENSES/python/python-multipart@0.0.32/LICENSE.txt"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "referencing",
+      "name": "referencing",
+      "version": "0.37.0",
+      "declaredLicense": "MIT",
+      "source": [
+        "Documentation, https://referencing.readthedocs.io/",
+        "Homepage, https://github.com/python-jsonschema/referencing",
+        "Issues, https://github.com/python-jsonschema/referencing/issues/",
+        "Funding, https://github.com/sponsors/Julian",
+        "Tidelift, https://tidelift.com/subscription/pkg/pypi-referencing?utm_source=pypi-referencing&utm_medium=referral&utm_campaign=pypi-link",
+        "Changelog, https://referencing.readthedocs.io/en/stable/changes/",
+        "Source, https://github.com/python-jsonschema/referencing"
+      ],
+      "files": [
+        "LICENSES/python/referencing@0.37.0/COPYING"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "rpds-py",
+      "name": "rpds-py",
+      "version": "2026.9.1",
+      "declaredLicense": "MIT",
+      "source": [
+        "Documentation, https://rpds.readthedocs.io/",
+        "Funding, https://github.com/sponsors/Julian",
+        "Homepage, https://github.com/crate-py/rpds",
+        "Issues, https://github.com/crate-py/rpds/issues/",
+        "Source, https://github.com/crate-py/rpds",
+        "Tidelift, https://tidelift.com/subscription/pkg/pypi-rpds-py?utm_source=pypi-rpds-py&utm_medium=referral&utm_campaign=pypi-link",
+        "Upstream, https://github.com/orium/rpds"
+      ],
+      "files": [
+        "LICENSES/python/rpds-py@2026.9.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "sse-starlette",
+      "name": "sse-starlette",
+      "version": "3.5.0",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Homepage, https://github.com/sysid/sse-starlette",
+        "Repository, https://github.com/sysid/sse-starlette",
+        "Issues, https://github.com/sysid/sse-starlette/issues",
+        "Source, https://github.com/sysid/sse-starlette"
+      ],
+      "files": [
+        "LICENSES/python/sse-starlette@3.5.0/AUTHORS",
+        "LICENSES/python/sse-starlette@3.5.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "starlette",
+      "name": "starlette",
+      "version": "1.9.0",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Homepage, https://github.com/Kludex/starlette",
+        "Documentation, https://starlette.dev/",
+        "Changelog, https://starlette.dev/release-notes/",
+        "Funding, https://github.com/sponsors/Kludex",
+        "Source, https://github.com/Kludex/starlette"
+      ],
+      "files": [
+        "LICENSES/python/starlette@1.9.0/LICENSE.md"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "typing-inspection",
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "declaredLicense": "MIT",
+      "source": [
+        "Homepage, https://github.com/pydantic/typing-inspection",
+        "Documentation, https://pydantic.github.io/typing-inspection/dev/",
+        "Source, https://github.com/pydantic/typing-inspection",
+        "Changelog, https://github.com/pydantic/typing-inspection/blob/main/HISTORY.md"
+      ],
+      "files": [
+        "LICENSES/python/typing-inspection@0.4.4/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "typing_extensions",
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "declaredLicense": "PSF-2.0",
+      "source": [
+        "Bug Tracker, https://github.com/python/typing_extensions/issues",
+        "Changes, https://github.com/python/typing_extensions/blob/main/CHANGELOG.md",
+        "Documentation, https://typing-extensions.readthedocs.io/",
+        "Home, https://github.com/python/typing_extensions",
+        "Q & A, https://github.com/python/typing/discussions",
+        "Repository, https://github.com/python/typing_extensions"
+      ],
+      "files": [
+        "LICENSES/python/typing_extensions@4.16.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "python",
+      "location": "uvicorn",
+      "name": "uvicorn",
+      "version": "0.54.0",
+      "declaredLicense": "BSD-3-Clause",
+      "source": [
+        "Changelog, https://uvicorn.dev/release-notes",
+        "Funding, https://github.com/sponsors/Kludex",
+        "Homepage, https://uvicorn.dev/",
+        "Source, https://github.com/Kludex/uvicorn"
+      ],
+      "files": [
+        "LICENSES/python/uvicorn@0.54.0/LICENSE.md"
+      ]
+    }
+  ],
+  "files": {
+    "LICENSES/npm/@modelcontextprotocol/client@2.3.1/LICENSE": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a",
+    "LICENSES/npm/@modelcontextprotocol/core@2.3.1/LICENSE": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a",
+    "LICENSES/npm/@modelcontextprotocol/ext-apps@2.0.3/LICENSE": "0382b0057770ca05e9c350a50aa3b1c1fea84da0bc81d723bf00b9aa841be58a",
+    "LICENSES/npm/@standard-schema/spec@1.1.0/LICENSE": "653b779005a3a4d64a7288c940f7b9a0e8f0b1e0375f6aa6af9473caf131e564",
+    "LICENSES/npm/cross-spawn@7.0.6/LICENSE": "aaa78451b6fecd1b9c4594c796c133c0e90cad100372ff8bc6de615e9ef9adf1",
+    "LICENSES/npm/eventsource-parser@3.1.1/LICENSE": "835eb611a23301b27115ca1be9f754c876e643ceb7fe63049c6b50609a1cafeb",
+    "LICENSES/npm/eventsource@3.0.7/LICENSE": "f683a72ffe6a9675b5507af22fe0f448d8c8de3da1e14f139d370a7e6a54a23e",
+    "LICENSES/npm/highlight.js@11.11.1/LICENSE": "6c081431591d9df696c82dc598fe1423765b8a299b200ed00b281afd0f64c490",
+    "LICENSES/npm/isexe@2.0.0/LICENSE": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b",
+    "LICENSES/npm/jose@6.2.13/LICENSE.md": "8078b0829d6c3e9ecde2f003e1966e4cad3efc6e7a640efbab0313cc166b1af1",
+    "LICENSES/npm/marked@15.0.12/LICENSE.md": "8e3a3f82f59a60958f56ca08f445647c32a4733dc7ca6c2c46f6eb898471ab9c",
+    "LICENSES/npm/path-key@3.1.1/license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+    "LICENSES/npm/pkce-challenge@5.0.1/LICENSE": "feb87a2e0c305de3464cc44077da5393c52d8ca6362d37427157d04ec6f4510d",
+    "LICENSES/npm/react-dom@19.3.1/LICENSE": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+    "LICENSES/npm/react@19.3.1/LICENSE": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+    "LICENSES/npm/scheduler@0.28.0/LICENSE": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+    "LICENSES/npm/shebang-command@2.0.0/license": "69dee148a2cc470554dfa7142e830662062394d0fe67cddd379aba90dc60d6b3",
+    "LICENSES/npm/shebang-regex@3.0.0/license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
+    "LICENSES/npm/which@2.0.2/LICENSE": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b",
+    "LICENSES/npm/zod@4.6.7/LICENSE": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+    "LICENSES/python/PyJWT@2.15.1/AUTHORS.rst": "925ce43461029eedbf558ec0b7cf7fc4b045def5120ebb97937c70814071cf07",
+    "LICENSES/python/PyJWT@2.15.1/LICENSE": "797a7a20231d4c433e9f1911db1731d06b5828b98f499819a034f7c0f56f5ce5",
+    "LICENSES/python/annotated-types@0.8.0/LICENSE": "fe1049884b1a0d9342901e88e07f32925d24b3121d9972b6a6805fb9824b095d",
+    "LICENSES/python/anyio@4.15.1/LICENSE": "5361ac9dc58f2ef5fd2e9b09c68297c17f04950909bbc8023bdb82eacf22c2b0",
+    "LICENSES/python/attrs@26.1.0/LICENSE": "882115c95dfc2af1eeb6714f8ec6d5cbcabf667caff8729f42420da63f714e9f",
+    "LICENSES/python/certifi@2026.10.19/LICENSE": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7",
+    "LICENSES/python/cffi@2.1.1/LICENSE": "5ba24ddc57067f9249add644c3afc41a5d6dc37e23433ef759d95df370b0af63",
+    "LICENSES/python/click@8.5.0/LICENSE.txt": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+    "LICENSES/python/cryptography@50.0.2/LICENSE": "3e0c7c091a948b82533ba98fd7cbb40432d6f1a9acbf85f5922d2f99a93ae6bb",
+    "LICENSES/python/cryptography@50.0.2/LICENSE.APACHE": "aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe",
+    "LICENSES/python/cryptography@50.0.2/LICENSE.BSD": "602c4c7482de6479dd2e9793cda275e5e63d773dacd1eca689232ab7008fb4fb",
+    "LICENSES/python/h11@0.16.0/LICENSE.txt": "37db5bb85926db28a427a25867f10b1232003aea1be69ccb851138adb8e6f361",
+    "LICENSES/python/httpcore@1.0.9/LICENSE.md": "fdcb59154c74cbaba16a11242f7740bea9f23d6feb5547917d8c5f94a80392a5",
+    "LICENSES/python/httpx-sse@0.4.3/LICENSE": "beec67e4ee83a7af26f242bed9987aa863d6d2dfb776106aa2360c4187f31901",
+    "LICENSES/python/httpx@0.28.1/LICENSE.md": "4ec59d544f12b5f539a3a716fd321ac58ccd8030b465221f2c880200cdf28d8d",
+    "LICENSES/python/idna@3.20/LICENSE.md": "1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04",
+    "LICENSES/python/jsonschema-specifications@2025.9.1/COPYING": "42dcd63495f87b4eb7c7757afa379bb55a53f94afd7a5f657d9adf57236e515c",
+    "LICENSES/python/jsonschema@4.25.1/COPYING": "4f92a015a13c4d1a040bef018aa13430b4f1bc73b41b16bb846c346766de7439",
+    "LICENSES/python/mcp@1.30.0/LICENSE": "5e13dbbc1d120fc2a03cecde7c91424ae2d7de11b63d58ded2f4431e261ee50d",
+    "LICENSES/python/pycparser@3.11/LICENSE": "0a9e78156ae8b96caf1b4f11ac2df424b83de29736f9e757630548a6272fdf90",
+    "LICENSES/python/pydantic-settings@2.16.1/LICENSE": "eb355a753e020346d33d83bf9769135b89fc610568ac531a01c295bcee7fd998",
+    "LICENSES/python/pydantic@2.14.1/LICENSE": "a9e186f3ca16b5eef84318e7a701721351a00cb7b8ae3a4394b67b49e3529ef3",
+    "LICENSES/python/pydantic_core@2.50.1/LICENSE": "2afdd30d54b4d62b6f488a6bcc1546e84ec5061f13f4209c03d012348783795a",
+    "LICENSES/python/python-dotenv@1.2.4/LICENSE": "80619b7049f08c81683ad0e01f08f257a840652dd71ee83146d36658c7d2c2b9",
+    "LICENSES/python/python-multipart@0.0.32/LICENSE.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "LICENSES/python/pywin32@311/adodbapi/license.txt": "5ea2f23c7f00c3006bacf267183e816d8d4b6dc95ea57a4ddb0ff81de6d8719e",
+    "LICENSES/python/pywin32@311/pythonwin/license.txt": "11d8462e134e8efe8f4bd52372292a72ff0b670753d2f49f71675eed0dbfd085",
+    "LICENSES/python/pywin32@311/win32/license.txt": "11d8462e134e8efe8f4bd52372292a72ff0b670753d2f49f71675eed0dbfd085",
+    "LICENSES/python/pywin32@311/win32com/License.txt": "c3bdfa1152a9b9d404ddc90b817e1b6945803879ac53a14d2dde30d677f883bd",
+    "LICENSES/python/referencing@0.37.0/COPYING": "42dcd63495f87b4eb7c7757afa379bb55a53f94afd7a5f657d9adf57236e515c",
+    "LICENSES/python/rpds-py@2026.9.1/LICENSE": "314e4e91be3baa93c0fb4bccc9e4e97cd643eb839b065af921782c2175fe9909",
+    "LICENSES/python/sse-starlette@3.5.0/AUTHORS": "c2ff63d2ecf128bbda8ab1b2016830a5da124202fbb97168685bb9946aed3f1a",
+    "LICENSES/python/sse-starlette@3.5.0/LICENSE": "80af6bfccbebd2c14d4aab96695cab9950e177190cc80f5ef819e99996883e8e",
+    "LICENSES/python/starlette@1.9.0/LICENSE.md": "dcb95677a02240243187e964f941847d19b17821cf99e5afae684fab328c19bf",
+    "LICENSES/python/typing-inspection@0.4.4/LICENSE": "804b59b25f2c31bd278f9202a19ae49a3945aa2664387e2d0a128c7cacc61ec3",
+    "LICENSES/python/typing_extensions@4.16.0/LICENSE": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+    "LICENSES/python/uvicorn@0.54.0/LICENSE.md": "efe1acf3e62fb99c288b0ec73e5a773b7268ef4320fe757ea994214e4b63c371",
+    "THIRD_PARTY_NOTICES.txt": "782787c416ae544edb5d16b9e022a05f098bc7e45d8ae5b2a4471e195b7a63fd"
+  }
+}

@@ -1,6 +1,84 @@
 # Codex Trace 安装指南
 
-Codex Trace 在本机展示 Codex 的执行轨迹。安装后，在聊天的 **New Tab → 执行轨迹** 打开；全局入口会先让你选择任务。发布 ZIP 包含构建好的前端、Python 后端、契约、锁定依赖清单及第三方授权文件，不需要克隆源码或安装 Node.js。
+Codex Trace 0.2.0 的主要分发渠道是本 GitHub 仓库的社区插件市场。它提供已构建的前端、后端、契约和许可证；用户无需 Node.js 或手工构建。插件读取和保存的数据范围见 [PRIVACY.md](PRIVACY.md)，维护者发布说明见 [MARKETPLACE.md](MARKETPLACE.md)。
+
+## 社区市场前置条件
+
+- 本机 Codex 桌面应用与原生 CLI；CLI 需为 0.153.0 或更高兼容版本，支持插件市场和本插件使用的只读 history API。
+- Git 与 uv 已安装，并能从启动 Codex 的进程环境中找到。终端中的 `git --version`、`uv --version`、`codex --version` 应正常返回；GUI 启动的 Codex 也须能找到 uv。
+- 注册和更新仓库时可访问 GitHub。仓库目前为私有，安装者必须拥有 Git 读取权限，并为本机 Git 配置有效凭据。首次启动、依赖变化或缓存缺失时，uv 需要联网获取固定 Python 3.14.2 与 `requirements.lock` 中的依赖。
+- Windows 需要原生 Codex 和本地 NTFS，无需 WSL；本次未获得原生 Windows 实际验证结果，不能把 macOS 或模拟测试记为 Windows 通过。其他限制见 [WINDOWS.md](WINDOWS.md)。
+
+社区方式无需预先手工安装 Python；uv 管理运行时和依赖。不要用 `sudo` 启动插件，也不要手工修改其缓存环境中的依赖。
+
+## 社区市场安装
+
+macOS 终端或 Windows PowerShell：
+
+```sh
+codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
+codex plugin add codex-trace@codex-trace-community
+```
+
+市场名为 `codex-trace-community`，插件名为 `codex-trace`。注册后从仓库清单定位 `plugins/codex-trace/`，Codex 管理其安装缓存。首次打开时 uv 可能需要较长时间准备运行环境；缓存由 uv 在插件目录外管理，不承诺重启后必定无需网络。
+
+安装后先按下节完成依赖预热，成功后重启 Codex 或开启新会话，再在聊天的 **New Tab → 执行轨迹** 打开；全局入口会先显示任务选择器。旧面板可能仍使用旧资源，关闭前先核对未确认导出。安装命令和仓库内的清单不代表已经通过 OpenAI 公共目录审核；该社区渠道由用户主动注册。
+
+若已有 `codex-trace@codex-trace`（ZIP 安装器）或 `codex-trace@codex-trace-local`（开发安装），先停用旧插件，避免多个同名入口同时启用。需要保留的数据与未决导出先按原渠道核对。
+
+## 首次使用与依赖预热
+
+首次使用、依赖变化或 uv 缓存被清理后，建议在打开插件前运行以下对应平台的安装与预热块。冷下载可能超过宿主默认约 30 秒的 MCP 启动等待时间；预热在终端中独立完成 Python 和依赖准备。它可替代上方裸 `plugin add` 命令；已安装时也可重复执行，从 CLI 的 `installedPath` 自动定位本次安装，无需手工寻找缓存目录。
+
+macOS（zsh 或 bash，无需预先安装 Python 或 jq）：
+
+```sh
+(
+  set -o pipefail
+  trace_root="$(codex plugin add codex-trace@codex-trace-community --json | uv run --no-project --no-config --python 3.14.2 -- python -I -B -c 'import json,sys; print(json.load(sys.stdin)["installedPath"])')" &&
+  cd "$trace_root" &&
+  uv run --no-project --no-config --python 3.14.2 --with-requirements ./requirements.lock -- python -I -B -c 'import compression.zstd, mcp; print("Codex Trace runtime ready")'
+)
+```
+
+Windows PowerShell：
+
+```powershell
+$traceJson = codex plugin add codex-trace@codex-trace-community --json
+if ($LASTEXITCODE -ne 0) { throw "Plugin installation failed" }
+$traceInstall = $traceJson | ConvertFrom-Json
+Push-Location -LiteralPath $traceInstall.installedPath -ErrorAction Stop
+try {
+  uv run --no-project --no-config --python 3.14.2 --with-requirements ./requirements.lock -- python -I -B -c "import compression.zstd, mcp; print('Codex Trace runtime ready')"
+  if ($LASTEXITCODE -ne 0) { throw "Runtime preparation failed" }
+} finally { Pop-Location }
+```
+
+显示 `Codex Trace runtime ready` 后，重启 Codex 或开启新会话，再打开执行轨迹。预热应使用启动 Codex 的同一用户和 uv 配置；更换用户、缓存位置或依赖后需要重新准备。命令失败时先处理 Git 访问权限、uv 网络或缓存问题，不能把失败的准备步骤当成插件已就绪。当前验证覆盖依赖准备及预热后的 MCP 和导出流程，尚未证明宿主在空缓存下能完成冷启动；Windows 命令也不代表已完成原生 Windows 实机验收。
+
+## 社区市场更新
+
+```sh
+codex plugin marketplace upgrade codex-trace-community
+codex plugin add codex-trace@codex-trace-community
+```
+
+更新后按 [首次使用与依赖预热](#首次使用与依赖预热) 执行同一安装与预热块，成功后重启 Codex 或开启新会话。仓库更新与依赖变化可能需要网络；失败时先修复 Git、uv、代理或证书问题，再重复同一流程。`install.py recover` 仅适用于下方的 ZIP 安装器，不用于社区插件缓存恢复。
+
+## 社区市场卸载与缓存
+
+```sh
+codex plugin remove codex-trace@codex-trace-community
+codex plugin marketplace remove codex-trace-community
+```
+
+插件删除与市场移除分别处理程序安装和市场注册。派生索引、偏好、导出回执与最终 ZIP 保留；uv 下载及运行环境缓存由 uv 管理，插件卸载不会主动清理它们。共享缓存可能被其他程序使用。先完成未决导出核对，停止插件服务并关闭页面，再按 [数据清理说明](PRIVACY.md#卸载与删除数据) 处理本插件数据，勿删除 Codex 的原始会话目录。
+
+常见启动问题：找不到 uv 时检查 Codex 的 PATH 并重启应用；首次准备失败时检查 uv 的网络、代理、证书和磁盘空间；无法发现 Codex 时可设置 `CODEX_TRACE_CODEX_EXECUTABLE` 为实际原生程序的绝对路径。不要把 CLI 包装器目录或应用目录当作可执行文件，也不要通过忽略 TLS 校验解决下载失败。
+
+## 可选：发布 ZIP 安装器
+
+以下原有流程用于下载并执行 `codex-trace-0.2.0.zip` 安装器，与上方社区市场分开管理。该方式需要本机 Python 3.14+，注册 `codex-trace@codex-trace`；Python 依赖在安装阶段准备。原生离线包的构建与验证另见 [MARKETPLACE.md](MARKETPLACE.md#可选原生离线插件包)。
 
 ## 支持的平台和前置条件
 
@@ -20,24 +98,24 @@ Codex Trace 在本机展示 Codex 的执行轨迹。安装后，在聊天的 **N
 
 从本项目的 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 下载同一版本的 `codex-trace-版本.zip` 与 `SHA256SUMS`。请使用 Release 附件中的 ZIP，不要使用 GitHub 自动生成的 Source code ZIP；后者没有构建好的界面。尚无已发布 Release 时，普通用户的下载入口尚未开放。
 
-以 `0.1.0` 为例，先在下载目录校验，再解压：
+以 `0.2.0` 为例，先在下载目录校验，再解压：
 
 macOS 终端：
 
 ```sh
 shasum -a 256 -c SHA256SUMS
-unzip codex-trace-0.1.0.zip
-cd codex-trace-0.1.0
+unzip codex-trace-0.2.0.zip
+cd codex-trace-0.2.0
 ```
 
 Windows PowerShell：
 
 ```powershell
-(Get-FileHash .\codex-trace-0.1.0.zip -Algorithm SHA256).Hash
+(Get-FileHash .\codex-trace-0.2.0.zip -Algorithm SHA256).Hash
 Get-Content .\SHA256SUMS
 # 确认输出的 SHA-256 与文件中该 ZIP 对应的值一致后再解压。
-Expand-Archive .\codex-trace-0.1.0.zip -DestinationPath .
-Set-Location .\codex-trace-0.1.0
+Expand-Archive .\codex-trace-0.2.0.zip -DestinationPath .
+Set-Location .\codex-trace-0.2.0
 ```
 
 校验不一致时重新下载，不要继续安装。校验和用于发现内容变化，不能代替对下载来源的信任。
@@ -90,7 +168,7 @@ py -3.14 .\install.py install --python "C:\Python314\python.exe" --codex "C:\Pro
 
 ## 从 Codex Display 切换
 
-Codex Trace 使用新的插件标识 `codex-trace`，发布安装市场为 `codex-trace`，源码开发市场为 `codex-trace-local`。这是新标识下的首次安装，不会自动替换原来的 `codex-display@codex-display` 或 `codex-display@codex-display-local`。
+Codex Trace 使用插件标识 `codex-trace`，社区市场为 `codex-trace-community`，可选 ZIP 安装市场为 `codex-trace`，源码开发市场为 `codex-trace-local`。这是新标识下的首次安装，不会自动替换原来的 `codex-display@codex-display` 或 `codex-display@codex-display-local`。
 
 1. 在旧版本中先核对尚未确认的导出结果，再关闭旧面板，通过 Codex 插件管理停用旧插件。
 2. 按上文首次安装流程安装 Codex Trace；源码开发安装使用 README 中的构建、组包和安装流程。为新版本使用独立的安装管理目录，不向旧版本的安装目录传入 `--root`。
@@ -160,9 +238,9 @@ Windows 使用 `py -3.14 .\install.py uninstall`。卸载移除本插件的安�
 
 ## 插件市场与公开上架
 
-此发行流程使用 Codex 支持的**本地插件市场**：安装器准备本机运行环境和市场目录，再调用 Codex 的市场注册及插件安装命令。安装后可在 Codex 插件管理中查看和管理“执行轨迹”。市场注册和公共目录上架是两个不同步骤。[官方插件打包文档](https://developers.openai.com/plugins/build/plugins)说明了本地市场和公共目录的区别。
+本 GitHub 社区市场通过用户主动注册仓库安装，不等于 OpenAI 公共目录上架。可选 ZIP 安装器则准备本机运行环境并注册另一独立的本地市场。两种方式均保留现有轨迹读取、缓存与导出行为。
 
-本项目包含本地 stdio MCP 服务。根据 [官方桌面插件提交要求](https://developers.openai.com/plugins/deploy/desktop-only)，这类插件进入 OpenAI 公共目录需要获准的提交组织、审核及发布操作。当前发布 ZIP 是本机安装介质，需要 Python 和依赖安装步骤，并不是可以直接上传后保证一键安装的公共目录插件包。还没有完成公共目录提交、审核或上架；在这些外部步骤完成前，不能承诺在公共目录直接搜索到并安装本插件。
+未来如果提交 OpenAI 公共目录，需要另行确认本地 MCP 提交资格、开发者身份、门户兼容性，以及读取本地 Codex 聊天/执行历史与平台准则的兼容性。那些条件只用于公共目录渠道，不能代替或混入社区仓库市场的技术验收。详见 [MARKETPLACE.md](MARKETPLACE.md#未来可选openai-公共目录)。
 
 ## 维护者：生成发布包
 
@@ -177,4 +255,4 @@ npm run release:build
 
 GitHub Release 工作流在版本标签触发时先运行 macOS/Windows 验证，再创建带 ZIP 和校验和的草稿 Release；手动触发仅验证和保存构建产物。检查平台测试结果与限制后，由维护者决定是否公开草稿。配置工作流、在本机构建都不会自动向 GitHub 推送或上架公共插件目录。
 
-验证发布包时可运行 `python3.14 scripts/smoke_release.py --archive build/releases/codex-trace-0.1.0.zip --report build/release-smoke.json`。该命令只在临时用户目录执行真实 Codex CLI 与新建虚拟环境的安装、重装、更新、失败恢复、启动及卸载；不会打开真实会话。CI 在 macOS 与 Windows 分别执行它。单元测试中的故障注入另行覆盖缓存损坏与自动回滚。
+验证发布包时可运行 `python3.14 scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`。该命令只在临时用户目录执行真实 Codex CLI 与新建虚拟环境的安装、重装、更新、失败恢复、启动及卸载；不会打开真实会话。CI 在 macOS 与 Windows 分别执行它。单元测试中的故障注入另行覆盖缓存损坏与自动回滚。

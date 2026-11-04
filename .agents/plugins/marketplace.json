@@ -1,0 +1,10 @@
+{
+  "name": "codex-trace-community",
+  "interface": {"displayName": "Codex Trace Community"},
+  "plugins": [{
+    "name": "codex-trace",
+    "source": {"source": "local", "path": "./plugins/codex-trace"},
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+    "category": "Developer Tools"
+  }]
+}

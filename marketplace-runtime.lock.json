@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "pythonVersion": "3.14.2",
+  "release": "20260114",
+  "releaseURL": "https://github.com/astral-sh/python-build-standalone/releases/tag/20260114",
+  "targets": {
+    "darwin-arm64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260114/cpython-3.14.2%2B20260114-aarch64-apple-darwin-pgo%2Blto-full.tar.zst",
+      "sha256": "9c890626d60b98405277cd86c5fb5b372af24add42767422901681324b6063c3",
+      "size": 56047554,
+      "targetTriple": "aarch64-apple-darwin"
+    },
+    "darwin-x64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260114/cpython-3.14.2%2B20260114-x86_64-apple-darwin-pgo%2Blto-full.tar.zst",
+      "sha256": "3def8a56eae0a3f0d90788b82eecb5cf78960241c18a2058c8bf316f403190c3",
+      "size": 55470829,
+      "targetTriple": "x86_64-apple-darwin"
+    },
+    "win32-x64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260114/cpython-3.14.2%2B20260114-x86_64-pc-windows-msvc-pgo-full.tar.zst",
+      "sha256": "1e0b0251fc7533c4fcbac0a8737cf341c6937c1d08adbd669b5a0c1ee597aa6a",
+      "size": 47909276,
+      "targetTriple": "x86_64-pc-windows-msvc"
+    }
+  },
+  "supplementalLicenseVersionSource": "https://github.com/astral-sh/python-build-standalone/blob/20260114/pythonbuild/downloads.py",
+  "supplementalLicenses": {
+    "licenses/LICENSE.zstd.txt": {
+      "component": "zstd",
+      "version": "1.5.7",
+      "url": "https://raw.githubusercontent.com/python/cpython-source-deps/zstd-1.5.7/LICENSE",
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+      "size": 1549
+    },
+    "licenses/LICENSE.zlib-ng.txt": {
+      "component": "zlib-ng",
+      "version": "2.2.4",
+      "url": "https://raw.githubusercontent.com/python/cpython-source-deps/zlib-ng-2.2.4/LICENSE.md",
+      "sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee",
+      "size": 867
+    }
+  }
+}

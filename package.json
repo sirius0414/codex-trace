@@ -1,6 +1,6 @@
 {
   "name": "codex-trace",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,13 @@
     "dev:browser:restart": "node scripts/run_python.mjs manage_dev_browser.py restart",
     "dev:browser:status": "node scripts/run_python.mjs manage_dev_browser.py status",
     "release:build": "node scripts/run_python.mjs build_release.py",
-    "plugin:update": "node scripts/run_python.mjs update_plugin.py"
+    "marketplace:runtime": "node scripts/run_python.mjs fetch_marketplace_runtime.py",
+    "marketplace:build": "node scripts/run_python.mjs build_marketplace.py",
+    "marketplace:verify": "node scripts/run_python.mjs smoke_marketplace.py",
+    "plugin:update": "node scripts/run_python.mjs update_plugin.py",
+    "community:build": "node scripts/run_python.mjs build_community_marketplace.py",
+    "community:check": "node scripts/run_python.mjs build_community_marketplace.py --check",
+    "community:verify": "node scripts/run_python.mjs smoke_community_marketplace.py"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "2.0.3",

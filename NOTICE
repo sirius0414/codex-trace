@@ -23,5 +23,16 @@ The project's MIT License applies to Codex Trace's own code. Third-party
 components retain their respective licenses and copyright notices.
 See THIRD_PARTY_NOTICES.txt and LICENSES/ in the plugin package, or third_party/
 in the source repository, for the dependency inventory and full upstream texts.
-Python dependency notices accompany a separately installed runtime; Python,
-its dependency code and the external Codex executable are not bundled.
+The GitHub community marketplace package does not bundle Python or Python
+dependency code. uv obtains and manages the pinned runtime and dependencies
+in external caches. Those components retain their upstream license terms.
+The portable installer ZIP does not bundle Python or Python dependency code;
+it prepares a separate local environment and installs the locked dependencies.
+The optional platform-specific offline plugin ZIP bundles a standalone CPython
+runtime and Python dependency code. Its runtime/LICENSES/cpython-runtime/
+directory contains the supplied runtime-distribution license and notice texts;
+runtime/runtime-provenance.json records their hashes and distribution source.
+The runtime distribution can include libraries with their own terms, so its
+full license collection must accompany that package. The external Codex
+executable is provided by the user's local installation and is not bundled
+in any distribution.

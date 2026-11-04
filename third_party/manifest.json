@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "lockfiles": {
-    "package-lock.json": "6ed3e4d6e2206d94a3c52438caee16ba37ab2025b29452c4813db067e51f8a4e",
+    "package-lock.json": "ed2f909afa7d0c7be998fb15ee9c3363d2a5c0dd2d439fe92b4245d790c58101",
     "requirements.lock": "ef54dbe8dbc400ab5fcf7ecfea17d668e8617a323f770c0bad1a0c471d0983c5"
   },
   "components": [

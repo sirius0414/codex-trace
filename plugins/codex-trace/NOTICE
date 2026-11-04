@@ -1,0 +1,38 @@
+Codex Trace
+Copyright (c) 2026 Siyue Zhang
+
+Research and design references
+
+Codex Trajectory, maintained by icesixgod:
+https://github.com/icesixgod/codex-trajectory
+Referenced during feasibility research for local Codex trajectory access and
+native plugin entrypoints.
+
+DeepSeek Harness, maintained by DeepSeek:
+https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory
+Referenced for the early trajectory interface design, including the timing
+overview, compact event ledger and on-demand inspector.
+
+Codex Trace is independently maintained. It is not affiliated with,
+endorsed by, or an official release of Codex Trajectory, DeepSeek or OpenAI.
+Reference acknowledgments do not grant rights to their names or logos.
+
+Third-party software
+
+The project's MIT License applies to Codex Trace's own code. Third-party
+components retain their respective licenses and copyright notices.
+See THIRD_PARTY_NOTICES.txt and LICENSES/ in the plugin package, or third_party/
+in the source repository, for the dependency inventory and full upstream texts.
+The GitHub community marketplace package does not bundle Python or Python
+dependency code. uv obtains and manages the pinned runtime and dependencies
+in external caches. Those components retain their upstream license terms.
+The portable installer ZIP does not bundle Python or Python dependency code;
+it prepares a separate local environment and installs the locked dependencies.
+The optional platform-specific offline plugin ZIP bundles a standalone CPython
+runtime and Python dependency code. Its runtime/LICENSES/cpython-runtime/
+directory contains the supplied runtime-distribution license and notice texts;
+runtime/runtime-provenance.json records their hashes and distribution source.
+The runtime distribution can include libraries with their own terms, so its
+full license collection must accompany that package. The external Codex
+executable is provided by the user's local installation and is not bundled
+in any distribution.

@@ -182,6 +182,19 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(sentinel.read_text(), "keep existing contents")
         self.assertEqual(list(output.iterdir()), [sentinel])
 
+    def test_local_package_keeps_legacy_manifest_without_portable_root_entrypoints(self):
+        source = self.prepare_source()
+        (source / "plugin/plugin.json").write_text('{"name":"portable-root-manifest"}', encoding="utf-8")
+        (source / "plugin/launch.py").write_text("raise RuntimeError('portable-only')\n", encoding="utf-8")
+        output = self.root / "local-package"
+        with mock.patch.object(packaging, "ROOT", source), mock.patch.object(packaging, "verify_runtime", return_value={}):
+            packaging.build(output, Path(sys.executable), Path(sys.executable), self.assets)
+        self.assertEqual(json.loads((output / ".codex-plugin/plugin.json").read_text())["name"], "codex-trace")
+        self.assertFalse((output / "plugin.json").exists())
+        self.assertFalse((output / "launch.py").exists())
+        self.assertTrue((output / ".mcp.json").is_file())
+        self.assertFalse((output / "mcp.json").exists())
+
     def test_package_imports_after_source_removed_and_excludes_unrelated_files(self):
         source = self.prepare_source()
         output = self.root / "package"
@@ -251,7 +264,7 @@ class PackagingTests(unittest.TestCase):
             report = verification.verify_cache(cache, self.root, checks)
         self.assertTrue(all(c["passed"] for c in checks), checks)
         self.assertGreater(len(checks), 25)
-        self.assertEqual(report["pluginVersion"], "0.1.0")
+        self.assertEqual(report["pluginVersion"], json.loads((ROOT / "package.json").read_text())["version"])
         self.assertEqual(set(report["historyMethods"]), verification.READ_METHODS)
         self.assertFalse(forbidden.exists())
         self.assertNotIn(verification.SYNTHETIC_BODY, json.dumps(report) + json.dumps(checks))
@@ -263,7 +276,7 @@ class PackagingTests(unittest.TestCase):
         lock = json.loads((ROOT / "package-lock.json").read_text())
         manifest = json.loads((ROOT / "plugin/.codex-plugin/plugin.json").read_text())
         from codex_trace import __version__
-        self.assertEqual({package["version"], lock["version"], lock["packages"][""]["version"], manifest["version"], __version__}, {"0.1.0"})
+        self.assertEqual({package["version"], lock["version"], lock["packages"][""]["version"], manifest["version"], __version__}, {package["version"]})
 
     def test_stderr_privacy_check_scans_whole_stream_without_retaining_text(self):
         client = object.__new__(verification.RpcClient)

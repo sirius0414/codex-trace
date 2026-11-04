@@ -41,7 +41,8 @@ class ReleaseBuildTests(unittest.TestCase):
             "contracts/tools.json": '{}',
             "LICENSE": "Synthetic project license\n", "NOTICE": "Synthetic notice\n",
             "install.py": 'print("synthetic installer")\n', "install.sh": '#!/bin/sh\n',
-            "install.ps1": '# synthetic installer\n', "INSTALL.md": '# Synthetic instructions\n',
+            "install.ps1": '# synthetic installer\n',
+            **{name: '# Synthetic release documentation\n' for name in release.RELEASE_DOCUMENTS},
             **{"scripts/" + name: '# synthetic helper\n' for name in release.SCRIPTS},
         }
         for name, value in sources.items():

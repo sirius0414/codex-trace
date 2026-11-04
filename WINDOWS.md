@@ -1,6 +1,8 @@
 # 原生 Windows 适配与验收
 
-目标环境为 Windows 10/11、本地 NTFS 卷、Python 3.14+（含 `compression.zstd`）及原生 Codex，无需 WSL。普通用户使用 [发布包安装指南](INSTALL.md)，无需安装 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。macOS 发布安装也使用同一份指南。
+目标环境为 Windows 10/11、本地 NTFS 卷及原生 Codex，无需 WSL。社区市场需要 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本，由 uv 管理 Python 3.14.2；首次准备、依赖变化或缓存缺失时需要网络。可选 ZIP 安装器和下方源码开发流程则要求本机 Python 3.14+（含 `compression.zstd`）。普通用户按 [社区市场安装指南](INSTALL.md#社区市场安装) 操作，无需 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。
+
+当前社区渠道尚未完成原生 Windows 实机验证。以下实现说明、macOS 测试与模拟测试不能作为 Windows 通过的证据。
 
 ## 从源码开发和本机组包
 
@@ -50,7 +52,7 @@ npm 开发入口通过 `scripts/run_python.mjs` 优先选择 `CODEX_TRACE_PYTHON
 
 Windows 文件保护使用真实 ACL 和原生文件身份，不把 `chmod`、`Path.resolve()` 或去掉 Unix 标志当成等效保证。普通文件描述符保持二进制模式；按偏移读取使用 `ReOpenFile` 独立文件指针，不改变调用方或其 `dup` 的位置。原始来源只申请读取权限，不加写锁、不收紧来源 ACL。app-server 本身仍可能维护自己的运行缓存。
 
-既有 POSIX 导出路径继续有效；新增 `C:\Users\张 三\Downloads\Codex Trace\codex-trace-….zip`。Schema 和两个前端导出入口共用测试样例，拒绝相对盘符、UNC、设备命名空间、ADS、遍历、保留设备名及尾部点/空格。后端另核对实际目录与文件身份，不能仅靠前端语法确认安全。
+既有 POSIX 导出路径继续有效；Windows 默认目录为 `%USERPROFILE%\Downloads\Codex Trace\`，中文与空格路径示例为 `C:\Codex Trace 测试\导出记录\codex-trace-….zip`。Schema 和两个前端导出入口共用测试样例，拒绝相对盘符、UNC、设备命名空间、ADS、遍历、保留设备名及尾部点/空格。后端另核对实际目录与文件身份，不能仅靠前端语法确认安全。
 
 不支持网络卷、UNC、junction、符号链接或其他重解析点上的来源/状态/导出目录，包括通过这些机制重定向的用户目录。未验证 FAT/exFAT、ReFS、云同步占位文件及所有长路径组合。Windows 没有本适配层可用的目录 `fsync` 等价物：文件内容刷盘与读回得到检查，但不承诺突然断电后的目录项持久性；未决回执仍须用原请求核对。管理员和 SYSTEM 保留操作系统本身的权限。
 
