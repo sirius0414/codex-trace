@@ -70,7 +70,12 @@ class MarketplaceExtractionTests(unittest.TestCase):
                               ("/".join(["deep"] * 21), False)):
             with self.subTest(path=path):
                 self.write_archive(path=path, symlink=symlink)
-                with self.assertRaisesRegex(ValueError, "path-or-file"):
+                # Windows ZipInfo 会把反斜杠归一为 /，此时由原始 manifest 的清单不一致拒绝。
+                normalized_backslash = path == "a\\b" and sys.platform == "win32"
+                with zipfile.ZipFile(self.archive) as archive:
+                    self.assertEqual(archive.infolist()[1].filename, "a/b" if normalized_backslash else path)
+                rejection = "archive-inventory-mismatch" if normalized_backslash else "path-or-file"
+                with self.assertRaisesRegex(ValueError, rejection):
                     extract_verified(self.archive, self.destination)
                 self.assertFalse(self.destination.exists())
 

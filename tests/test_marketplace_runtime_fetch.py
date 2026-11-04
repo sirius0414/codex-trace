@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import sys
 import tarfile
 import tempfile
@@ -68,6 +68,45 @@ class RuntimeFetchTests(unittest.TestCase):
         for platform, machine in (("linux", "aarch64"), ("win32", "arm64"), ("darwin", "sparc")):
             with self.subTest(platform=platform, machine=machine), self.assertRaises(ValueError):
                 fetch.native_target(platform, machine)
+
+    def test_sysconfig_relocates_escaped_and_forward_slash_windows_prefixes(self):
+        source = PureWindowsPath("C:/Users/Runtime Builder/中文 source")
+        values = {"prefix": str(source), "BINDIR": str(source / "bin"),
+                  "INCLUDEDIR": source.as_posix() + "/include", "OTHER": 42}
+        data = ("build_time_vars = " + repr(values) + "\n").encode()
+        self.assertNotIn(str(source), data.decode())
+        content = fetch.prepare.portable_sysconfig(data, source)
+        namespace = {}
+        exec(content, namespace)
+        actual = namespace["build_time_vars"]
+        self.assertEqual(actual["prefix"], sys.base_prefix)
+        self.assertEqual(actual["BINDIR"], sys.base_prefix + "\\bin")
+        self.assertEqual(actual["INCLUDEDIR"], sys.base_prefix + "/include")
+        self.assertEqual(actual["OTHER"], 42)
+
+    def test_sysconfig_without_local_prefix_is_unchanged_and_dynamic_values_are_rejected(self):
+        source = PureWindowsPath("C:/private/runtime")
+        data = b"build_time_vars = {'prefix': '/upstream/install', 'OTHER': 42}\n"
+        self.assertEqual(fetch.prepare.portable_sysconfig(data, source), data)
+        with self.assertRaises(ValueError):
+            fetch.prepare.portable_sysconfig(b"build_time_vars = dict(prefix='C:/private/runtime')\n", source)
+
+    def test_invalid_runtime_link_resolution_is_a_rejection_on_every_host(self):
+        source = self.root / "source"
+        source.mkdir()
+        link = source / "invalid-link"
+        link.write_bytes(b"placeholder; never copied")
+        resolve = Path.resolve
+
+        def invalid_link(path, *args, **kwargs):
+            if path == link:
+                raise OSError(123, "invalid Windows link target")
+            return resolve(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "resolve", new=invalid_link), \
+             self.assertRaisesRegex(ValueError, "Invalid runtime symlink or path"):
+            fetch.prepare.runtime_files(source)
+        self.assertFalse(self.output.exists())
 
     def test_checked_in_lock_uses_fixed_full_archives_and_versioned_supplements(self):
         for target in fetch.TARGETS:

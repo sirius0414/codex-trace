@@ -7,7 +7,7 @@ Codex Trace 0.2.0 的主要分发渠道是本 GitHub 仓库的社区插件市场
 - 本机 Codex 桌面应用与原生 CLI；CLI 需为 0.153.0 或更高兼容版本，支持插件市场和本插件使用的只读 history API。
 - Git 与 uv 已安装，并能从启动 Codex 的进程环境中找到。终端中的 `git --version`、`uv --version`、`codex --version` 应正常返回；GUI 启动的 Codex 也须能找到 uv。
 - 注册和更新仓库时可访问 GitHub。仓库目前为私有，安装者必须拥有 Git 读取权限，并为本机 Git 配置有效凭据。首次启动、依赖变化或缓存缺失时，uv 需要联网获取固定 Python 3.14.2 与 `requirements.lock` 中的依赖。
-- Windows 需要原生 Codex 和本地 NTFS，无需 WSL；本次未获得原生 Windows 实际验证结果，不能把 macOS 或模拟测试记为 Windows 通过。其他限制见 [WINDOWS.md](WINDOWS.md)。
+- Windows 需要原生 Codex 和本地 NTFS，无需 WSL；以普通用户启动 Codex 和终端，不支持“以管理员身份运行”。实际平台结果以对应版本的 [Release 验证记录](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.0) 为准，不能把 macOS 或模拟测试记为 Windows 通过。其他限制见 [WINDOWS.md](WINDOWS.md)。
 
 社区方式无需预先手工安装 Python；uv 管理运行时和依赖。不要用 `sudo` 启动插件，也不要手工修改其缓存环境中的依赖。
 

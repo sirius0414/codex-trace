@@ -4,7 +4,7 @@
 
 Codex Trace 通过本地 Python MCP 服务和随包提供的 React 界面运行。安装后，在聊天的 **New Tab → 执行轨迹** 打开面板；无法确认当前任务时，会显示任务选择器。全局入口也会先让你选择任务。
 
-[社区安装](INSTALL.md#社区市场安装) · [可选发行附件](https://github.com/sirius0414/codex-trace/releases) · [安装指南](INSTALL.md) · [Windows 说明](WINDOWS.md) · [贡献指南](CONTRIBUTING.md)
+[社区安装](INSTALL.md#社区市场安装) · [可选发行附件](https://github.com/sirius0414/codex-trace/releases) · [安装指南](INSTALL.md) · [Windows 说明](WINDOWS.md) · [贡献指南](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md)
 
 ## 功能
 
@@ -182,7 +182,7 @@ build/releases/
 
 构建会编译前端、校验版本和授权清单，按白名单收录安装器、已构建界面、后端、契约、依赖锁文件和许可证，并生成包内逐文件校验清单。开发环境、Codex 配置、凭据、会话、索引和导出文件不进入发布包。
 
-版本必须在 `package.json`、`package-lock.json`、插件清单及后端 `__version__` 中保持一致。发布构建默认使用 `SOURCE_DATE_EPOCH=0` 和固定 ZIP 元数据；相同源码、依赖、工具链与时间值可生成相同字节的产物。同版本已有产物内容不同时会拒绝覆盖，正式发版应更新版本号。更新依赖后需刷新[第三方授权快照](third_party/README.md)。
+版本必须在 `package.json`、`package-lock.json`、插件清单及后端 `__version__` 中保持一致。发布构建默认使用 `SOURCE_DATE_EPOCH=0` 和固定 ZIP 元数据；相同源码、依赖、工具链与时间值可生成相同字节的产物。同版本已有产物内容不同时会拒绝覆盖，正式发版应更新版本号。更新依赖后需刷新[第三方授权快照](https://github.com/sirius0414/codex-trace/blob/main/third_party/README.md)。
 
 ### 验证安装包
 
@@ -204,7 +204,7 @@ Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive 
 
 ### GitHub Release
 
-[Release 工作流](.github/workflows/release.yml) 在 macOS 和 Windows 分别安装依赖、运行测试、检查契约、执行两次构建并比较产物，再验证解压包的安装生命周期。
+[Release 工作流](https://github.com/sirius0414/codex-trace/blob/main/.github/workflows/release.yml) 在 macOS 和 Windows 分别安装依赖、运行测试、检查契约、执行两次构建并比较产物，再验证解压包的安装生命周期。
 
 | 触发方式 | 结果 |
 | --- | --- |
@@ -222,9 +222,9 @@ Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive 
 | [MARKETPLACE.md](MARKETPLACE.md) | GitHub 社区市场发布、原生离线候选包与验证边界 |
 | [PRIVACY.md](PRIVACY.md)、[SUPPORT.md](SUPPORT.md)、[TERMS.md](TERMS.md) | 数据保存与清理、支持渠道和许可边界 |
 | [WINDOWS.md](WINDOWS.md) | 原生 Windows 实现、文件系统边界与验收方法 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 开发约束、代码规范和评审入口 |
-| [contracts/README.md](contracts/README.md) | MCP 数据契约与导出语义 |
-| [third_party/README.md](third_party/README.md) | 跨平台依赖授权快照维护 |
+| [CONTRIBUTING.md](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md) | 开发约束、代码规范和评审入口 |
+| [contracts/README.md](https://github.com/sirius0414/codex-trace/blob/main/contracts/README.md) | MCP 数据契约与导出语义 |
+| [third_party/README.md](https://github.com/sirius0414/codex-trace/blob/main/third_party/README.md) | 跨平台依赖授权快照维护 |
 
 问题反馈与改进建议请提交到 [GitHub Issues](https://github.com/sirius0414/codex-trace/issues)，附系统版本、Python/Codex 版本、复现步骤和去除个人信息的错误摘要。
 
@@ -232,4 +232,4 @@ Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive 
 
 本项目由作者独立维护。接入可行性研究参考了 [Codex Trajectory](https://github.com/icesixgod/codex-trajectory) 的本地轨迹读取及原生插件入口；早期界面设计参考了 [DeepSeek Harness 的 Trajectory 组件](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory)。
 
-Codex Trace 与上述项目、DeepSeek、OpenAI 无隶属或背书关系。项目自身代码采用 [MIT 许可证](LICENSE)，参考来源见 [NOTICE](NOTICE)。第三方组件保留各自的许可条款，完整文本随发布包提供，见[第三方授权清单](third_party/THIRD_PARTY_NOTICES.txt)和 [LICENSES](third_party/LICENSES/)。
+Codex Trace 与上述项目、DeepSeek、OpenAI 无隶属或背书关系。项目自身代码采用 [MIT 许可证](LICENSE)，参考来源见 [NOTICE](NOTICE)。第三方组件保留各自的许可条款，完整文本随发布包提供，见[第三方授权清单](https://github.com/sirius0414/codex-trace/blob/main/third_party/THIRD_PARTY_NOTICES.txt)和 [LICENSES](https://github.com/sirius0414/codex-trace/tree/main/third_party/LICENSES/)。

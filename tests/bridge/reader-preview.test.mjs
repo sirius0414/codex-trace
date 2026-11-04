@@ -18,6 +18,13 @@ test('specific source formats win while text carriers allow strong body syntax',
   assert.equal(detectReader('2026-10-01 INFO Ready\n    continued'), 'text');
   assert.equal(detectReader('*** Begin Patch\n*** End Patch'), 'diff');
 });
+test('object-property source language metadata falls back to plain text or Markdown', () => {
+  for (const language of ['constructor', '__proto__', ' CONSTRUCTOR extra ']) {
+    const metadata = {format:'text',language,origin:'schema.language'};
+    assert.equal(detectReader('const answer = 42;', metadata), 'text');
+    assert.equal(detectReader('```js\nconst answer = 42;\n```', metadata), 'markdown');
+  }
+});
 test('command output and decoded strings use body syntax without inferring from field names', () => {
   const output = '---\r\nname: research\r\ndescription: Read primary sources.\r\n---\r\n# Research\r\n\r\n## Workflow\r\n\r\n1. Read\r\n2. Verify\r\n';
   assert.equal(detectReader(output, {format:'text',origin:'commandExecution.aggregatedOutput'}), 'markdown');

@@ -233,7 +233,14 @@ class RawTests(unittest.TestCase):
         linked = self.sessions / 'linked'
         symlink(self, linked, self.sessions, target_is_directory=True)
         self.assertIn('symlink-or-noncanonical-source', self.read(linked / target.name).issues)
-        self.assertIn('not-regular-source', self.read(self.sessions).issues)
+        # Windows 在打开普通文件句柄时即拒绝目录；POSIX 在 fstat 后拒绝，均不得读取内容。
+        before_reads = self.adapter.metrics['readBytes']
+        directory = self.read(self.sessions)
+        expected_issue = 'source-unreadable' if os.name == 'nt' else 'not-regular-source'
+        self.assertEqual(directory.issues, [expected_issue])
+        self.assertEqual(directory.records, [])
+        self.assertEqual(directory.sources[0]['state'], 'unreadable')
+        self.assertEqual(self.adapter.metrics['readBytes'], before_reads)
 
     @unittest.skipUnless(hasattr(os, 'mkfifo'), 'POSIX FIFO fixture; Windows special handles have separate native tests')
     def test_fifo_is_rejected_without_waiting_for_a_writer(self):

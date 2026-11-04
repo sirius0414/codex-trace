@@ -36,6 +36,24 @@ test('actual reader lays out tables, code and headings and identifies visual fol
   assert.match(folded, /loaded and collapsed/);
   assert.doesNotMatch(folded, /<table>|echo hello/);
 });
+test('object-property language labels render fenced and direct code without losing surrounding text', () => {
+  const source = 'const html = "<tag> & value";';
+  for (const language of ['constructor', '__proto__', 'CONSTRUCTOR extra', '__PROTO__']) {
+    for (const markdown of [
+      `Before fence\n\n\`\`\`${language}\n${source}\n\`\`\`\n\nAfter fence`,
+      `Before fence\n\n> ~~~${language}\n> ${source}\n> ~~~\n\nAfter fence`,
+    ]) {
+      const html = render(RichReader, {text:markdown});
+      assert.match(html, /Before fence/);
+      assert.match(html, /After fence/);
+      assert.match(html, /const html = &quot;&lt;tag&gt; &amp; value&quot;;/);
+      assert.doesNotMatch(html, /class="hljs-|<tag>/);
+    }
+    const html = render(CodeReader, {text:source,language});
+    assert.match(html, /const html = &quot;&lt;tag&gt; &amp; value&quot;;/);
+    assert.doesNotMatch(html, /class="hljs-|<tag>/);
+  }
+});
 test('large code, table and lists render bounded initial DOM with explicit deferred counts', () => {
   const code = render(CodeReader, { text: Array.from({ length: 10000 }, (_, i) => `line-${i}`).join('\n'), language: 'text', lineNumbers: true });
   assert.equal([...code.matchAll(/class="cx-reader-code-line"/g)].length, 200);

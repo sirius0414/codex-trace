@@ -171,7 +171,9 @@ class ExportStoreTests(unittest.TestCase):
                     temporary.unlink()
                 else:
                     saved.write_bytes(PAYLOAD)
-                    os.utime(saved, ns=(original.st_atime_ns, original.st_mtime_ns))
+                    # 本用例检查重试上限；显式改变 mtime，避免依赖 NTFS change time 更新时点。
+                    # 仅 ctime 变化、恢复 mtime 的拒绝语义由上一个独立用例覆盖。
+                    os.utime(saved, ns=(original.st_atime_ns, original.st_mtime_ns + 2_000_000_000))
             return chunk
 
         with mock.patch.object(export_store.os, "read", new=change_after_each_complete_read), \

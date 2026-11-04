@@ -37,6 +37,27 @@ test('syntax highlighting never changes source characters or accepts raw HTML no
   assert.equal(knownLanguage('not-a-language'), undefined);
   assert.equal(highlightedLines(source, 'not-a-language').flat().map(piece => piece.text).join('\n'), source);
 });
+test('inherited object names are unknown explicit languages and preserve plain source', () => {
+  const source = '\tconst html = "<tag> & value";\r\nconsole.log(html);\n';
+  const labels = [...Object.getOwnPropertyNames(Object.prototype), ' CONSTRUCTOR extra ', '\t__PROTO__\nextra'];
+  for (const label of labels) {
+    assert.equal(knownLanguage(label), undefined, label);
+    assert.deepEqual(detectCodeLanguage(source, label), {language:undefined,basis:'explicit'}, label);
+    assert.deepEqual(highlightedLines(source, label), source.split('\n').map(text => [{text,className:''}]), label);
+  }
+});
+test('language normalization preserves custom and native highlighter aliases', () => {
+  for (const [label, language, source] of [
+    [' JS extra ', 'javascript', 'const answer = 42;'],
+    ['shell', 'bash', 'echo "$value"'],
+    ['tsx', 'typescript', 'const answer: number = 42;'],
+    ['JSONC', 'jsonc', '{"answer":42}'],
+    ['golang', 'golang', 'func main() {}'],
+  ]) {
+    assert.equal(knownLanguage(label), language, label);
+    assert.ok(highlightedLines(source, label).flat().some(piece => piece.className), label);
+  }
+});
 test('links only allow explicit safe protocols and code highlighting is bounded', () => {
   for (const url of ['javascript:alert(1)', 'data:text/html,<script>', 'file:///private/test', '//example.org', 'https:\n//x']) assert.equal(safeReaderUrl(url), undefined, url);
   for (const url of ['https://example.org/schema#field', 'http://example.org', 'mailto:team@example.org']) assert.equal(safeReaderUrl(url), url);

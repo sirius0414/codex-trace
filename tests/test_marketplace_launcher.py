@@ -5,7 +5,7 @@ from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
@@ -73,14 +73,24 @@ class MarketplaceLauncherTests(unittest.TestCase):
             os.chdir(cwd)
 
     def test_macos_known_bundle_fallback_and_path_precedence(self):
-        bundle = self.executable(self.root / "Applications/Codex.app/Contents/Resources/codex")
-        path = self.executable(self.root / "path/codex")
-        with patch.object(marketplace, "_application_candidates", return_value=[bundle]):
-            self.assertEqual(self.discover({"PATH": ""}, platform_name="darwin"), bundle)
-            self.assertEqual(self.discover({"PATH": str(path.parent)}, platform_name="darwin"), path)
-        candidates = marketplace._application_candidates(self.root)
+        # 模拟 macOS 时也使用 POSIX 路径；Windows 临时目录的盘符冒号不是 macOS PATH 内容。
+        home = PurePosixPath("/Users/synthetic")
+        bundle = home / "Applications/Codex.app/Contents/Resources/codex"
+        path = home / "path/codex"
+
+        def existing_candidate(candidate, platform_name, machine):
+            self.assertEqual(platform_name, "darwin")
+            if candidate not in (bundle, path):
+                raise marketplace.LauncherError("synthetic candidate missing")
+            return candidate
+
+        with patch.object(marketplace, "Path", PurePosixPath), \
+             patch.object(marketplace, "_candidate", side_effect=existing_candidate):
+            self.assertEqual(self.discover({"PATH": ""}, platform_name="darwin", home=home), bundle)
+            self.assertEqual(self.discover({"PATH": str(path.parent)}, platform_name="darwin", home=home), path)
+            candidates = marketplace._application_candidates(home)
         self.assertIn(bundle, candidates)
-        self.assertIn(self.root / "Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex", candidates)
+        self.assertIn(home / "Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex", candidates)
 
     def test_windows_native_path_and_quoted_directory(self):
         native = self.executable(self.root / "程序 目录/codex.exe")

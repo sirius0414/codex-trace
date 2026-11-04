@@ -58,20 +58,22 @@ def make_repository(root: Path, env: dict, git: Path) -> Path:
 
 class CommunitySmokeInputTests(unittest.TestCase):
     def test_github_helper_restores_profile_only_inside_credential_subprocess(self):
+        original_home = Path(tempfile.gettempdir()).resolve() / "original home"
+        gh = original_home.parent / "tools" / ("gh.exe" if os.name == "nt" else "gh")
         isolated = {"HOME": "/temporary/home", "CODEX_HOME": "/temporary/codex",
                     "GH_CONFIG_DIR": "/temporary/gh", "GIT_CONFIG_GLOBAL": "/temporary/gitconfig"}
         before = dict(isolated)
-        original = {"HOME": "/original home", "GH_CONFIG_DIR": "/original gh", "GH_TOKEN": "never-copy-this-token"}
-        with patch.dict(os.environ, original, clear=True), patch.object(smoke.shutil, "which", return_value="/tools/gh"), \
-                patch.object(smoke.Path, "home", return_value=Path("/original home")), patch.object(smoke, "run") as run:
+        original = {"HOME": str(original_home), "GH_CONFIG_DIR": "/original gh", "GH_TOKEN": "never-copy-this-token"}
+        with patch.dict(os.environ, original, clear=True), patch.object(smoke.shutil, "which", return_value=str(gh)), \
+                patch.object(smoke.Path, "home", return_value=original_home), patch.object(smoke, "run") as run:
             smoke.configure_github_auth(isolated, Path("/temporary"), Path("/tools/git"))
         self.assertEqual(isolated, before)
         command = run.call_args.args[0]
         self.assertEqual(command[1:5], ["config", "--file", "/temporary/gitconfig", "credential.https://github.com.helper"])
         tokens = shlex.split(command[5][1:])
-        self.assertIn("HOME=/original home", tokens)
+        self.assertIn("HOME=" + str(original_home), tokens)
         self.assertIn("GH_CONFIG_DIR=/original gh", tokens)
-        self.assertEqual(tokens[-3:], ["/tools/gh", "auth", "git-credential"])
+        self.assertEqual(tokens[-3:], [gh.as_posix(), "auth", "git-credential"])
         self.assertNotIn("never-copy-this-token", command[5])
         self.assertEqual(run.call_args.kwargs["env"], before)
 

@@ -1,8 +1,10 @@
 # 原生 Windows 适配与验收
 
-目标环境为 Windows 10/11、本地 NTFS 卷及原生 Codex，无需 WSL。社区市场需要 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本，由 uv 管理 Python 3.14.2；首次准备、依赖变化或缓存缺失时需要网络。可选 ZIP 安装器和下方源码开发流程则要求本机 Python 3.14+（含 `compression.zstd`）。普通用户按 [社区市场安装指南](INSTALL.md#社区市场安装) 操作，无需 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。
+目标环境为 Windows 10/11、本地 NTFS 卷及原生 Codex，无需 WSL。请以普通用户启动 Codex 和终端，不支持“以管理员身份运行”：提权令牌可能把新建文件的所有者设为 Administrators 组，插件会拒绝这类状态文件，而不会接管所有权或放宽保护。社区市场需要 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本，由 uv 管理 Python 3.14.2；首次准备、依赖变化或缓存缺失时需要网络。可选 ZIP 安装器和下方源码开发流程则要求本机 Python 3.14+（含 `compression.zstd`）。普通用户按 [社区市场安装指南](INSTALL.md#社区市场安装) 操作，无需 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。
 
-当前社区渠道尚未完成原生 Windows 实机验证。以下实现说明、macOS 测试与模拟测试不能作为 Windows 通过的证据。
+社区渠道的原生测试结果见对应版本的 [GitHub Release 验证记录](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.0)。以下实现说明、macOS 测试与模拟测试不能作为 Windows 通过的证据。
+
+GitHub Windows runner 使用管理员令牌。CI 在独立复制的令牌中把新文件的默认所有者设为当前用户，再执行测试和合成安装／导出检查；它不改已有文件所有者、不放宽产品的 SID/DACL 检查，也不修改 runner 的原始令牌。这是原生 Windows API 验证，仍保留管理员权限，不等同于普通用户桌面实机验收；提权启动不在支持范围内。
 
 ## 从源码开发和本机组包
 

@@ -19,7 +19,8 @@ for (const [name, definition] of Object.entries({ bash, javascript, typescript, 
 const aliases: Record<string, string> = { sh: 'bash', shell: 'bash', zsh: 'bash', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', html: 'xml', yml: 'yaml', patch: 'diff', rs: 'rust' };
 export function knownLanguage(value?: string): string | undefined {
   const first = value?.trim().split(/\s+/)[0].toLowerCase();
-  const language = first ? aliases[first] ?? first : undefined;
+  // 来源标签可能与 Object.prototype 同名，只接受别名表自身的字符串映射。
+  const language = first ? (Object.hasOwn(aliases, first) ? aliases[first] : first) : undefined;
   return language && hljs.getLanguage(language) ? language : undefined;
 }
 

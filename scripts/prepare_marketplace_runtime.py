@@ -64,12 +64,15 @@ def runtime_files(root: Path) -> list[tuple[str, Path, int]]:
             target = os.readlink(path)
             if Path(target).is_absolute():
                 raise ValueError(f"Absolute runtime symlink: {relative}")
-            actual = path.resolve(strict=True)
-            if not actual.is_relative_to(resolved_root):
-                raise ValueError(f"Runtime symlink escapes its root: {relative}")
         elif getattr(info, "st_file_attributes", 0) & 0x400:
             raise ValueError(f"Runtime contains a reparse point: {relative}")
-        actual = path.resolve(strict=True)
+        try:
+            actual = path.resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            # Windows 的损坏链接可能报告 WinError 123；与悬空/循环链接一样拒绝。
+            raise ValueError(f"Invalid runtime symlink or path: {relative}") from error
+        if stat.S_ISLNK(info.st_mode) and not actual.is_relative_to(resolved_root):
+            raise ValueError(f"Runtime symlink escapes its root: {relative}")
         if actual.is_dir():
             if actual in ancestors:
                 raise ValueError(f"Runtime symlink cycle: {relative}")
@@ -99,8 +102,6 @@ def tree_hash(files: list[tuple[str, Path, int]]) -> str:
 def portable_sysconfig(data: bytes, source: Path) -> bytes:
     """uv 会写入安装前缀；仅重写静态 sysconfig 字典，改为启动时解析前缀。"""
     text = data.decode("utf-8")
-    if str(source) not in text:
-        return data
     module = ast.parse(text)
     assignments = [node for node in module.body if isinstance(node, ast.Assign)
                    and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
@@ -110,9 +111,14 @@ def portable_sysconfig(data: bytes, source: Path) -> bytes:
     values = ast.literal_eval(assignments[0].value)
     if not isinstance(values, dict):
         raise ValueError("Runtime sysconfig metadata must be a literal dictionary")
+    # 必须检查解析后的值：Windows 前缀在 Python 源码中通常有转义反斜杠。
+    prefixes = tuple(dict.fromkeys((str(source), source.as_posix())))
+    if not any(prefix in value for value in values.values() if isinstance(value, str) for prefix in prefixes):
+        return data
     marker = "__CODEX_TRACE_RUNTIME_PREFIX__"
-    values = {key: value.replace(str(source), marker) if isinstance(value, str) else value
-              for key, value in values.items()}
+    for prefix in prefixes:
+        values = {key: value.replace(prefix, marker) if isinstance(value, str) else value
+                  for key, value in values.items()}
     output = "# Relocated build metadata; prefix follows this bundled interpreter.\nimport sys\n"
     output += "build_time_vars = " + repr(values) + "\n"
     output += f"build_time_vars = {{k: v.replace({marker!r}, sys.base_prefix) if isinstance(v, str) else v for k, v in build_time_vars.items()}}\n"

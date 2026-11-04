@@ -20,13 +20,13 @@ codex plugin add codex-trace@codex-trace-community
 
 首次使用、依赖变化或缓存缺失时，先按 [安装与依赖预热](INSTALL.md#首次使用与依赖预热) 准备运行环境；冷下载可能超过宿主默认的启动等待时间。成功后重启 Codex 或开启新会话，再打开执行轨迹。uv 需要联网准备 Python 3.14.2 和锁定依赖；uv 管理的运行时、环境及下载缓存位于插件目录外。完整卸载和缓存说明见 [INSTALL.md](INSTALL.md#社区市场卸载与缓存)。
 
-English quickstart: Install Git, uv, and a compatible Codex CLI (0.153.0 or later), then run the installation commands above. The repository is currently private; installers need Git read access and valid Git credentials. No Node.js or manual frontend build is required. uv prepares Python 3.14.2 and the locked dependencies on first launch; initial setup, dependency changes, or missing caches may require network access. Follow the [runtime preparation steps](INSTALL.md#首次使用与依赖预热) before opening the plugin, since cold downloads may exceed the host startup timeout. Restart Codex or start a new session after preparation succeeds. This is a user-added GitHub community marketplace, not an OpenAI public-directory listing. Native Windows validation has not been established by the current local checks.
+English quickstart: Install Git, uv, and a compatible Codex CLI (0.153.0 or later), then run the installation commands above. The repository is currently private; installers need Git read access and valid Git credentials. No Node.js or manual frontend build is required. uv prepares Python 3.14.2 and the locked dependencies on first launch; initial setup, dependency changes, or missing caches may require network access. Follow the [runtime preparation steps](INSTALL.md#首次使用与依赖预热) before opening the plugin, since cold downloads may exceed the host startup timeout. Restart Codex or start a new session after preparation succeeds. This is a user-added GitHub community marketplace, not an OpenAI public-directory listing. Platform validation results are recorded in the corresponding GitHub Release; local macOS checks do not establish native Windows support.
 
 ## 社区仓库发布内容与验证
 
 仓库根的 `.agents/plugins/marketplace.json` 发现清单指向 `plugins/codex-trace/`。该生成目录包含插件清单、uv 启动配置、后端、构建好的前端、契约、依赖锁文件和许可证；它不是未经构建的 `plugin/` 源码目录。发布者生成并核对这些文件后，将它们与对应源码一同提交，用户安装时无需构建。
 
-维护者按 [贡献指南](CONTRIBUTING.md) 准备开发依赖后生成并核对社区目录：
+维护者按 [贡献指南](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md) 准备开发依赖后生成并核对社区目录：
 
 ```sh
 .venv/bin/python scripts/build_community_marketplace.py
@@ -35,7 +35,7 @@ English quickstart: Install Git, uv, and a compatible Codex CLI (0.153.0 or late
 
 Windows 使用 `.venv\Scripts\python.exe`。默认入口重新构建前端并固定构建时间，输出到 `plugins/codex-trace/`；`--check` 比较应生成内容与已提交目录，发现缺失、多余或变更文件即失败。`--assets dist/ui` 仅用于明确复用已验证的前端产物；可用 `--output DIR` 选择独立候选目录。生成目录与 `.agents/plugins/marketplace.json` 均须包含在发布提交中。
 
-发布前应从准备提交的 Git 树验证目录内容与源码一致，在隔离用户目录中通过真实 Codex CLI 注册市场、安装插件、检查 uv 启动配置并运行合成任务的读取与导出检查。测试报告记录实际平台、版本和未执行项。macOS 成功不能代替原生 Windows 检查；本次尚不能声称 Windows 已通过实际验证。已公开的 Release、校验和与生成目录应对应同一提交和版本。
+发布前应从准备提交的 Git 树验证目录内容与源码一致，在隔离用户目录中通过真实 Codex CLI 注册市场、安装插件、检查 uv 启动配置并运行合成任务的读取与导出检查。测试报告记录实际平台、版本和未执行项。macOS 成功不能代替原生 Windows 检查；各平台实际结果见对应版本的 GitHub Release 验证记录。已公开的 Release、校验和与生成目录应对应同一提交和版本。
 
 当前 smoke 证据覆盖冷依赖准备（cold dependency preparation）及预热后的 MCP/导出流程（warm MCP），不等于宿主空缓存冷启动通过。现有 modern MCP 清单不接受 `startup_timeout_sec`，不得通过添加该字段声称已延长启动时间；发布说明应继续提供终端预热步骤。
 
@@ -66,7 +66,7 @@ Windows 使用 `.venv\Scripts\python.exe`。默认入口重新构建前端并固
 
 Windows 使用 `& .\.venv\Scripts\python.exe scripts/fetch_marketplace_runtime.py --output build/marketplace-runtime`。工具只选择当前主机对应的 `darwin-arm64`、`darwin-x64` 或 `win32-x64`，不提供跨平台验证声明。`--output` 必须是尚不存在的新目录；已存在的运行时不会被覆盖。
 
-[marketplace-runtime.lock.json](marketplace-runtime.lock.json) 固定 Python Standalone Builds 的 `20260114` 发行构建与 CPython `3.14.2`，记录三个原生目标的完整归档 URL、大小和 SHA-256。下载默认缓存在 `build/marketplace-runtime-cache/`，可通过 `--cache-dir DIR` 改变。缓存及新下载文件都先核对锁定哈希，再进行提取；下载或校验失败不会生成可用运行时。
+[marketplace-runtime.lock.json](https://github.com/sirius0414/codex-trace/blob/main/marketplace-runtime.lock.json) 固定 Python Standalone Builds 的 `20260114` 发行构建与 CPython `3.14.2`，记录三个原生目标的完整归档 URL、大小和 SHA-256。下载默认缓存在 `build/marketplace-runtime-cache/`，可通过 `--cache-dir DIR` 改变。缓存及新下载文件都先核对锁定哈希，再进行提取；下载或校验失败不会生成可用运行时。
 
 归档仅提取 `python/install/`、`python/licenses/` 和 `python/PYTHON.json`，使用 `tarfile` 的 `data` 过滤器并额外拒绝目录逃逸、外部链接、重复成员及特殊文件，解压数据总量限制为 512 MiB。工具核对 `PYTHON.json` 中的 Python 版本、目标平台和所有递归的 `license_path` / `license_paths` 引用，再把全部发行许可证与元数据交给准备器。
 
@@ -117,7 +117,7 @@ Windows 将解释器改为 `build\marketplace-runtime\python.exe`，并使用 Po
 
 ## 验证候选包
 
-先完成 [贡献指南](CONTRIBUTING.md#验证) 中的构建、前后端测试和契约检查，再使用同一输入在第二个输出目录重建，比较两份 ZIP 的 SHA-256。重复构建时使用相同前端构建时间设置；默认采用固定 `SOURCE_DATE_EPOCH=0`。保留源码提交、工具链、运行时来源、wheelhouse 和验证报告，以便追溯候选包。
+先完成 [贡献指南](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md#验证) 中的构建、前后端测试和契约检查，再使用同一输入在第二个输出目录重建，比较两份 ZIP 的 SHA-256。重复构建时使用相同前端构建时间设置；默认采用固定 `SOURCE_DATE_EPOCH=0`。保留源码提交、工具链、运行时来源、wheelhouse 和验证报告，以便追溯候选包。
 
 macOS arm64 的命令示例：
 

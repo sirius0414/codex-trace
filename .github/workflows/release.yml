@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-15, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
       PYTHONUTF8: '1'
@@ -72,7 +72,14 @@ jobs:
         run: |
           python contracts/generate_types.py --check
       - name: Test backend, packaging and isolated install lifecycle
-        run: python -m unittest discover -s tests -p "test_*.py"
+        shell: python
+        run: |
+          import subprocess, sys
+          command = [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', 'test_*.py']
+          if sys.platform == 'win32':
+              command = [sys.executable, 'scripts/diagnose_windows_permissions.py', '--normalize-test-owner',
+                         '--report', 'build/windows-owner-tests.json', '--', *command]
+          subprocess.run(command, check=True)
       - name: Test frontend
         run: npm test
       - name: Check committed community marketplace distribution
@@ -105,16 +112,34 @@ jobs:
       - name: Install pinned native Codex CLI for release smoke
         run: npm install -g @openai/codex@0.153.0
       - name: Smoke test Git community marketplace install and upgrade
-        run: python scripts/smoke_community_marketplace.py --repository . --report build/community-smoke.json
+        shell: python
+        run: |
+          import subprocess, sys
+          command = [sys.executable, 'scripts/smoke_community_marketplace.py', '--repository', '.',
+                     '--report', 'build/community-smoke.json']
+          if sys.platform == 'win32':
+              command = [sys.executable, 'scripts/diagnose_windows_permissions.py', '--normalize-test-owner',
+                         '--report', 'build/windows-owner-community.json', '--', *command]
+          subprocess.run(command, check=True)
       - name: Smoke test extracted release with a clean runtime and Codex profile
         shell: python
         run: |
           import json, subprocess, sys
           from pathlib import Path
           version = json.loads(Path('package.json').read_text())['version']
-          subprocess.run([sys.executable, 'scripts/smoke_release.py',
-                          '--archive', f'build/releases/codex-trace-{version}.zip',
-                          '--report', 'build/release-smoke.json'], check=True)
+          command = [sys.executable, 'scripts/smoke_release.py',
+                     '--archive', f'build/releases/codex-trace-{version}.zip',
+                     '--report', 'build/release-smoke.json']
+          if sys.platform == 'win32':
+              command = [sys.executable, 'scripts/diagnose_windows_permissions.py', '--normalize-test-owner',
+                         '--report', 'build/windows-owner-installer.json', '--', *command]
+          subprocess.run(command, check=True)
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Windows'
+        with:
+          name: windows-owner-diagnostics
+          path: build/windows-owner-*.json
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -147,7 +172,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: release-macos-latest
+          name: release-macos-15
           path: release
       - name: Create or update draft GitHub Release
         env:
