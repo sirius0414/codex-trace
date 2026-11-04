@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "lockfiles": {
-    "package-lock.json": "3ebc0c8173921917eb3fea734d1a7a83627121428f353d0cc3f1a27d56fff3b7",
+    "package-lock.json": "6ed3e4d6e2206d94a3c52438caee16ba37ab2025b29452c4813db067e51f8a4e",
     "requirements.lock": "ef54dbe8dbc400ab5fcf7ecfea17d668e8617a323f770c0bad1a0c471d0983c5"
   },
   "components": [
@@ -105,6 +105,20 @@
     },
     {
       "ecosystem": "npm",
+      "location": "node_modules/highlight.js",
+      "name": "highlight.js",
+      "version": "11.11.1",
+      "declaredLicense": "BSD-3-Clause",
+      "source": {
+        "type": "git",
+        "url": "git://github.com/highlightjs/highlight.js.git"
+      },
+      "files": [
+        "LICENSES/npm/highlight.js@11.11.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
       "location": "node_modules/isexe",
       "name": "isexe",
       "version": "2.0.0",
@@ -126,6 +140,20 @@
       "source": "panva/jose",
       "files": [
         "LICENSES/npm/jose@6.2.13/LICENSE.md"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "location": "node_modules/marked",
+      "name": "marked",
+      "version": "15.0.12",
+      "declaredLicense": "MIT",
+      "source": {
+        "type": "git",
+        "url": "git://github.com/markedjs/marked.git"
+      },
+      "files": [
+        "LICENSES/npm/marked@15.0.12/LICENSE.md"
       ]
     },
     {
@@ -748,8 +776,10 @@
     "LICENSES/npm/cross-spawn@7.0.6/LICENSE": "aaa78451b6fecd1b9c4594c796c133c0e90cad100372ff8bc6de615e9ef9adf1",
     "LICENSES/npm/eventsource-parser@3.1.1/LICENSE": "835eb611a23301b27115ca1be9f754c876e643ceb7fe63049c6b50609a1cafeb",
     "LICENSES/npm/eventsource@3.0.7/LICENSE": "f683a72ffe6a9675b5507af22fe0f448d8c8de3da1e14f139d370a7e6a54a23e",
+    "LICENSES/npm/highlight.js@11.11.1/LICENSE": "6c081431591d9df696c82dc598fe1423765b8a299b200ed00b281afd0f64c490",
     "LICENSES/npm/isexe@2.0.0/LICENSE": "4ec3d4c66cd87f5c8d8ad911b10f99bf27cb00cdfcff82621956e379186b016b",
     "LICENSES/npm/jose@6.2.13/LICENSE.md": "8078b0829d6c3e9ecde2f003e1966e4cad3efc6e7a640efbab0313cc166b1af1",
+    "LICENSES/npm/marked@15.0.12/LICENSE.md": "8e3a3f82f59a60958f56ca08f445647c32a4733dc7ca6c2c46f6eb898471ab9c",
     "LICENSES/npm/path-key@3.1.1/license": "48da2f39e100d4085767e94966b43f4fa95ff6a0698fba57ed460914e35f94a0",
     "LICENSES/npm/pkce-challenge@5.0.1/LICENSE": "feb87a2e0c305de3464cc44077da5393c52d8ca6362d37427157d04ec6f4510d",
     "LICENSES/npm/react-dom@19.3.1/LICENSE": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
@@ -796,6 +826,6 @@
     "LICENSES/python/typing-inspection@0.4.4/LICENSE": "804b59b25f2c31bd278f9202a19ae49a3945aa2664387e2d0a128c7cacc61ec3",
     "LICENSES/python/typing_extensions@4.16.0/LICENSE": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
     "LICENSES/python/uvicorn@0.54.0/LICENSE.md": "efe1acf3e62fb99c288b0ec73e5a773b7268ef4320fe757ea994214e4b63c371",
-    "THIRD_PARTY_NOTICES.txt": "88748e16292e8905ef15cbeb0de88fb0b59b2356f9fb786747d8ef31c0e20e20"
+    "THIRD_PARTY_NOTICES.txt": "782787c416ae544edb5d16b9e022a05f098bc7e45d8ae5b2a4471e195b7a63fd"
   }
 }

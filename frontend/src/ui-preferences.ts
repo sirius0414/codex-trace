@@ -1,11 +1,13 @@
 /** 界面偏好独立于任务阅读状态；只持久化经过校验的显示选项，不保存任务内容。 */
 export type Language = 'zh' | 'en';
 export type UIStyle = 'classic' | 'soft' | 'terminal';
-export type UIPreferences = { language: Language; uiStyle: UIStyle; showSpanSummary: boolean; showTimelineCursors: boolean };
+export type UIPreferences = { language: Language; uiStyle: UIStyle; showSpanSummary: boolean; showTimelineCursors: boolean; readerFontSize: number; readerWrap: boolean; readerLineNumbers: boolean };
 type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const UI_PREFERENCES_KEY = 'codex-trace.ui-preferences.v1';
 export const uiStyles: readonly UIStyle[] = ['classic', 'soft', 'terminal'];
+export const readerFontSizes = [13, 14, 15, 16, 18, 20] as const;
+export const readerDefaults = { readerFontSize: 15, readerWrap: true, readerLineNumbers: false };
 
 // 仅翻译客户端自己的固定异常；来源说明和任意后端错误继续按原文显示。
 const clientErrors: Record<string, string> = {
@@ -27,7 +29,7 @@ export function localizeClientError(message: string, language: Language): string
 
 /** 首次使用跟随浏览器语言；存储不可用或旧值损坏时，仍能在当前页面切换。 */
 export function readUIPreferences(storage: PreferenceStorage | null, languages: readonly string[] = []): UIPreferences {
-  const defaults: UIPreferences = { language: languages[0]?.toLowerCase().startsWith('en') ? 'en' : 'zh', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false };
+  const defaults: UIPreferences = { language: languages[0]?.toLowerCase().startsWith('en') ? 'en' : 'zh', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults };
   try {
     const saved: unknown = JSON.parse(storage?.getItem(UI_PREFERENCES_KEY) ?? 'null');
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return defaults;
@@ -37,11 +39,14 @@ export function readUIPreferences(storage: PreferenceStorage | null, languages: 
       uiStyle: uiStyles.includes(value.uiStyle as UIStyle) ? value.uiStyle! : defaults.uiStyle,
       showSpanSummary: typeof value.showSpanSummary === 'boolean' ? value.showSpanSummary : defaults.showSpanSummary,
       showTimelineCursors: typeof value.showTimelineCursors === 'boolean' ? value.showTimelineCursors : defaults.showTimelineCursors,
+      readerFontSize: readerFontSizes.some(size => size === value.readerFontSize) ? value.readerFontSize! : defaults.readerFontSize,
+      readerWrap: typeof value.readerWrap === 'boolean' ? value.readerWrap : defaults.readerWrap,
+      readerLineNumbers: typeof value.readerLineNumbers === 'boolean' ? value.readerLineNumbers : defaults.readerLineNumbers,
     };
   } catch { return defaults; }
 }
 
 export function saveUIPreferences(storage: PreferenceStorage | null, value: UIPreferences): void {
-  try { storage?.setItem(UI_PREFERENCES_KEY, JSON.stringify({ language: value.language, uiStyle: value.uiStyle, showSpanSummary: value.showSpanSummary, showTimelineCursors: value.showTimelineCursors })); }
+  try { storage?.setItem(UI_PREFERENCES_KEY, JSON.stringify({ language: value.language, uiStyle: value.uiStyle, showSpanSummary: value.showSpanSummary, showTimelineCursors: value.showTimelineCursors, readerFontSize: value.readerFontSize, readerWrap: value.readerWrap, readerLineNumbers: value.readerLineNumbers })); }
   catch { /* 嵌入式宿主可能禁用持久存储；偏好仍保留在 React 状态中。 */ }
 }

@@ -8,6 +8,9 @@ import { interactionTargets } from './agent-navigation';
 import { clockTime, duration, localizedKindLabels, latestUsage, metric, relationshipEndpoints, localizedStatusLabels } from './model';
 import { usePreferences } from '../preferences';
 import { useInspectorResize } from './useInspectorResize';
+import PreviewReader from './reader/PreviewReader';
+import { ReaderSettings } from './reader/ReaderSettings';
+import { readReadingState, saveReadingState, readPosition, savePosition, type ReadingState } from './reader/reading-state';
 
 export function UsageFacts({ values, label }: { values: UsageSnapshot[]; label: string }) {
   const { language, t } = usePreferences();
@@ -30,7 +33,64 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
   const resize = useInspectorResize(panel, Boolean(props.overlay), props.preferredWidth, props.onResize);
   const closeButton = useRef<HTMLButtonElement>(null);
   const opener = useRef<Element | null>(document.activeElement);
-  const [copied, setCopied] = useState<'' | 'success' | 'unavailable'>('');
+  const [copied, setCopied] = useState('');
+  const [readerSettingsOpen, setReaderSettingsOpen] = useState(false);
+  const readerSettingsButton = useRef<HTMLButtonElement>(null);
+  const readerSettingsPanel = useRef<HTMLElement>(null);
+  const readingKey = JSON.stringify([snapshot?.binding.sourceInstanceId, snapshot?.binding.viewSessionId, event?.threadId, view.selectedEventId]);
+  const [reading, setReading] = useState<{ key: string; state: ReadingState }>(() => ({ key: readingKey, state: readReadingState(readingKey) }));
+  const readingState = reading.key === readingKey ? reading.state : readReadingState(readingKey);
+  const updateReading = (state: ReadingState) => { saveReadingState(readingKey, state); setReading({ key: readingKey, state }); };
+  const positionKey = `${readingKey}:${view.detailTab}`;
+  const pendingPosition = useRef<{key:string; top:number} | null>(null);
+  const positionOwner = useRef(positionKey);
+  useLayoutEffect(() => { setReaderSettingsOpen(false); }, [readingKey, view.detailTab]);
+  useLayoutEffect(() => {
+    if (!readerSettingsOpen) return;
+    readerSettingsPanel.current?.querySelector('select')?.focus({ preventScroll: true });
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !readerSettingsPanel.current?.contains(event.target) && !readerSettingsButton.current?.contains(event.target)) setReaderSettingsOpen(false);
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [readerSettingsOpen]);
+  useLayoutEffect(() => {
+    positionOwner.current = positionKey;
+    pendingPosition.current = {key: positionKey, top: readPosition(positionKey)};
+    if (body.current) body.current.scrollTop = 0;
+  }, [positionKey]);
+  useLayoutEffect(() => {
+    const pending = pendingPosition.current, element = body.current;
+    if (!pending || pending.key !== positionKey || !element || !detail) return;
+    element.scrollTop = pending.top;
+    // 切回条目可能仍在补读旧字节窗口，等高度足够后才接受新的滚动位置。
+    if (element.scrollHeight - element.clientHeight >= pending.top || !props.detailLoading && Object.values(detail.parts).every(part => !part?.nextCursor)) pendingPosition.current = null;
+  }, [positionKey, detail, props.detailLoading]);
+  useLayoutEffect(() => {
+    if (!readingState.expanded && !readerSettingsOpen) return;
+    const inspector = panel.current;
+    const app = inspector?.closest('.cx-panel');
+    const covered = app ? [...app.children, ...(inspector?.parentElement?.children ?? [])].filter((element): element is HTMLElement => element instanceof HTMLElement && element !== inspector && !element.contains(inspector)) : [];
+    const prior = readingState.expanded ? covered.map(element => [element, element.inert] as const) : [];
+    for (const [element] of prior) element.inert = true;
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // 字段说明先消费 Escape；内部浮层关闭后，再允许收回展开阅读。
+        if (!readerSettingsOpen && event.target instanceof Element && event.target.closest('[data-field-help-open="true"]')) return;
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (readerSettingsOpen) { setReaderSettingsOpen(false); readerSettingsButton.current?.focus({ preventScroll: true }); }
+        else updateReading({ ...readingState, expanded: false });
+      }
+      if (event.key === 'Tab' && inspector && readingState.expanded) {
+        const focusable = [...inspector.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,a[href],[tabindex="0"]')].filter(element => element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden');
+        const first = focusable[0], last = focusable.at(-1);
+        if (event.shiftKey && (document.activeElement === first || !inspector.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || !inspector.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener('keydown', key, true);
+    return () => { document.removeEventListener('keydown', key, true); for (const [element, inert] of prior) element.inert = inert; };
+  }, [readingKey, readingState, readerSettingsOpen]);
   const createdGroup = snapshot?.groups.find(group => group.creationEventId === view.selectedEventId);
   const group = createdGroup ?? snapshot?.groups.find(item => item.groupId === event?.groupId);
   const relation = snapshot?.relationships.find(item => item.relationshipId === group?.relationshipId);
@@ -49,11 +109,16 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
       else document.querySelector<HTMLElement>('.cx-scroll')?.focus({ preventScroll: true });
     });
   }
-  async function copy(text: string) {
+  async function copy(text: string, label = t('当前已加载内容', 'currently loaded content')) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable');
-      await navigator.clipboard.writeText(text); setCopied('success');
+      await navigator.clipboard.writeText(text); setCopied(t(`已复制${label}`, `Copied ${label}`));
     } catch {
+      // textarea 会把 CRLF 归一为 LF；宿主剪贴板不可用时不能以改变原文为代价报告成功。
+      if (text.includes('\r')) {
+        setCopied(t('宿主无法精确复制此换行格式，请使用原始记录导出。', 'The host cannot copy these line endings exactly. Use raw record export.'));
+        return;
+      }
       const active = document.activeElement;
       const textarea = document.createElement('textarea');
       textarea.value = text; textarea.style.position = 'fixed'; textarea.style.opacity = '0';
@@ -61,7 +126,7 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
       try { document.body.appendChild(textarea); textarea.select(); success = document.execCommand('copy'); }
       catch { /* 宿主可能拒绝剪贴板访问，失败时不显示复制成功。 */ }
       finally { textarea.remove(); if (active instanceof HTMLElement && active.isConnected) active.focus({ preventScroll: true }); }
-      setCopied(success ? 'success' : 'unavailable');
+      setCopied(success ? t(`已复制${label}`, `Copied ${label}`) : t('复制不可用，请选择文本复制', 'Copy is unavailable. Select the text to copy it.'));
     }
     setTimeout(() => setCopied(''), 2000);
   }
@@ -89,26 +154,21 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
   }
   function previewContent(item: TraceEvent) {
     if (item.kind === 'modelUsage') return <UsageFacts values={item.usage ?? []} label={t('本次模型请求', 'This model request')} />;
-    const available = (part: ContentPart) => Boolean(detail?.parts[part]) || item.content.some(reference => reference.part === part);
-    const tool = item.kind === 'toolCall' || item.kind === 'toolResult' || Boolean(item.toolName);
-    if (tool) return <>
-      {(item.kind !== 'toolResult' || available('input')) && content('input', t('输入', 'Input'), detail?.parts.input)}
-      {content('output', t('输出', 'Output'), detail?.parts.output)}
-      {available('error') && content('error', t('错误', 'Error'), detail?.parts.error)}
-    </>;
-    const parts = (['input', 'output'] as const).filter(available);
-    if (!parts.length) return <p className="cx-data-note">{props.detailLoading ? t('正在读取内容…', 'Loading content…') : t('该记录尚无可读取正文。', 'This record has no readable content yet.')}</p>;
-    return <>{parts.map(part => content(part, item.kind === 'compaction' ? t('已记录的压缩摘要', 'Recorded compaction summary') : t('内容', 'Content'), detail?.parts[part]))}{available('error') && content('error', t('错误', 'Error'), detail?.parts.error)}</>;
+    return <PreviewReader key={readingKey} event={item} detail={detail} loading={props.detailLoading} state={readingState} onState={updateReading} copy={copy} onMore={props.onMoreDetail} />;
   }
-  return <aside ref={panel} id="cx-record-details" className={`cx-inspector ${resize.resizing ? 'resizing' : ''}`} style={{ width: resize.width }} role={props.overlay ? 'dialog' : undefined} aria-label={t('所选记录详情', 'Selected record details')} tabIndex={-1}>
+
+  return <aside ref={panel} id="cx-record-details" className={`cx-inspector ${resize.resizing ? 'resizing' : ''} ${readingState.expanded ? 'cx-reader-expanded' : ''}`} style={{ width: readingState.expanded ? '100%' : resize.width }} role={props.overlay || readingState.expanded ? 'dialog' : undefined} aria-modal={readingState.expanded || undefined} aria-label={t('所选记录详情', 'Selected record details')} tabIndex={-1}>
     <div className="cx-inspector-resizer" role="separator" tabIndex={0} aria-orientation="vertical" aria-controls="cx-record-details"
       aria-label={t('调整内容预览宽度', 'Resize content preview')} aria-valuemin={resize.min} aria-valuemax={resize.max} aria-valuenow={resize.width}
       aria-valuetext={t(`${resize.width} 像素`, `${resize.width} pixels`)} title={t('拖动调整预览宽度；方向键微调，双击或 Enter 恢复默认', 'Drag to resize preview; use arrow keys to adjust, double-click or press Enter to reset')}
       {...resize.handleProps} />
-    <div className="cx-detail-head">{event && <Icon name={eventIcon(event)} />}<strong>{event ? kindLabels[event.kind] : t('记录详情', 'Record details')}</strong><small>{turn ? t(`${group?.kind === 'main' ? '' : '子任务 · '}第 ${turn.order + 1} 轮`, `${group?.kind === 'main' ? '' : 'Subtask · '}Turn ${turn.order + 1}`) : t('轮次未归属', 'No associated turn')}</small><button ref={closeButton} className="cx-icon" aria-label={t('关闭详情', 'Close details')} title={t('关闭详情 · Esc', 'Close details · Esc')} onClick={close}><Icon name="close" /></button></div>
+    <div className="cx-detail-head">{event && <Icon name={eventIcon(event)} />}<strong>{event ? kindLabels[event.kind] : t('记录详情', 'Record details')}</strong><small>{turn ? t(`${group?.kind === 'main' ? '' : '子任务 · '}第 ${turn.order + 1} 轮`, `${group?.kind === 'main' ? '' : 'Subtask · '}Turn ${turn.order + 1}`) : t('轮次未归属', 'No associated turn')}</small>
+      {view.detailTab === 'preview' && <><button ref={readerSettingsButton} className="cx-icon cx-reader-settings-trigger" aria-label={t('阅读设置', 'Reading settings')} title={t('阅读设置', 'Reading settings')} aria-expanded={readerSettingsOpen} aria-controls="cx-reader-settings" onClick={() => setReaderSettingsOpen(open => !open)}><Icon name="settings" /></button><button className="cx-icon cx-reader-expand" aria-label={readingState.expanded ? t('收回阅读', 'Exit expanded view') : t('展开阅读', 'Expand reader')} title={readingState.expanded ? t('收回阅读', 'Exit expanded view') : t('展开阅读', 'Expand reader')} aria-pressed={readingState.expanded} onClick={() => updateReading({ ...readingState, expanded: !readingState.expanded })}><Icon name={readingState.expanded ? 'contract' : 'expand'} /></button></>}
+      <button ref={closeButton} className="cx-icon" aria-label={t('关闭详情', 'Close details')} title={t('关闭详情 · Esc', 'Close details · Esc')} onClick={close}><Icon name="close" /></button></div>
+    {readerSettingsOpen && <section ref={readerSettingsPanel} id="cx-reader-settings" className="cx-popover cx-reader-settings" role="dialog" aria-label={t('阅读设置', 'Reading settings')}><div className="cx-popover-head">{t('阅读设置', 'Reading settings')}<button className="cx-icon" aria-label={t('关闭阅读设置', 'Close reading settings')} onClick={() => { setReaderSettingsOpen(false); readerSettingsButton.current?.focus({ preventScroll: true }); }}><Icon name="close" /></button></div><ReaderSettings /><p className="cx-preference-note">{t('应用于所有条目，刷新后保留。', 'Applies to all entries and is remembered on reload.')}</p></section>}
     <div className="cx-tabs" role="tablist" aria-label={t('详情内容', 'Detail content')}>{tabs.map(([tab, title], index) => <button key={tab} id={`cx-tab-${tab}`} role="tab" aria-selected={view.detailTab === tab} aria-controls="cx-detail-content" tabIndex={view.detailTab === tab ? 0 : -1}
       onClick={() => props.onView({ detailTab: tab })} onKeyDown={key => { if (key.key === 'ArrowLeft' || key.key === 'ArrowRight') { key.preventDefault(); const next = tabs[(index + (key.key === 'ArrowRight' ? 1 : 3)) % 4][0]; props.onView({ detailTab: next }); document.getElementById(`cx-tab-${next}`)?.focus(); } }}>{title}</button>)}</div>
-    <div ref={body} id="cx-detail-content" className="cx-detail-body" role="tabpanel" aria-labelledby={`cx-tab-${view.detailTab}`} tabIndex={0}>
+    <div ref={body} onScroll={() => { if (!pendingPosition.current && body.current) savePosition(positionOwner.current, body.current.scrollTop); }} onWheel={() => { pendingPosition.current = null; }} onTouchStart={() => { pendingPosition.current = null; }} onKeyDown={event => { if (['PageDown', 'PageUp', 'Home', 'End', 'ArrowDown', 'ArrowUp'].includes(event.key)) pendingPosition.current = null; }} id="cx-detail-content" className="cx-detail-body" role="tabpanel" aria-labelledby={`cx-tab-${view.detailTab}`} tabIndex={0}>
       {relatedAgents.length > 0 && <nav className="cx-related-agents" aria-label={t('关联 Agent 页面', 'Related agent pages')}><span>{t('关联 Agent', 'Related agents')}</span>{relatedAgents.map(agent => {
         const name = agent.groupId === snapshot?.rootGroupId ? t('主 Agent', 'Main Agent') : agent.name;
         return <button key={agent.groupId} className="cx-agent-jump" title={t(`跳转到 ${name} 的记录页面`, `Go to records for ${name}`)} aria-label={t(`跳转到 ${name}`, `Go to ${name}`)} onClick={() => props.onAgentNavigate?.(agent.groupId)}><Icon name="branch" /><span>{name}</span><Icon name="right" /></button>;
@@ -120,7 +180,7 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
         {createdGroup && lineage()}
       </> : view.detailTab === 'raw' ? content('raw', t('已关联原始内容', 'Associated raw content'), detail?.parts.raw) : <><h2>{t('记录来源与父子关系', 'Record source and parent-child relationships')}</h2>{facts(event)}{lineage()}{content('source', t('来源依据', 'Source evidence'), detail?.parts.source)}</>}
       {detail?.explanation && <p className="cx-note">{detail.explanation}</p>}
-      <span className="cx-copy-status" role="status">{copied === 'success' ? t('已复制当前已加载内容', 'Copied the currently loaded content') : copied === 'unavailable' ? t('复制不可用，请选择文本复制', 'Copy is unavailable. Select the text to copy it.') : ''}</span>
+      <span className="cx-copy-status" role="status">{copied}</span>
     </div>
   </aside>;
 }

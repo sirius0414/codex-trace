@@ -16,8 +16,9 @@ from .lifecycle import turn_states, thread_explanation
 from .execution import execution_intervals
 from .usage import usage_snapshots, scoped_usage_snapshots
 from .relationships import project_relationships, resolve_relationships
+from .readers import item_readers, tool_reader
 
-PARSER_VERSION = '1.3.2'
+PARSER_VERSION = '1.4.0'
 _PREVIEW_LENGTH = 280
 _ITEM_TYPES = {
     'UserMessage': 'userMessage', 'AgentMessage': 'agentMessage',
@@ -114,17 +115,92 @@ def _value(value: Any) -> str:
     return value if isinstance(value, str) else _json(value)
 
 
-def _content(part: str, text: str, completeness: str = 'unknown') -> dict:
+def _raw_body(row: dict, path: tuple[str, ...], fallback: Any) -> str:
+    """已校验 raw 的字段直接切取 JSON 子串，避免重新序列化舍入数字或丢失重复键。
+
+    字符串只解码其 JSON 包装（与正文语义一致）；对象/数组/数值保持来源词法。
+    不能定位的旧适配器记录使用原投影值，raw 全文仍是独立可检查的来源。
+    """
+    try:
+        text = row.get('raw', b'').decode('utf-8')
+        decoder = json.JSONDecoder()
+        def skip(position):
+            while position < len(text) and text[position].isspace():
+                position += 1
+            return position
+        def locate(position, remaining):
+            position = skip(position)
+            value, end = decoder.raw_decode(text, position)
+            if not remaining:
+                return value if isinstance(value, str) else text[position:end]
+            if not isinstance(value, dict) or text[position] != '{':
+                raise ValueError('not an object')
+            cursor, found = skip(position + 1), None
+            while text[cursor] != '}':
+                key, cursor = decoder.raw_decode(text, cursor)
+                cursor = skip(cursor)
+                if text[cursor] != ':':
+                    raise ValueError('missing colon')
+                start = skip(cursor + 1)
+                _, cursor = decoder.raw_decode(text, start)
+                if key == remaining[0]:
+                    found = locate(start, remaining[1:])
+                cursor = skip(cursor)
+                if text[cursor] == ',':
+                    cursor = skip(cursor + 1)
+            if found is None:
+                raise ValueError('field missing')
+            return found
+        return locate(0, path)
+    except (ValueError, IndexError, UnicodeError, RecursionError):
+        return _value(fallback)
+
+
+def _restore_raw_tool_bodies(pair: tuple[dict, dict], row: dict, original: dict) -> None:
+    """item 投影保留语义索引，raw 正文优先使用同一物理记录中的精确字段。"""
+    event, parts = pair
+    kind = _ITEM_TYPES.get(original.get('type'), original.get('type'))
+    fields = {
+        'commandExecution': {'input': 'command', 'output': 'aggregated_output'},
+        'fileChange': {'input': 'changes'},
+        'mcpToolCall': {'input': 'arguments', 'output': 'result'},
+        'dynamicToolCall': {'input': 'arguments', 'output': 'content_items'},
+        'collabAgentToolCall': {'input': 'prompt', 'output': 'agents_states'},
+        'functionCallOutput': {'output': 'output'},
+    }.get(kind, {})
+    if not fields:
+        return
+    for part, key in {**fields, 'error': 'error'}.items():
+        if key in original and part in parts:
+            parts[part] = _raw_body(row, ('payload', 'item', key), original[key])
+    prior = {ref['part']: ref for ref in event['content']}
+    event['content'] = [_content(part, text, prior.get(part, {}).get('completeness', 'unknown'),
+                                prior.get(part, {}).get('reader')) for part, text in parts.items()]
+
+
+def _content(part: str, text: str, completeness: str = 'unknown', reader: dict | None = None) -> dict:
     size = len(text.encode('utf-8'))
     return {'part': part, 'loaded': False, 'sourceTruncated': False, 'chunked': size > 65536,
-            'readableBytes': size, 'chunkCursor': None, 'completeness': completeness}
+            'readableBytes': size, 'chunkCursor': None, 'completeness': completeness,
+            **({'reader': reader} if reader else {})}
 
 
 def _event(thread_id: str, event_id: str, turn_id: str | None, kind: str, parts: dict,
            source: dict, order: int, *, role=None, tool=None, timing=None, status=None,
-           call_key=None, completeness='unknown', section=None) -> tuple[dict, dict]:
+           call_key=None, completeness='unknown', section=None, readers=None) -> tuple[dict, dict]:
     """同时生成轻量事件索引和独立详情正文；索引只标注可读取范围。"""
     parts = {part: text for part, text in parts.items() if isinstance(text, str)}
+    readers = readers or {}
+    if kind == 'environment':
+        readers.setdefault('input', {'format': 'json', 'origin': 'recorded environment object'})
+    if kind in ('userMessage', 'assistantMessage', 'systemContext', 'developerContext', 'reasoningSummary', 'compaction'):
+        for part in ('input', 'output'):
+            if part in parts:
+                readers.setdefault(part, {'format': 'markdown', 'origin': 'message text; Markdown reading convention'})
+    if source.get('kind') == 'api':
+        for reader in readers.values():
+            if reader:
+                reader['origin'] = 'API decoded projection: ' + reader['origin']
     summary = _LABELS[kind] + (f' · {tool}' if tool else '')
     parts.setdefault('summary', summary)
     parts.setdefault('source', _json([source]))
@@ -137,7 +213,7 @@ def _event(thread_id: str, event_id: str, turn_id: str | None, kind: str, parts:
                       'basis': 'officialOrder' if source['kind'] == 'api' else 'logicalSourcePosition'},
             'status': status or unknown_status('此类记录不提供操作执行状态。'),
             'timing': timing or _timing(),
-            'content': [_content(part, text, completeness if part == 'output' else 'unknown') for part, text in parts.items()],
+            'content': [_content(part, text, completeness if part == 'output' else 'unknown', readers.get(part)) for part, text in parts.items()],
             'sources': [source], 'eventRevision': 1, 'callKey': call_key, 'modelRequestKey': None}, parts
 
 
@@ -163,8 +239,6 @@ def _normalize_raw_item(item: dict) -> dict:
     # Rust std::time::Duration serde serializes explicit seconds/nanoseconds.
     if isinstance(duration, dict) and _number(duration.get('secs')) is not None and _number(duration.get('nanos')) is not None:
         result['durationMs'] = duration['secs'] * 1000 + duration['nanos'] / 1_000_000
-    if kind == 'commandExecution' and isinstance(item.get('command'), list):
-        result['command'] = _json(item['command'])
     return result
 
 
@@ -247,7 +321,8 @@ def _item_event(thread_id: str, wrapper: dict, ordinal: int, source: dict) -> tu
     else:
         return None
     event, details = _event(thread_id, event_id, turn_id, event_kind, parts, source, ordinal, role=role, tool=tool,
-                           timing=timing, status=status, call_key=call_key, completeness=completeness)
+                           timing=timing, status=status, call_key=call_key, completeness=completeness,
+                           readers=item_readers(kind, item, tool))
     # 页面跳转只复制结构化 Thread ID；活动目标不等同于子任务关系，也不从路径或正文反推。
     participants = []
     if kind == 'subAgentActivity':
@@ -409,6 +484,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
             wrapper = {'turnId': payload['turn_id'], 'item': item, 'startedAtMs': payload.get('started_at_ms'), 'completedAtMs': payload.get('completed_at_ms')}
             pair = _item_event(thread_id, wrapper, ordinal, source)
             if pair:
+                _restore_raw_tool_bodies(pair, row, payload['item'])
                 event_id = pair[0]['eventId']
                 raw_positions[event_id] = ordinal
                 if event_id in events:
@@ -493,10 +569,12 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                 # 相同调用键出现多条输入时保留歧义，不能把独立物理记录强行折叠。
                 if event_id in events:
                     event_id = _raw_key(thread_id, row)
-                pair = _event(thread_id, event_id, turn_id, 'toolCall', {'input': _value(payload.get('input', payload.get('arguments', ''))), 'output': ''}, source, ordinal,
+                pair = _event(thread_id, event_id, turn_id, 'toolCall', {'input': _raw_body(row, ('payload', 'input' if 'input' in payload else 'arguments'), payload.get('input', payload.get('arguments', ''))), 'output': ''}, source, ordinal,
                               role='tool', tool=_str(payload.get('name')), timing=timing,
                               call_key='call:' + _identity(thread_id, turn_id, call_id) if call_key else event_id,
-                              completeness='notRecorded')
+                              completeness='notRecorded', readers={'input': tool_reader(_str(payload.get('name')), 'input',
+                                  structured=isinstance(payload.get('input', payload.get('arguments')), (dict, list)), function=subtype == 'function_call',
+                                  body=payload.get('input', payload.get('arguments')))})
                 if call_key:
                     raw_calls.setdefault(call_key, []).append(event_id)
             # API 模式不再展示普通旧格式内部调用，避免和官方工具项重复计数。
@@ -512,7 +590,7 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
     for row, turn_id, key, timing in raw_results:
         candidates = raw_calls.get(key, []) if key else []
         payload = row['record']['payload']
-        text = _value(payload.get('output', ''))
+        text = _raw_body(row, ('payload', 'output'), payload.get('output', ''))
         if len(candidates) == 1:
             event_id = candidates[0]
             event, parts = events[event_id], details[event_id]
@@ -523,7 +601,12 @@ def project(thread_id: str, records: Iterable[dict], api_items: Iterable[dict] =
                 event['timing'] = _timing(start, end, source=event['timing']['source'],
                     basis='同轮次同 call_id 的调用发出至返回记录的经过时间；返回不表示后台操作已结束')
             # 自定义工具返回片段不证明嵌套操作已经完成，因此只标记 fragment。
-            event['content'] = [_content(part, value, 'fragment' if part == 'output' else 'unknown') for part, value in parts.items()]
+            prior = {ref['part']: ref for ref in event['content']}
+            # 结果归并不能清除调用输入的格式证据；结果只能使用唯一关联调用的工具定义。
+            output_reader = tool_reader(event.get('toolName'), 'output', body=parts['output'])
+            event['content'] = [_content(part, value, 'fragment' if part == 'output' else 'unknown',
+                                output_reader if part == 'output' else prior.get(part, {}).get('reader'))
+                                for part, value in parts.items()]
         else:
             if payload.get('type') == 'function_call_output' and not (mode == 'raw' and not persisted_items):
                 continue

@@ -7,7 +7,9 @@ import { uiStyles } from '../ui-preferences';
 import EventList from './EventList';
 import Inspector, { UsageFacts } from './Inspector';
 import Overview from './Overview';
+import ResizableOverview from './ResizableOverview';
 import Icon from './icons';
+import { ReaderSettings } from './reader/ReaderSettings';
 import { DEFAULT_INSPECTOR_WIDTH } from './useInspectorResize';
 import { rangeReveal } from './expansion';
 import { activeAgentId, agentPagePatch } from './agent-navigation';
@@ -144,7 +146,7 @@ export default function TraceUI(props: TraceUIProps) {
       <button className="cx-button cx-download" disabled={!snapshot || props.exporting} aria-label={t('导出记录', 'Export records')} title={t('导出所选任务可读取的全部原始记录，不受搜索、筛选、分页和折叠影响', 'Export all readable raw records for the selected task, regardless of search, filters, pages, or collapsed groups')} onClick={props.onExport}><Icon name="download" /><span>{props.exporting ? t('正在导出…', 'Exporting…') : t('导出记录', 'Export records')}</span></button>
       <button className="cx-button cx-settings-trigger" aria-label={t('设置', 'Settings')} title={t('设置', 'Settings')} aria-expanded={popover === 'settings'} aria-haspopup="dialog" aria-controls="cx-settings" onClick={() => setPopover(value => value === 'settings' ? null : 'settings')}><Icon name="settings" /><span>{t('设置', 'Settings')}</span></button>
     </header>
-    <Overview key={snapshot?.binding.threadId ?? 'empty'} {...pageProps} selectionRequest={selectionRequest} highlightedEvents={highlightedEvents} onRangeCommit={revealRange} />
+    <ResizableOverview><Overview key={snapshot?.binding.threadId ?? 'empty'} {...pageProps} selectionRequest={selectionRequest} highlightedEvents={highlightedEvents} onRangeCommit={revealRange} /></ResizableOverview>
     <div className="cx-filterbar"><label className="cx-search"><Icon name="search" /><input aria-label={t('搜索已加载记录', 'Search loaded records')} value={view.filters.text} placeholder={t('搜索已加载记录…', 'Search loaded records…')} onChange={event => filter({ text: event.target.value })} /></label>
       <select className="cx-type" aria-label={t('事件类型或工具', 'Event type or tool')} value={typeValue} onChange={event => filter(event.target.value.startsWith('tool:') ? { kinds: [], toolName: event.target.value.slice(5) } : { kinds: event.target.value === 'all' ? [] : [event.target.value as EventKind], toolName: null })}>
         <option value="all">{t('全部类型', 'All types')}</option>{Object.entries(kindLabels).filter(([kind]) => kind !== 'modelUsage').map(([kind, label]) => <option key={kind} value={kind}>{label}</option>)}{tools.length > 0 && <optgroup label={t('工具名称', 'Tool name')}>{tools.map(tool => <option key={tool} value={`tool:${tool}`}>{tool}</option>)}</optgroup>}
@@ -180,6 +182,7 @@ export default function TraceUI(props: TraceUIProps) {
         <label className="cx-setting-toggle"><span><strong>{t('显示原时间高亮', 'Show original-time highlights')}</strong><small>{t('保留轮次页定位产生的原始时间选区', 'Retain original-time selections from turn navigation')}</small></span><input type="checkbox" aria-label={t('显示原时间高亮', 'Show original-time highlights')} checked={showTimelineCursors} onChange={event => setShowTimelineCursors(event.target.checked)} /></label>
         <label className="cx-setting-toggle"><span><strong>{t('显示概览滚动条', 'Show overview scrollbar')}</strong><small>{t('辅助平移顺序图；布局坐标不表示耗时', 'Pan the sequence; layout coordinates are not elapsed time')}</small></span><input type="checkbox" aria-label={t('显示概览滚动条', 'Show overview scrollbar')} checked={showSpanSummary} onChange={event => setShowSpanSummary(event.target.checked)} /></label>
       </fieldset>
+      <ReaderSettings />
       <label className="cx-language-field"><span>{t('界面语言', 'Interface language')}</span><select value={language} onChange={event => setLanguage(event.target.value as 'zh' | 'en')}><option value="zh">简体中文</option><option value="en">English</option></select></label>
       <fieldset className="cx-style-options"><legend>{t('UI 模板', 'UI template')}</legend>{uiStyles.map(style => <label key={style} className={`cx-style-option ${uiStyle === style ? 'selected' : ''}`}><input type="radio" name="cx-ui-style" value={style} checked={uiStyle === style} onChange={() => setUiStyle(style)} /><span className={`cx-style-preview ${style}`} aria-hidden="true"><i /><i /><i /></span><span><strong>{styleLabels[style]}</strong><small>{styleNotes[style]}</small></span></label>)}</fieldset>
       <p className="cx-preference-note">{t('更改立即生效，刷新后保留。', 'Changes apply immediately and are remembered on reload.')}</p>

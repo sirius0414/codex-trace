@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { readFile, writeFile } from 'node:fs/promises';
+export async function runSupplementary(page, artifactDir) {
+  const checks=[];
+  const check=(name,value)=>{assert.ok(value,name);checks.push(name);};
+  const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const select=async id=>{await page.selectOption('select[aria-label="Fixture"]',id);await settle();};
+  const expand=async()=>{if(await page.evaluate(()=>!document.querySelector('.cx-reader-expanded'))){await page.focus('.cx-reader-expand');await page.press('.cx-reader-expand','Enter');}await settle();assert.ok(await page.evaluate(()=>!!document.querySelector('.cx-reader-expanded')),'reader expanded');};
+  const shot=async name=>{const size=await page.evaluate(()=>({width:Math.ceil(innerWidth*devicePixelRatio),height:Math.ceil(innerHeight*devicePixelRatio)}));const r=await page.cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,...size,scale:1}});await writeFile(`${artifactDir}/${name}.png`,Buffer.from(r.data,'base64'));};
+  await page.reload();await page.click('text="English"');
+  await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.qaCopied=text;}}}));
+  await select('array');await expand();
+  check('Command arguments remain an array, never a shell string',await page.evaluate(()=>!document.querySelector('.cx-reader-command')&&document.querySelector('.cx-reader-json-tree').textContent.includes('4 items')));
+  await page.click('loc=role:button[name="Copy entire JSON body"]');
+  check('Argument array exact copy',await page.evaluate(()=>JSON.stringify(JSON.parse(window.qaCopied))===JSON.stringify(['bash','-lc','echo "hello world"','literal $HOME'])));
+  await select('files');await expand();
+  check('Confirmed file change has path and diff layout',await page.evaluate(()=>document.querySelector('.cx-reader-file').textContent.includes('src/example.py')&&!!document.querySelector('.cx-reader-file .hljs-addition')));
+  await page.click('.cx-reader-file .cx-reader-code-head button');
+  check('Diff copy preserves original lines',await page.evaluate(()=>window.qaCopied==='@@ -1 +1 @@\n-print(1)\n+print(2)'));
+  await select('diff');await expand();
+  check('Raw patch has diff reader',await page.evaluate(()=>document.querySelector('.cx-reader-code-head').textContent.includes('diff')));
+  await page.click('.cx-reader-settings-trigger');
+  await page.selectOption('#cx-reader-settings select','18');
+  check('Code size follows reading font control',await page.evaluate(()=>getComputedStyle(document.querySelector('.cx-reader-pre')).fontSize==='16px'));
+  await page.click('#cx-reader-settings input[type="checkbox"] >> nth=0');
+  check('Wrapping can be disabled',await page.evaluate(()=>getComputedStyle(document.querySelector('.cx-reader-pre')).whiteSpace==='pre'));
+  await page.click('#cx-reader-settings input[type="checkbox"] >> nth=1');
+  check('Line number option decorates code without changing it',await page.evaluate(()=>document.querySelector('.cx-reader-pre').classList.contains('numbered')));
+  await page.press('#cx-reader-settings select','Escape');
+  await select('oversized');await expand();
+  check('Oversized JSON falls back with bounded source DOM',await page.evaluate(()=>!document.querySelector('.cx-reader-json-tree')&&document.querySelector('.cx-reader-json-fallback').textContent.includes('limit')&&document.querySelector('.cx-reader-source').textContent.length<=100000));
+  await page.click('[data-reader-part="output"] .cx-reader-block-tools .cx-button');
+  check('Large fallback copy includes all loaded body',await page.evaluate(()=>window.qaCopied.length===8000022));
+  for (const uiStyle of ['classic','soft','terminal']) {
+    await page.evaluate(style=>{window.readerFixture.setUiStyle(style);window.readerFixture.setLanguage('zh');document.documentElement.dataset.theme='dark';},uiStyle);
+    await page.cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+    await select('json');await expand();await settle();
+    check(`390px Chinese dark ${uiStyle}: no panel overflow`,await page.evaluate(()=>document.querySelector('.cx-detail-body').scrollWidth<=document.querySelector('.cx-detail-body').clientWidth+2));
+    check(`390px ${uiStyle}: long-string length remains visible`,await page.evaluate(()=>{const e=document.querySelector('.cx-reader-json-size');return e&&e.getBoundingClientRect().width>0&&e.textContent.includes('32,500')}));
+  }
+  await select('context');await expand();
+  await page.evaluate(()=>document.querySelector('.cx-reader-table').scrollIntoView({block:'start'}));await shot('04-narrow-dark-zh');
+  await page.evaluate(()=>{window.readerFixture.setUiStyle('soft');window.readerFixture.setLanguage('en');document.documentElement.dataset.theme='light';});await settle();
+  check('Language and theme change keep body present',await page.evaluate(()=>document.querySelector('.cx-panel').lang==='en'&&!!document.querySelector('.cx-reader-table')));
+  await page.evaluate(()=>{const panel=document.querySelector('.cx-inspector');const nodes=[...panel.querySelectorAll('button:not(:disabled),input,select,a[href],[tabindex="0"]')].filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden');nodes.at(-1).focus();});
+  await page.keyboard.press('Tab');
+  check('Expanded Tab cycle stays within reader',await page.evaluate(()=>document.querySelector('.cx-inspector').contains(document.activeElement)&&document.querySelector('.cx-toolbar').inert));
+  await select('command');await expand();
+  await page.focus('[aria-label="Field definition /cmd"]');await page.keyboard.press('Enter');await settle();
+  check('Narrow definition can be pinned by keyboard without covering trigger',await page.evaluate(()=>{const t=document.querySelector('[aria-label="Field definition /cmd"]').getBoundingClientRect();const c=document.querySelector('.is-pinned .cx-reader-help-card').getBoundingClientRect();return c.top>=t.bottom||c.bottom<=t.top;}));
+  await shot('05-narrow-tool');
+  await page.focus('.is-pinned .cx-reader-help-card a');await page.keyboard.press('Escape');await settle();
+  check('Escape dismisses field help before expanded reader',await page.evaluate(()=>!document.querySelector('[data-field-help-open="true"]')&&!!document.querySelector('.cx-reader-expanded')&&document.activeElement?.classList.contains('cx-reader-help-trigger')));
+  await page.keyboard.press('Escape');await settle();
+  check('Second Escape exits expanded reader without closing details',await page.evaluate(()=>!document.querySelector('.cx-reader-expanded')&&!!document.querySelector('.cx-inspector')));
+  const previous=JSON.parse(await readFile(`${artifactDir}/checks.json`,'utf8'));await writeFile(`${artifactDir}/checks.json`,JSON.stringify([...previous,...checks],null,2));
+  return checks;
+}

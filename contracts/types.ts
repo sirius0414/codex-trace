@@ -77,6 +77,7 @@ export type ContentRef = {
   "readableBytes": (number) | (null);
   "chunkCursor": (string) | (null);
   "completeness": OutputCompleteness;
+  "reader"?: ReaderMetadata;
 };
 
 export type EventOrder = {
@@ -314,6 +315,7 @@ export type ContentChunk = {
   "nextCursor": (string) | (null);
   "sourceTruncated": boolean;
   "completeness": OutputCompleteness;
+  "reader"?: ReaderMetadata;
 };
 
 export type EventDetail = {
@@ -584,4 +586,34 @@ export type ReadViewStateResult = {
   "binding": Binding;
   "preferenceRevision": number;
   "state": ViewState;
+};
+
+export type ReaderFormat = "text" | "markdown" | "code" | "json" | "diff";
+
+export type FieldDescription = {
+  "path": string;
+  "scope": "protocol" | "tool";
+  "type"?: string;
+  "description": string;
+  "descriptionEn"?: string;
+  "unit"?: string;
+  "required"?: boolean;
+  "enum"?: Array<string>;
+  "sourceUrl": string;
+  "sourceVersion": string;
+  "versionMatch": "exact" | "reference";
+  "format"?: ReaderFormat;
+  "language"?: string;
+};
+
+export type ReaderMetadata = {
+  "format": ReaderFormat;
+  "language"?: string;
+  "origin": string;
+  "adapter"?: "command" | "patch" | "function";
+  "fields"?: Array<FieldDescription>;
+  "auxiliary"?: Array<{
+    "name": string;
+    "value": string;
+  }>;
 };

@@ -8,6 +8,7 @@ import { interactionTargets } from './agent-navigation';
 import { usePreferences } from '../preferences';
 import UsageBadge from './UsageBadge';
 import { usagePresentation } from './usage';
+import { ListSizeTracker } from './event-list-size';
 
 export function eventIcon(event: TraceEvent): IconName {
   if (event.status.value === 'failed') return 'alert';
@@ -61,6 +62,8 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
   const scrollGeneration = useRef(0);
   const anchor = useRef(view.anchor);
   const lastTop = useRef(0);
+  const sizes = useRef(new ListSizeTracker());
+  const resizeHandler = useRef<() => boolean>(() => false);
   const lastThread = useRef<string | undefined>(undefined);
   const lastSelected = useRef<string | null>(null);
   const receivedAnchor = useRef(view.anchor);
@@ -84,11 +87,28 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
     if (!element) return anchor.current;
     return readingAnchor(rows, element.scrollTop) ?? anchor.current;
   }
+  function reconcileSize() {
+    const element = scroll.current;
+    if (!element) return false;
+    const following = view.follow === 'following';
+    const saved = !following && anchor.current ? rows.find(row => rowId(row) === anchor.current!.eventId) : null;
+    const readingTop = saved && anchor.current ? saved.top + anchor.current.offsetPx : lastTop.current;
+    const target = sizes.current.measure(element.clientHeight, element.scrollHeight, following, readingTop);
+    if (target == null) return false;
+    // 浏览器可能先派发尺寸钳制产生的 scroll，再调用 ResizeObserver；两条路径共用测量状态。
+    // 暂停阅读时保留原锚点，窗口扩大导致的临时钳制不会丢失之后可恢复的位置。
+    moveTo(target);
+    if (following) anchor.current = captureAnchor();
+    return true;
+  }
+  resizeHandler.current = reconcileSize;
   useLayoutEffect(() => {
     if (!scroll.current) return;
+    resizeHandler.current();
     const observer = new ResizeObserver(() => {
       const element = scroll.current!;
-      setViewport({ top: element.scrollTop, height: element.clientHeight });
+      // 回调读取最新 follow/rows，不能使用挂载时闭包中的任务状态。
+      if (!resizeHandler.current()) setViewport({ top: element.scrollTop, height: element.clientHeight });
     });
     observer.observe(scroll.current);
     return () => observer.disconnect();
@@ -145,6 +165,7 @@ export default function EventList(props: TraceUIProps & { visible: TraceEvent[];
   }, [viewport, rows]);
   function onScroll() {
     const element = scroll.current!;
+    if (reconcileSize()) return;
     setViewport({ top: element.scrollTop, height: element.clientHeight });
     if (!automatic.current) {
       const next = captureAnchor();

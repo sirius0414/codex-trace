@@ -1,0 +1,22 @@
+[
+  "Text transport automatically renders Markdown with table and highlighted fence",
+  "Markdown heading retains reading typography",
+  "YAML frontmatter is preserved instead of hidden",
+  "Default body toolbar has no size, wrapping or line-number controls",
+  "Reading settings are keyboard reachable and focused",
+  "Escape closes settings before leaving expanded reading",
+  "Unlabelled Python is automatically recognized and highlighted",
+  "Shared settings apply across entries",
+  "Auto-highlight copy retains indentation without line numbers",
+  "Manual plain code disables automatic highlighting",
+  "JSON text expands directly to decoded Markdown reading",
+  "Truncation warning and source fragment remain visible",
+  "Text body shows actual newlines and no JSON wrapper",
+  "Decoded string copy is exact",
+  "JSON source copy retains original quotes and escaped newlines",
+  "Original JSON remains explicitly available",
+  "Decoded string view and folding persist after switching entries",
+  "Reading settings survive reload",
+  "Narrow Chinese dark settings fit inside the reader",
+  "Global settings share the same live reading preferences"
+]

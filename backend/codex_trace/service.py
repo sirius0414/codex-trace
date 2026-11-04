@@ -605,7 +605,8 @@ class TrajectoryService(Observation):
                     "eventId": event["eventId"], "eventRevision": event["eventRevision"], "availability": "available",
                     "summary": event["preview"], "chunks": [{"part": part, "text": piece, "byteOffset": len(text[:offset].encode()),
                     "readableBytes": len(text.encode()), "nextCursor": next_cursor, "sourceTruncated": ref.get("sourceTruncated", False),
-                    "completeness": ref.get("completeness", "unknown")}], "sources": deepcopy(event["sources"]),
+                    "completeness": ref.get("completeness", "unknown"),
+                    **({"reader": deepcopy(ref["reader"])} if "reader" in ref else {})}], "sources": deepcopy(event["sources"]),
                     "rawAssociation": "recorded" if any(s["kind"] == "raw" for s in event["sources"]) else "notRecorded",
                     "explanation": "原始关联未记录" if part == "raw" and not text else "当前块为已读取内容。"}
 

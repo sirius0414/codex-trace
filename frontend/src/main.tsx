@@ -5,7 +5,7 @@ import type { ChangeBatch, ContentPart, DownloadResult, EventDetail, ListThreads
 import { TrajectoryClient } from './bridge/client';
 import { defaultView, eventLocation, mergeDetail, mergeSnapshot, partsForTab, readAnchorPage, readSelectionPage, restoredView, searchKeys, searchVisibility, selectedView, PreferenceGate, SessionGate, type EventLocation, type SearchMatches } from './state/session';
 import { ChangeProtocolError, ChangeReader, mergeChanges, recordChangeTiming, type ChangeTiming } from './state/changes';
-import { readDetailWindow } from './state/detail';
+import { DetailReadWindows, readDetailWindow } from './state/detail';
 import { rebuildLoadedSnapshot } from './state/rebuild';
 import { ExportCoordinator } from './state/export';
 import { GroupReader } from './state/groups';
@@ -52,6 +52,7 @@ function TrajectoryApp() {
   const detailRequests = useRef(new Set<string>());
   const detailSerial = useRef(0);
   const detailVersions = useRef(new Map<string, number>());
+  const detailWindows = useRef(new DetailReadWindows());
   const threadSerial = useRef(0);
   const threadCursor = useRef<string | null>(null);
   const threadQuery = useRef('');
@@ -99,6 +100,7 @@ function TrajectoryApp() {
     invalidateDetails();
   }
   function resetSelection() {
+    detailWindows.current.clear();
     preferences.current = new PreferenceGate();
     currentSnapshot.current = null; setSnapshot(null);
     currentDetail.current = null; setDetail(null);
@@ -298,7 +300,7 @@ function TrajectoryApp() {
     listTimer.current = setTimeout(() => { void listThreads(); }, 200);
   }
 
-  async function loadPart(part: ContentPart, append = false) {
+  async function loadPart(part: ContentPart, append = false, readAll = false) {
     const token = gate.current.capture(), state = currentSnapshot.current, selected = currentView.current.selectedEventId;
     if (!token.binding || !state || !selected || !client.current) return;
     const event = state.events.find(row => row.eventId === selected);
@@ -307,10 +309,12 @@ function TrajectoryApp() {
     }
     const previous = currentDetail.current?.eventId === selected ? currentDetail.current.parts[part] : undefined;
     const versionKey = `${selected}:${part}`;
+    const windowKey = JSON.stringify([state.generation, selected, part]);
     // 详情游标绑定冻结版本；事件更新后先刷新当前已显示窗口，再继续读取新字节。
     if (append && detailVersions.current.get(versionKey) !== event.eventRevision) append = false;
     const cursor = append ? previous?.nextCursor : null;
-    if (append && !cursor || !append && previous && detailVersions.current.get(versionKey) === event.eventRevision) return;
+    if (append && !cursor || !readAll && !append && previous && detailVersions.current.get(versionKey) === event.eventRevision) return;
+    const requestedBytes = readAll ? Math.min(8_000_000, event.content.find(ref => ref.part === part)?.readableBytes ?? previous?.readableBytes ?? 0) : 0;
     const serial = detailSerial.current, requestKey = `${serial}:${state.generation}:${event.eventRevision}:${selected}:${part}:${cursor ?? ''}`;
     if (detailRequests.current.has(requestKey)) return;
     const pending = partRequests.current.get(part);
@@ -323,13 +327,14 @@ function TrajectoryApp() {
       const adapter = client.current;
       const read = (chunkCursor: string | null) => adapter.call<EventDetail>('read_event', { binding: token.binding,
         generation: state.generation, eventId: selected, part, chunkCursor }, { signal });
-      const response = append ? await read(cursor ?? null) : await readDetailWindow(read, previous ? new TextEncoder().encode(previous.text).length : 0);
+      const response = append ? await read(cursor ?? null) : await readDetailWindow(read, Math.max(requestedBytes, detailWindows.current.get(windowKey), previous ? new TextEncoder().encode(previous.text).length : 0));
       // 选择、来源代次或事件版本任一过期，都不能把旧正文拼入当前详情。
       if (signal.aborted || !gate.current.accepts(token, response.binding) || serial !== detailSerial.current || currentView.current.selectedEventId !== response.eventId
         || response.generation !== currentSnapshot.current?.generation) return;
       const currentEvent = currentSnapshot.current.events.find(row => row.eventId === selected);
       if (currentEvent && response.eventRevision < currentEvent.eventRevision) return;
       const next = mergeDetail(currentDetail.current, response, append);
+      if (next.parts[part]) detailWindows.current.remember(windowKey, next.parts[part]!.text);
       detailVersions.current.set(versionKey, response.eventRevision);
       currentDetail.current = next; setDetail(next);
     } catch (failure) { if (!signal.aborted && serial === detailSerial.current) showError(failure, token); }
@@ -527,7 +532,7 @@ function TrajectoryApp() {
       const cursor = groupId ? current?.groups.find(group => group.groupId === groupId)?.nextCursor : current?.coverage.nextCursor;
       if (cursor) void readSnapshot(gate.current.capture(), cursor, false, groupId ?? null);
     }}
-    onMoreDetail={(part: ContentPart) => { void loadPart(part, true); }}
+    onMoreDetail={(part: ContentPart, readAll = false) => { void loadPart(part, !readAll, readAll); }}
     onExport={() => { void exports.current?.run(); }}
     onRetry={() => { preferences.current.blocked = false; preferences.current.pending = null;
       void readSnapshot(gate.current.capture(), null, true).then(() => groupReads.current?.retry()); void listThreads(); }}/ >;

@@ -147,6 +147,10 @@ def install(output: Path) -> dict:
     manifest = json.loads((package / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
     if manifest.get("name") != PLUGIN:
         raise ValueError("只能更新 codex-trace。")
+    # 使用已验证包中的编号，分步安装时当前源码或 dist 可能已是另一份构建。
+    runtime_path = package / "runtime.json"
+    runtime = json.loads(runtime_path.read_text(encoding="utf-8")) if runtime_path.is_file() else {}
+    build_id = (runtime.get("frontendBuild") or {}).get("buildId")
     previous = next((entry for entry in cli_json(codex, "plugin", "marketplace", "list", "--json")["marketplaces"]
                      if entry["name"] == MARKET), None)
     if previous and previous.get("marketplaceSource", {}).get("sourceType") != "local":
@@ -180,7 +184,7 @@ def install(output: Path) -> dict:
                 or transport.get("command") != launch["command"] or transport.get("args") != launch["args"]
                 or any(transport.get("env", {}).get(key) != value for key, value in launch["env"].items())):
             raise ValueError("MCP 未启用或启动配置未指向本次安装。")
-        report = {"passed": True, "pluginId": SELECTOR, "version": manifest["version"],
+        report = {"passed": True, "pluginId": SELECTOR, "version": manifest["version"], "buildId": build_id,
             "installedPath": str(cache), "marketplace": str(marketplace), "verifiedFileCount": len(expected),
             "uiSha256": expected["ui/trajectory-v1.html"], "mcpCwdVerified": True,
             "hostUiReloaded": False}
@@ -221,7 +225,7 @@ def main() -> int:
             print(f"准备完成；安装命令：python3 scripts/update_plugin.py --install-prepared {output}")
             return 0
         result = install(output)
-        print(f"更新完成：{result['installedPath']}\n校验通过：{result['verifiedFileCount']} 个文件\n安装报告：{output / 'installed.json'}")
+        print(f"更新完成：{result['installedPath']}\n构建编号：{result['buildId'] or '未知（安装包未记录）'}\n校验通过：{result['verifiedFileCount']} 个文件\n安装报告：{output / 'installed.json'}")
         print("请重新加载插件资源；若仍显示旧界面，请在方便时重启 Codex。")
         return 0
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
