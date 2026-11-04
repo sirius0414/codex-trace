@@ -46,7 +46,6 @@ jobs:
       PYTHONUTF8: '1'
       PYTHONPATH: backend
       PYTHONDONTWRITEBYTECODE: '1'
-      SOURCE_DATE_EPOCH: '0'
     steps:
       - name: Preserve source bytes for cross-platform distribution checks
         run: git config --global core.autocrlf false
