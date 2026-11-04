@@ -16,7 +16,15 @@ const body = (text: string, extra: Partial<DetailPart> = {}): DetailPart => ({te
 const meta = {format:'json' as const,adapter:'command' as const,origin:'Synthetic recorded exec_command',fields:[{path:'/cmd',scope:'tool' as const,type:'string',description:'Shell command to execute.',descriptionEn:'Shell command to execute.',required:true,sourceUrl:'https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/handlers/shell_spec.rs',sourceVersion:'main · checked 2026-11-03',versionMatch:'reference' as const,format:'code' as const,language:'bash'},{path:'/yield_time_ms',scope:'tool' as const,type:'number',description:'等待输出的时长。',descriptionEn:'Time to wait for output.',unit:'milliseconds',sourceUrl:'https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/handlers/shell_spec.rs',sourceVersion:'main · checked 2026-11-03',versionMatch:'reference' as const}]};
 const markdownOutput = '---\nname: reader-fixture\ndescription: A synthetic Markdown output\n---\n\n# Research notes\n\nRead **context** with preserved metadata.\n\n| Item | State |\n| --- | --- |\n| Preview | Ready |\n\n```python\ndef greet(name):\n    return "Hello " + name\n```\n';
 const stringOutput = 'Warning: truncated output (synthetic fixture)\nTotal output lines: 80\n\n' + markdownOutput;
+const onlyOutput = 'Standalone Call output\r\n' + 'Loaded bytes remain available.\r\n'.repeat(4000) + 'END_OF_LOADED_OUTPUT';
 const cases: Record<string, {kind:TraceEvent['kind'];tool?:string;parts:DetailData['parts']}> = {
+  call_output_only:{kind:'toolCall',tool:'output.only',parts:{output:body(onlyOutput)}},
+  call_empty_input:{kind:'toolCall',tool:'output.only',parts:{input:body(''),output:body('Only effective output')}},
+  result_pair:{kind:'toolResult',tool:'paired.result',parts:{input:body('Recorded input'),output:body('Recorded output')}},
+  result_input_placeholder:{kind:'toolResult',tool:'input.only',parts:{input:body('Only effective input'),output:body('',{completeness:'notRecorded'})}},
+  deferred_pair:{kind:'toolCall',tool:'deferred.input',parts:{input:body('Input confirmed by reference before loading'),output:body('Output arrived first')}},
+  unknown_empty_pair:{kind:'toolCall',tool:'unknown.input',parts:{input:body('',{readableBytes:null}),output:body('Only output remains after the unknown input is read')}},
+  unknown_empty_manual:{kind:'toolCall',tool:'unknown.input',parts:{input:body('',{readableBytes:null}),output:body('Manual collapse overrides pending defaults')}},
   markdown_output:{kind:'toolResult',tool:'command',parts:{output:body(markdownOutput,{reader:{format:'text',origin:'commandExecution.aggregatedOutput'}})}},
   escaped_output:{kind:'toolResult',tool:'functions.exec',parts:{output:body(JSON.stringify({content:[{type:'text',text:stringOutput}],literal:'literal \\n is kept; C:\\temp\\notes'}),{sourceTruncated:true,completeness:'fragment',reader:{format:'json',origin:'synthetic tool JSON'}})}},
   auto_code:{kind:'toolResult',tool:'unknown.function',parts:{output:body('def greet(name):\n    message = "Hello " + name\n    return message\n',{reader:{format:'text',origin:'synthetic text'}})}},
@@ -45,11 +53,21 @@ function App() {
   const [snapshot,setSnapshot]=useState(createSnapshot);
   const [view,setView]=useState({...defaultView(),selectedEventId:'context',detailTab:'preview' as const,expandedTurnIds:snapshot.turns.map(t=>t.turnId)});
   const [loaded,setLoaded]=useState(false);
+  const [revealed,setRevealed]=useState(false);
+  const [refreshCount,setRefreshCount]=useState(0);
+  const [detailHidden,setDetailHidden]=useState(false);
+  const [revealedUnknown,setRevealedUnknown]=useState<Record<string,boolean>>({});
   const id=view.selectedEventId;
   const parts=id ? structuredClone(cases[id].parts) : {};
   if(id==='partial' && loaded) parts.input=body(complex,{reader:{format:'json',origin:'recorded JSON'}});
-  const detail=id?{eventId:id,summary:id,parts:{...parts,raw:body(JSON.stringify({type:'synthetic_raw_record',case:id},null,2)),source:body('Synthetic test source')},explanation:''}:null;
-  Object.assign(window,{readerFixture:{markdownOutput,stringOutput,select:(id:string)=>setView(v=>({...v,selectedEventId:id})),refresh:()=>setSnapshot(s=>({...s,revision:s.revision+1})),state:()=>({view,snapshot}),setLanguage,setUiStyle}});
+  if(id==='deferred_pair' && !revealed) delete parts.input;
+  if(id?.startsWith('unknown_empty_')) {
+    if(revealedUnknown[id]) parts.input=body('');
+    else delete parts.input;
+  }
+  if(id==='call_output_only' && refreshCount) parts.output=body(onlyOutput+`\nRefreshed output ${refreshCount}`);
+  const detail=id&&!detailHidden?{eventId:id,summary:id,parts:{...parts,raw:body(JSON.stringify({type:'synthetic_raw_record',case:id},null,2)),source:body('Synthetic test source')},explanation:''}:null;
+  Object.assign(window,{readerFixture:{markdownOutput,stringOutput,select:(id:string)=>setView(v=>({...v,selectedEventId:id})),reveal:()=>setRevealed(true),revealUnknown:()=>id&&setRevealedUnknown(values=>({...values,[id]:true})),setDetailHidden,currentParts:()=>structuredClone(parts),refresh:()=>{setRefreshCount(count=>count+1);setSnapshot(s=>({...s,revision:s.revision+1,events:s.events.map(event=>({...event,eventRevision:event.eventRevision+1,content:event.content.map(ref=>event.eventId==='call_output_only'&&ref.part==='output'?{...ref,readableBytes:new TextEncoder().encode(onlyOutput+`\nRefreshed output ${refreshCount+1}`).length}:ref)}))}));},state:()=>({view,snapshot}),setLanguage,setUiStyle}});
   return <><div style={{height:34,display:'flex',gap:10,padding:5,background:'#e7ece8',color:'#263d31'}}><b>Synthetic QA</b><select aria-label="Fixture" value={id??''} onChange={e=>setView(v=>({...v,selectedEventId:e.target.value}))}>{Object.keys(cases).map(id=><option key={id}>{id}</option>)}</select><button onClick={()=>setLanguage('zh')}>中文</button><button onClick={()=>setLanguage('en')}>English</button><button onClick={()=>document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'}>Theme</button></div><TraceUI snapshot={snapshot} view={view} detail={detail} trackingPaused={false} onTrackingPause={()=>{}} threads={[]} threadsMore={false} threadScope="user" matchedIds={null} loading={false} detailLoading={false} error="" exportMessage="" exporting={false} onTask={()=>{}} onTaskSearch={()=>{}} onMoreThreads={()=>{}} onThreadScope={()=>{}} onView={p=>setView(v=>({...v,...p}))} onSelect={id=>setView(v=>({...v,selectedEventId:id}))} onLoadEarlier={()=>{}} onMoreDetail={()=>setLoaded(true)} onExport={()=>{}} onRetry={()=>{}} /></>;
 }
 createRoot(document.getElementById('root')!).render(<PreferencesProvider><App/></PreferencesProvider>);

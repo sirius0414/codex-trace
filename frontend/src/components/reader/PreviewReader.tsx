@@ -1,19 +1,24 @@
 /** 详情阅读编排：各 part 独立识别、折叠和切换；Raw 仍由 Inspector 展示原始关联记录。 */
-import { useDeferredValue, useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
 import type { ContentPart, TraceEvent } from '../../../../contracts/types';
 import type { DetailData, DetailPart } from '../../ui-types';
 import { usePreferences } from '../../preferences';
 import { JsonReader } from './JsonReader';
 import { RichReader, CodeReader } from './RichReader';
-import { detectReader, previewParts, readableComplete, searchPreview, type ReaderMode, type TextHit } from './preview-model';
-import type { BlockReadingState, ReadingState } from './reading-state';
+import { detectReader, previewCollapseDefaults, previewParts, readableComplete, searchPreview, type ReaderMode, type TextHit } from './preview-model';
+import { initializePreviewState, type BlockReadingState, type ReadingState } from './reading-state';
 
 type Props = { event: TraceEvent; detail: DetailData | null; loading: boolean; state: ReadingState; onState: (state: ReadingState) => void; copy: (text: string, label: string) => void; onMore: (part: ContentPart, readAll?: boolean) => void };
-export default function PreviewReader({ event, detail, loading, state, onState, copy, onMore }: Props) {
+export default function PreviewReader({ event, detail, loading, state: savedState, onState, copy, onMore }: Props) {
   const { t, readerFontSize, readerWrap, readerLineNumbers } = usePreferences();
+  const parts = detail?.parts ?? {};
+  const collapseDefaults = previewCollapseDefaults(event, parts);
+  const state = initializePreviewState(event, parts, savedState);
+  useLayoutEffect(() => {
+    if (state !== savedState) onState(state);
+  }, [state, savedState, onState]);
   const root = useRef<HTMLDivElement>(null);
   const previousHit = useRef(state.hit);
-  const parts = detail?.parts ?? {};
   const labels: Record<string, string> = { input: t('输入', 'Input'), output: t('输出', 'Output'), error: t('错误', 'Error') };
   const query = useDeferredValue(state.query);
   const search = useMemo(() => searchPreview(parts, query), [parts, query]);
@@ -83,14 +88,13 @@ export default function PreviewReader({ event, detail, loading, state, onState, 
 
   return <div ref={root} className="cx-reader" style={{ '--cx-reader-font': `${readerFontSize}px`, '--cx-reader-code-font': `${readerFontSize - 2}px` } as CSSProperties}>
     <div className="cx-reader-search"><input type="search" aria-label={t('搜索条目已加载正文', 'Search loaded entry body')} placeholder={t('搜索本条目正文…', 'Search this entry…')} value={state.query} onChange={e => update({ query: e.target.value, hit: undefined })} />
-      <small>{t('范围：已加载的输入、输出、错误；不含 Raw 及尚未加载部分。', 'Scope: loaded input, output and error; excludes Raw and unloaded content.')}</small>
       {query && <div className="cx-reader-search-results"><p role="status">{t(`${search.total} 处命中${search.total > search.hits.length ? `；显示前 ${search.hits.length} 处，请缩小查询` : ''}`, `${search.total} matches${search.total > search.hits.length ? `; showing first ${search.hits.length}, refine your query` : ''}`)}</p>{search.hits.map((hit, index) => <button key={`${hit.part}:${hit.start}`} onClick={() => focusHit(hit)}><b>{labels[hit.part]} {index + 1}</b> {hit.before}<mark>{hit.match}</mark>{hit.after}</button>)}</div>}
     </div>
     {!partNames.length && <p className="cx-data-note">{loading ? t('正在读取内容…', 'Loading content…') : t('该记录尚无可读取正文。', 'This record has no readable body yet.')}</p>}
     {partNames.map(part => {
       const value = parts[part], ref = event.content.find(item => item.part === part), metadata = value?.reader ?? ref?.reader;
       const block = state.blocks[part] ?? {};
-      const collapsed = block.collapsed ?? (isTool && (event.kind === 'toolResult' ? part === 'input' : part === 'output') && event.status.value !== 'failed');
+      const collapsed = block.collapsed ?? block.defaultCollapsed ?? collapseDefaults[part] ?? false;
       const completeness = value?.completeness ?? ref?.completeness ?? 'notRecorded';
       const sourceTruncated = value?.sourceTruncated ?? ref?.sourceTruncated;
       const more = value ? !readableComplete(value) : Boolean(ref?.readableBytes);

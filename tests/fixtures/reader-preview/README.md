@@ -10,6 +10,7 @@
 - Markdown 通过 marked 词法节点转 React；HTML 和上下文包装保持可见，不注入 HTML，不自动请求图片。代码高亮只解析已知高亮器的文本/样式，并校验高亮前后文本一致。
 - 命令正文、文件 diff 使用可靠工具定义；命令数组保持 JSON。完整参数始终在下方 JSON 或正文原文中。
 - 阅读状态仅在当前页面会话内记忆，最多 150 条目、600 个标签滚动位置。不会写入宿主 ViewState 或 localStorage。重新选择条目时后端重读之前的 UTF-8 字节窗口，重新校验版本，不缓存旧游标。
+- 单个有效正文默认展开；Input/Output 同时存在时 Call 展开 Input、Result 展开 Output；失败条目首次打开全部展开，Error 排在最前。有效正文结合来源引用与已读数据判断，未保存的空占位不计入，确认存在但未加载的正文计入。每块首次确认存在时保存默认值，用户手动折叠优先；切换、分页和实时刷新不重置。
 - 展开阅读覆盖面板，保留拖动/方向键调整宽度；展开时背景 inert，Tab 限于阅读面板，Escape 先退出展开。
 
 ## 字段解释覆盖
@@ -47,6 +48,13 @@ const { runAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/rea
 console.log(await runAcceptance(page, '/ABSOLUTE_REPO/build/reader-acceptance'));
 ```
 
+默认折叠和状态保持的针对性回归可在同一任务空间另一次页面加载后运行：
+
+```js
+const { runCollapseAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/collapse.mjs');
+console.log(await runCollapseAcceptance(page, '/ABSOLUTE_REPO/build/reader-collapse-acceptance'));
+```
+
 浏览器测试捕获传给 Clipboard API 的文本以核对保真，不修改用户剪贴板。截图和 `checks.json` 写入指定 build 目录。另需在 390px 视口检查中英文、三种风格、暗色、Tab 导航和说明卡；这些是实际浏览器交互验收，不以单元测试代替。
 
 ## 本次验收结果（2026-11-03）
@@ -57,3 +65,9 @@ console.log(await runAcceptance(page, '/ABSOLUTE_REPO/build/reader-acceptance'))
 - ego-browser / Chromium 主流程和补充流程共 **49** 个真实浏览器断言通过。补充流程由 `supplementary.mjs` 提供，覆盖三种主题的 390px 窄屏、Tab 焦点范围、参数数组、文件 diff、8M 以上正文回退及完整已加载内容复制。
 - 截图和浏览器记录：`build/reader-acceptance/01-markdown.png`、`02-json-search.png`、`03-tool-definition.png`、`04-narrow-dark-zh.png`、`05-narrow-tool.png`、`checks.json`。
 - 本次验证使用合成记录与隔离服务夹具；未修改真实任务、执行预览命令或更新已安装插件。
+
+## 默认折叠回归（2026-11-04）
+
+- `npm test` **369/369** 通过，其中新增 **16** 项默认折叠、引用判定、状态保持和真实 React 渲染测试；`npm run build`（TypeScript 检查及生产构建）、夹具构建和 `git diff --check` 通过。
+- `collapse.mjs` 的 ego-browser / Chromium **42/42** 交互断言通过，覆盖单正文、Call/Result 双正文、空占位、失败顺序、手动状态、切换、分页、实时刷新、临时无详情、搜索定位、原文切换和完整 CRLF 复制。未知大小引用先参与暂定默认，确认另一块为空后展开唯一正文；手动折叠始终优先。
+- 记录与截图：`build/reader-collapse-acceptance/checks.json`、`failure-bodies.png`、`sole-call-output.png`。

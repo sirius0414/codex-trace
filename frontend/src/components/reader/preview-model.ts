@@ -37,6 +37,23 @@ export function previewParts(event: TraceEvent, parts: Partial<Record<ContentPar
   const order: ContentPart[] = event.status?.value === 'failed' ? ['error', 'input', 'output'] : event.kind === 'toolResult' ? ['output', 'input', 'error'] : ['input', 'output', 'error'];
   return order.filter(part => available(part) || tool && part === 'output');
 }
+/** 已保存但大小未知的引用先按存在处理；读齐为空后才能排除。 */
+export function previewBodyPresence(event: TraceEvent, parts: Partial<Record<ContentPart, DetailPart>>, part: ContentPart): 'present' | 'pending' | 'empty' {
+  const value = parts[part], refs = event.content.filter(ref => ref.part === part);
+  if (value?.text.length || value?.nextCursor || (value?.readableBytes ?? 0) > 0
+    || refs.some(ref => (ref.readableBytes ?? 0) > 0 || ref.chunkCursor || ref.chunked)) return 'present';
+  if (value && readableComplete(value)) return 'empty';
+  return refs.some(ref => ref.readableBytes == null && ref.completeness !== 'notRecorded') ? 'pending' : 'empty';
+}
+/** 展示块包含未保存输出的提示；只有已读正文或来源确认存在的正文参与默认折叠。 */
+export function previewCollapseDefaults(event: TraceEvent, parts: Partial<Record<ContentPart, DetailPart>>) {
+  const effective = previewParts(event, parts).filter(part => previewBodyPresence(event, parts, part) !== 'empty');
+  const tool = event.kind === 'toolCall' || event.kind === 'toolResult' || Boolean(event.toolName);
+  const paired = tool && effective.includes('input') && effective.includes('output') && event.status.value !== 'failed';
+  const defaults: Partial<Record<ContentPart, boolean>> = {};
+  for (const part of effective) defaults[part] = paired && (event.kind === 'toolResult' ? part === 'input' : part === 'output');
+  return defaults;
+}
 export type TextHit = {part: ContentPart; start: number; end: number; before: string; match: string; after: string};
 /** 查询仅覆盖本次已读正文。限制结果列表，不限制查找的文本范围；返回总数以避免隐瞒命中。 */
 export function searchPreview(parts: Partial<Record<ContentPart, DetailPart>>, query: string, limit = 100) {

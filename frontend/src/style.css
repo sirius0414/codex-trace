@@ -119,7 +119,6 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-detail-body{min-height:0;overflow:auto;flex:1;padding:12px 13px;scrollbar-width:thin;overscroll-behavior:contain}
 .cx-detail-body>h2{font-size:13px;font-weight:500;margin:0 0 6px;overflow-wrap:anywhere}
 .cx-event-intro{font-size:12px;line-height:1.7;margin:0 0 12px;overflow-wrap:anywhere}
-.cx-detail-meta{color:var(--cx-muted);font-size:10px;margin-bottom:11px}
 .cx-detail-label{display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--cx-muted);margin:10px 0 4px}
 .cx-detail-label .cx-icon{width:20px;height:20px}
 .cx-code{background:var(--cx-soft);border:1px solid var(--cx-line);border-radius:4px;padding:8px 9px;font:11px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;color:var(--cx-ink)}
@@ -430,9 +429,8 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-reader .cx-reader-heading-toggle{font:inherit}
 .cx-reader button:focus-visible,.cx-reader summary:focus-visible,.cx-reader a:focus-visible{outline:2px solid var(--cx-green);outline-offset:2px}
 .cx-reader select{border:1px solid var(--cx-line);border-radius:4px;background:var(--cx-bg);color:var(--cx-ink);padding:3px;max-width:100%;min-height:27px}
-.cx-reader-search{margin:12px 0 20px}
+.cx-reader-search{margin:0 0 12px}
 .cx-reader-search>input{width:100%;padding:8px 10px;border:1px solid var(--cx-line);border-radius:5px;background:var(--cx-bg);color:var(--cx-ink);font-size:12px}
-.cx-reader-search small{display:block;margin-top:5px;font-size:10px;color:var(--cx-muted);line-height:1.5}
 .cx-reader-search-results{max-height:230px;overflow:auto;border:1px solid var(--cx-line);border-radius:4px;padding:5px;margin-top:6px}
 .cx-reader-search-results p{font-size:11px;color:var(--cx-muted);margin:3px}
 .cx-reader-search-results button{display:block;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;width:100%;padding:7px;border:0;border-bottom:1px solid var(--cx-line);background:var(--cx-bg);line-height:1.6}
