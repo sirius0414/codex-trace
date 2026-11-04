@@ -1,73 +1,52 @@
 # Preview 阅读器验收
 
-此目录使用合成数据挂载正式 `TraceUI` / `Inspector`，不连接用户历史、执行工具或访问工作文件。`main.tsx` 包含长 Markdown、精确 JSON 数字、长字符串、命令、日志、部分 JSON、来源截断、未保存输出、失败、未知工具及 20,000 项数组。
+此目录用合成数据挂载正式 `TraceUI` / `Inspector`，不连接真实历史、执行工具或访问工作文件。
 
-## 设计与实现
+## 阅读行为
 
-- Summary 保留事件与用量概述；Preview 按输入/输出/错误块独立阅读；正文原文是该块的原始文本；Raw 是确认关联的原始记录；Source 保留来源证据。
-- 可选 `reader` 契约传递来源格式、工具适配和字段解释。可靠来源优先，无来源时保守按可见语法识别；可手动选择阅读格式和代码语言。
-- JSON 仅在可读取正文收齐后建树。AST 保存数值和字段源码区间，不用浮点数重序列化。重复字段、空值、JSON 转义和源码复制均保留。JSON 字符串的“复制字段值”保留 JSON 引号/转义，“复制字符串正文”明确表示已解码。
-- Markdown 通过 marked 词法节点转 React；HTML 和上下文包装保持可见，不注入 HTML，不自动请求图片。代码高亮只解析已知高亮器的文本/样式，并校验高亮前后文本一致。
-- 命令正文、文件 diff 使用可靠工具定义；命令数组保持 JSON。完整参数始终在下方 JSON 或正文原文中。
-- 阅读状态仅在当前页面会话内记忆，最多 150 条目、600 个标签滚动位置。不会写入宿主 ViewState 或 localStorage。重新选择条目时后端重读之前的 UTF-8 字节窗口，重新校验版本，不缓存旧游标。
-- 单个有效正文默认展开；Input/Output 同时存在时 Call 展开 Input、Result 展开 Output；失败条目首次打开全部展开，Error 排在最前。有效正文结合来源引用与已读数据判断，未保存的空占位不计入，确认存在但未加载的正文计入。每块首次确认存在时保存默认值，用户手动折叠优先；切换、分页和实时刷新不重置。
-- 展开阅读覆盖面板，保留拖动/方向键调整宽度；展开时背景 inert，Tab 限于阅读面板，Escape 先退出展开。
+- Summary 保留事件概述；Preview 阅读已加载输入、输出和错误；“原文”保留当前块原始文本；Raw content 展示关联原始记录；Source 展示来源证据。
+- 正文按内容和来源格式自动识别。阅读 / 原文及一个复制入口与分区标题共用一行；格式和代码语言修正收进“更多”。字号、换行、行号、宽度和展开阅读继续使用原有设置。
+- JSON 使用保留源码区间的索引，只插入缩进，不经过对象解析再序列化。数字字面量、重复字段、键的转义和字符串转义均保留；普通对象和数组直接展开。已删除字段树、深度控制、字段目录、字段搜索和节点复制。
+- `json-layout.ts` 集中定义长值阈值：值的原始 JSON 超过 **600 个 UTF-16 单元或 12 行**时自动折叠。对象显示 `{…}`，数组显示 `[…]`，字符串保留前 70 单元。根值从不自动折叠。没有新增用户设置项。
+- 已确认来源为 `mcpToolCall.result`，且字段定义和实际结构均支持的纯文本结果可以直接阅读。未知字段、重复键、非文本块、错误结果和 `structuredContent` 仍完整显示为 JSON，不按字段名猜测包装。
+- 条目级搜索覆盖全部已加载输入/输出/错误原文，包括视觉折叠和显示窗口外文本；最多列出 100 个结果，同时显示真实命中总数。JSON 命中展开对应长值并移动显示窗口，Markdown 等格式或跨 JSON 结构空白的命中使用原文精确定位。
+- 每块仅一个复制入口，复制完整已加载原始正文，与折叠、格式及显示窗口无关。合成测试拦截 Clipboard API 的参数核对保真，不修改用户剪贴板。
+- 普通、完整和未知来源状态不占提示行。可靠的来源截断、仅保存片段、仍未加载内容、未保存输出仍显示。只移除已知固定 explanation 文案，保留实际错误和限制。
 
-## 字段解释覆盖
+## 状态与资源边界
 
-生产数据实际接入 exec_command 输入 10 项、结果 6 项，write_stdin 输入 4 项及相同结果定义；MCP 外层 content/isError/structuredContent 与已确认 text 内容块；fileChange 已记录 diff。说明包含可获得的类型、用途、单位、必填性、枚举、链接和版本。参见 `contracts/README.md` 的具体来源。
+- 后端每次读取至多 65,536 个 Unicode 字符（原为 16,384）；UTF-8 字节偏移与续读游标保持连续。
 
-当前历史适配器没有保存每次调用的工具 schema 或协商协议版本，所有随包官方定义都标为 **reference / 历史版本无法匹配，仅供参考**。未定义字段没有说明按钮。浮层无需网络，支持悬浮、键盘聚焦、点击固定和来源链接。
+- 阅读状态只在页面会话中保留，最多 150 条目、600 个标签位置；不持久化正文和查询。JSON 对象以字段名及同名出现次序保持状态，数组以索引保持状态；数组插入或重排没有可靠身份映射。
+- 单个有效正文默认展开；Input/Output 同时存在时 Call 展开 Input、Result 展开 Output；失败条目首次全部展开且 Error 最先。异步正文到达、分页、条目切换和刷新保留手动选择。
+- JSON 解析限制 8,000,000 UTF-16 单元、200,000 节点、128 层；不完整、无效或超限时回退原文，读取入口由外层保留。
+- JSON 每次至多 400 排版行，以约 200,000 字符预算在行边界停止；一个长值窗口至多 100,000 字符。前后窗口有显式导航。搜索直接定位到目标窗口，不挂载之前全部数据。
+- 普通原文以 100,000 字符为窗口；搜索可直接跳到末尾。复制包含全部已加载正文。
+- Markdown、代码、表格、列表继续使用各自的有界显示与阅读状态。
 
-## 数据与资源边界
-
-- `nextCursor/readableBytes`、`sourceTruncated`、来源完整性、未保存输出分别展示。读齐可读取正文不等于来源完整。生产来源没有可验证截断证据时保持 unknown，不从日志里的 “truncated” 字样推测。
-- 原始工具字段优先从同一物理记录取精确 JSON 子串；API 已解码值不能恢复原传输字节、历史缺失内容或已丢失的精度。`origin` 明确标记 API decoded projection。
-- JSON 结构索引限制 8,000,000 UTF-16 单元、200,000 节点、128 层；超限回退原文。每层值按 100 项显示，大对象另有全部 key 的目录（超过 1,000 个 key 时窗口呈现）。树一次至多 2,000 可见节点。搜索覆盖完整已解析正文，结果列表最多 200 项。
-- 全条目搜索仅覆盖已加载输入/输出/错误，最多列出 100 个结果并显示真实总数；不会搜索尚未加载内容或 Raw。
-- 大 Markdown、代码、表格、列表有明确的延后呈现提示。视觉折叠/延后呈现不裁剪复制数据。普通原文每次显示 100,000 字符，可继续显示；复制包含全部已加载正文。
-- 高亮支持 Bash、JavaScript、TypeScript、Python、JSON、diff、CSS、XML、SQL、YAML、Rust、Go、Swift；未知语言仍可原样阅读。未记录 shell 类型的命令不默认解释成 Bash，可手动选择。
-- 宿主剪贴板拒绝访问时可使用浏览器回退；含 CR 的文本不经过会改变换行的 textarea 回退，改为明确提示使用原始记录导出。
-
-## 自动化和浏览器流程
+## 验证
 
 ```sh
 npm run build
 npm test
-PYTHONPATH=backend:tests .venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python contracts/generate_types.py --check
 git diff --check
 node tests/fixtures/reader-preview/build.mjs
 python3 -m http.server 4175 --bind 127.0.0.1 --directory build/reader-preview
 ```
 
-按 ego-browser 技能创建一个任务空间并打开 `http://127.0.0.1:4175`，再在同一空间的页面运行：
+在 ego-browser 同一个任务空间打开 `http://127.0.0.1:4175` 后运行：
 
 ```js
-const { runAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/acceptance.mjs');
-console.log(await runAcceptance(page, '/ABSOLUTE_REPO/build/reader-acceptance'));
+const { runAcceptance, runNarrowAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/acceptance.mjs');
+console.log(await runAcceptance(page, '/ABSOLUTE_REPO/build/preview-unified-acceptance'));
+console.log(await runNarrowAcceptance(page, '/ABSOLUTE_REPO/build/preview-unified-acceptance'));
 ```
 
-默认折叠和状态保持的针对性回归可在同一任务空间另一次页面加载后运行：
+默认折叠、分页和实时刷新回归：
 
 ```js
 const { runCollapseAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/collapse.mjs');
-console.log(await runCollapseAcceptance(page, '/ABSOLUTE_REPO/build/reader-collapse-acceptance'));
+console.log(await runCollapseAcceptance(page, '/ABSOLUTE_REPO/build/preview-collapse-acceptance'));
 ```
 
-浏览器测试捕获传给 Clipboard API 的文本以核对保真，不修改用户剪贴板。截图和 `checks.json` 写入指定 build 目录。另需在 390px 视口检查中英文、三种风格、暗色、Tab 导航和说明卡；这些是实际浏览器交互验收，不以单元测试代替。
-
-## 本次验收结果（2026-11-03）
-
-- `npm run build` 成功，`npm test` **331/331** 通过。
-- Python 完整检查运行 **580** 项，**17** 项按平台/环境条件跳过，其余通过。
-- 契约生成一致性、第三方许可证检查及 `git diff --check` 通过。
-- ego-browser / Chromium 主流程和补充流程共 **49** 个真实浏览器断言通过。补充流程由 `supplementary.mjs` 提供，覆盖三种主题的 390px 窄屏、Tab 焦点范围、参数数组、文件 diff、8M 以上正文回退及完整已加载内容复制。
-- 截图和浏览器记录：`build/reader-acceptance/01-markdown.png`、`02-json-search.png`、`03-tool-definition.png`、`04-narrow-dark-zh.png`、`05-narrow-tool.png`、`checks.json`。
-- 本次验证使用合成记录与隔离服务夹具；未修改真实任务、执行预览命令或更新已安装插件。
-
-## 默认折叠回归（2026-11-04）
-
-- `npm test` **369/369** 通过，其中新增 **16** 项默认折叠、引用判定、状态保持和真实 React 渲染测试；`npm run build`（TypeScript 检查及生产构建）、夹具构建和 `git diff --check` 通过。
-- `collapse.mjs` 的 ego-browser / Chromium **42/42** 交互断言通过，覆盖单正文、Call/Result 双正文、空占位、失败顺序、手动状态、切换、分页、实时刷新、临时无详情、搜索定位、原文切换和完整 CRLF 复制。未知大小引用先参与暂定默认，确认另一块为空后展开唯一正文；手动折叠始终优先。
-- 记录与截图：`build/reader-collapse-acceptance/checks.json`、`failure-bodies.png`、`sole-call-output.png`。
+窄屏流程会校准浏览器现有缩放，按 390 个 CSS 像素检查中英文、classic / soft / terminal 三种风格以及明暗主题。截图和检查结果保存到指定 build 目录。

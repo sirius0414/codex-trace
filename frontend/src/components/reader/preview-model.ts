@@ -75,3 +75,8 @@ export function searchPreview(parts: Partial<Record<ContentPart, DetailPart>>, q
   }
   return { hits, total };
 }
+
+/** 只去除已知无信息量的固定句，保留同一 explanation 中的失败/限制等实际问题。 */
+export function meaningfulPreviewExplanation(value: string) {
+  return value.replace(/当前块为已读取内容。|This block contains loaded content\.|Source completeness unknown\.?|来源完整性未知[。.]?/g, '').trim();
+}

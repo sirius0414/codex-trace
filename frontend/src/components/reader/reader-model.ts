@@ -45,7 +45,10 @@ export function detectCodeLanguage(text: string, explicitLanguage?: string): Cod
     else if (/^#![^\n]*\bpython[\d.]*\b/.test(sample)) syntax('python');
     else if (/^\s*(?:(?:export|declare)\s+)?(?:interface\s+\w+(?:\s+extends\s+[\w, ]+)?\s*\{|type\s+\w+(?:<[^>]+>)?\s*=)/m.test(sample)
       || /^\s*(?:export\s+)?(?:const|let)\s+[$\w]+\s*:\s*[\w<\[\]| ,]+\s*=/m.test(sample)) syntax('typescript');
-    else if (/^\s*(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s*[$\w]*\s*\([^\n]*\)\s*\{/m.test(sample)
+    // 工具编排常只有 text(await tools.xxx(...)) 一行，没有变量或函数声明。
+    // 要求完整的 await + tools 调用形状，不能因正文提到工具名就当作代码。
+    else if (/^\s*(?:text|image|audio|notify|generatedImage)\s*\(\s*await\s+tools\.[$\w]+\s*\(/m.test(sample)
+      || /^\s*(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s*[$\w]*\s*\([^\n]*\)\s*\{/m.test(sample)
       || /^\s*(?:export\s+)?(?:const|let|var)\s+[$\w{\[][^\n]*=\s*(?:[^\n]*=>|[^\n]*[;({\[])/m.test(sample)
       || /^\s*(?:console\.(?:log|error|warn|info|debug)\(|(?:module\.exports|exports\.\w+)\s*=)/m.test(sample)
       || /^\s*import\s+(?:[\w*{}, ]+)\s+from\s+['"][^'"\n]+['"];?\s*$/m.test(sample)) syntax('javascript');

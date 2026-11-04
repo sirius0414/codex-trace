@@ -18,6 +18,12 @@ const markdownOutput = '---\nname: reader-fixture\ndescription: A synthetic Mark
 const stringOutput = 'Warning: truncated output (synthetic fixture)\nTotal output lines: 80\n\n' + markdownOutput;
 const onlyOutput = 'Standalone Call output\r\n' + 'Loaded bytes remain available.\r\n'.repeat(4000) + 'END_OF_LOADED_OUTPUT';
 const cases: Record<string, {kind:TraceEvent['kind'];tool?:string;parts:DetailData['parts']}> = {
+  orchestration:{kind:'toolCall',tool:'exec',parts:{input:body('text(await tools.exec_command({cmd:"cat /synthetic/SKILL.md",max_output_tokens:6000}));')}},
+  ordinary_json:{kind:'toolResult',parts:{output:body('{"i\\u0064":900719925474099312345,"id":1.00e+009,"line":"a\\nb","literal":"C:\\new","nested":{"ok":true},"array":[1,2]}')}},
+  long_values:{kind:'toolResult',parts:{output:body(JSON.stringify({object:{deep:{text:'x'.repeat(700)+'OBJECT_TARGET'}},array:Array.from({length:200},(_,i)=>`item-${i}`),string:'prefix '+'x'.repeat(250000)+'STRING_TARGET',tail:'visible sibling'}))}},
+  environment:{kind:'environment',parts:{input:body(JSON.stringify({cwd:'/synthetic/project',shell:'zsh',timezone:'Asia/Shanghai',network:'restricted'}))}},
+  direct_command:{kind:'toolCall',parts:{input:body('printf "hello\n"\nnpm test',{reader:{format:'code',language:'bash',origin:'commandExecution.command'}})}},
+  protocol:{kind:'toolResult',parts:{output:body(JSON.stringify({content:[{type:'text',text:'# Protocol body\n\nReadable **message**.'}],isError:false}),{reader:{format:'json',origin:'mcpToolCall.result',fields:[{path:'/content/0/text',scope:'protocol',format:'text',description:'MCP text body',sourceUrl:'https://modelcontextprotocol.io/specification/2025-06-18/server/tools',sourceVersion:'2025-06-18',versionMatch:'reference'}]}})}},
   call_output_only:{kind:'toolCall',tool:'output.only',parts:{output:body(onlyOutput)}},
   call_empty_input:{kind:'toolCall',tool:'output.only',parts:{input:body(''),output:body('Only effective output')}},
   result_pair:{kind:'toolResult',tool:'paired.result',parts:{input:body('Recorded input'),output:body('Recorded output')}},
@@ -52,6 +58,7 @@ function App() {
   const {setLanguage,setUiStyle}=usePreferences();
   const [snapshot,setSnapshot]=useState(createSnapshot);
   const [view,setView]=useState({...defaultView(),selectedEventId:'context',detailTab:'preview' as const,expandedTurnIds:snapshot.turns.map(t=>t.turnId)});
+  const [explanation,setExplanation]=useState('');
   const [loaded,setLoaded]=useState(false);
   const [revealed,setRevealed]=useState(false);
   const [refreshCount,setRefreshCount]=useState(0);
@@ -66,8 +73,8 @@ function App() {
     else delete parts.input;
   }
   if(id==='call_output_only' && refreshCount) parts.output=body(onlyOutput+`\nRefreshed output ${refreshCount}`);
-  const detail=id&&!detailHidden?{eventId:id,summary:id,parts:{...parts,raw:body(JSON.stringify({type:'synthetic_raw_record',case:id},null,2)),source:body('Synthetic test source')},explanation:''}:null;
-  Object.assign(window,{readerFixture:{markdownOutput,stringOutput,select:(id:string)=>setView(v=>({...v,selectedEventId:id})),reveal:()=>setRevealed(true),revealUnknown:()=>id&&setRevealedUnknown(values=>({...values,[id]:true})),setDetailHidden,currentParts:()=>structuredClone(parts),refresh:()=>{setRefreshCount(count=>count+1);setSnapshot(s=>({...s,revision:s.revision+1,events:s.events.map(event=>({...event,eventRevision:event.eventRevision+1,content:event.content.map(ref=>event.eventId==='call_output_only'&&ref.part==='output'?{...ref,readableBytes:new TextEncoder().encode(onlyOutput+`\nRefreshed output ${refreshCount+1}`).length}:ref)}))}));},state:()=>({view,snapshot}),setLanguage,setUiStyle}});
+  const detail=id&&!detailHidden?{eventId:id,summary:id,parts:{...parts,raw:body(JSON.stringify({type:'synthetic_raw_record',case:id},null,2)),source:body('Synthetic test source')},explanation}:null;
+  Object.assign(window,{readerFixture:{setExplanation,markdownOutput,stringOutput,select:(id:string)=>setView(v=>({...v,selectedEventId:id})),reveal:()=>setRevealed(true),revealUnknown:()=>id&&setRevealedUnknown(values=>({...values,[id]:true})),setDetailHidden,currentParts:()=>structuredClone(parts),refresh:()=>{setRefreshCount(count=>count+1);setSnapshot(s=>({...s,revision:s.revision+1,events:s.events.map(event=>({...event,eventRevision:event.eventRevision+1,content:event.content.map(ref=>event.eventId==='call_output_only'&&ref.part==='output'?{...ref,readableBytes:new TextEncoder().encode(onlyOutput+`\nRefreshed output ${refreshCount+1}`).length}:ref)}))}));},state:()=>({view,snapshot}),setLanguage,setUiStyle}});
   return <><div style={{height:34,display:'flex',gap:10,padding:5,background:'#e7ece8',color:'#263d31'}}><b>Synthetic QA</b><select aria-label="Fixture" value={id??''} onChange={e=>setView(v=>({...v,selectedEventId:e.target.value}))}>{Object.keys(cases).map(id=><option key={id}>{id}</option>)}</select><button onClick={()=>setLanguage('zh')}>中文</button><button onClick={()=>setLanguage('en')}>English</button><button onClick={()=>document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark'}>Theme</button></div><TraceUI snapshot={snapshot} view={view} detail={detail} trackingPaused={false} onTrackingPause={()=>{}} threads={[]} threadsMore={false} threadScope="user" matchedIds={null} loading={false} detailLoading={false} error="" exportMessage="" exporting={false} onTask={()=>{}} onTaskSearch={()=>{}} onMoreThreads={()=>{}} onThreadScope={()=>{}} onView={p=>setView(v=>({...v,...p}))} onSelect={id=>setView(v=>({...v,selectedEventId:id}))} onLoadEarlier={()=>{}} onMoreDetail={()=>setLoaded(true)} onExport={()=>{}} onRetry={()=>{}} /></>;
 }
 createRoot(document.getElementById('root')!).render(<PreferencesProvider><App/></PreferencesProvider>);

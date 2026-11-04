@@ -14,10 +14,10 @@ export type RichReaderState = {
   nestedCounts?: Record<string, number>;
 };
 export type CodeReaderProps = {
-  text: string; language?: string; wrap?: boolean; lineNumbers?: boolean; copy: ReaderCopy;
+  text: string; language?: string; wrap?: boolean; lineNumbers?: boolean; copy: ReaderCopy; chrome?: boolean;
   visibleLines?: number; onVisibleLines?: (count: number) => void; maxLines?: number;
 };
-export function CodeReader({ text, language, wrap = true, lineNumbers = false, copy, visibleLines, onVisibleLines, maxLines = 200 }: CodeReaderProps) {
+export function CodeReader({ text, language, wrap = true, lineNumbers = false, copy, visibleLines, onVisibleLines, maxLines = 200, chrome = true }: CodeReaderProps) {
   const { t } = usePreferences();
   const [localLines, setLocalLines] = useState(maxLines);
   const count = visibleLines ?? localLines;
@@ -28,7 +28,7 @@ export function CodeReader({ text, language, wrap = true, lineNumbers = false, c
   const lines = useMemo(() => highlightedLines(shownText, actualLanguage), [shownText, actualLanguage]);
   function more() { const next = count + 300; if (onVisibleLines) onVisibleLines(next); else setLocalLines(next); }
   return <div className="cx-reader-code">
-    <div className="cx-reader-code-head"><span>{language || actualLanguage || t('代码 / 文本', 'Code / text')}{actualLanguage && detected.basis !== 'explicit' ? t(' · 自动识别', ' · detected') : language && !actualLanguage ? t(' · 无高亮', ' · plain') : ''}</span><button type="button" className="cx-button" onClick={() => copy(text, t('代码正文', 'Code text'))}>{t('复制代码', 'Copy code')}</button></div>
+    {chrome && <div className="cx-reader-code-head"><span>{language || actualLanguage || t('代码 / 文本', 'Code / text')}{actualLanguage && detected.basis !== 'explicit' ? t(' · 自动识别', ' · detected') : language && !actualLanguage ? t(' · 无高亮', ' · plain') : ''}</span><button type="button" className="cx-button" onClick={() => copy(text, t('代码正文', 'Code text'))}>{t('复制代码', 'Copy code')}</button></div>}
     <pre className={`cx-reader-pre ${wrap ? 'wrap' : ''} ${lineNumbers ? 'numbered' : ''}`} tabIndex={0} aria-label={t('代码正文', 'Code text')}><code>{lines.map((line, index) => <Fragment key={index}><span className="cx-reader-code-line" data-line={index + 1}>{line.length ? line.map((piece, j) => <span className={piece.className || undefined} key={j}>{piece.text}</span>) : ''}</span>{index < lines.length - 1 ? '\n' : ''}</Fragment>)}</code></pre>
     {rawLines.length > count && <div className="cx-reader-deferred"><span>{t(`已加载 ${rawLines.length} 行，显示 ${count} 行；复制包含全部已加载代码。`, `${rawLines.length} loaded lines; ${count} shown. Copy includes all loaded code.`)}</span><button className="cx-button" onClick={more}>{t('再显示 300 行', 'Show 300 more lines')}</button></div>}
     {shownText.length > 100_000 && actualLanguage && <p className="cx-data-note">{t('此代码块较大，暂以无高亮方式显示以保持响应。', 'This large code block is shown without highlighting to keep the reader responsive.')}</p>}
@@ -37,9 +37,9 @@ export function CodeReader({ text, language, wrap = true, lineNumbers = false, c
 
 export type RichReaderProps = {
   text: string; state?: RichReaderState; onState?: (state: RichReaderState) => void;
-  copy: ReaderCopy; wrap?: boolean; lineNumbers?: boolean; fontSize?: number;
+  copy: ReaderCopy; chrome?: boolean; wrap?: boolean; lineNumbers?: boolean; fontSize?: number;
 };
-export function RichReader({ text, state: suppliedState, onState, copy, wrap = true, lineNumbers = false, fontSize }: RichReaderProps) {
+export function RichReader({ text, state: suppliedState, onState, copy, wrap = true, lineNumbers = false, fontSize, chrome = true }: RichReaderProps) {
   const { t } = usePreferences();
   const [localState, setLocalState] = useState<RichReaderState>({});
   const state = suppliedState ?? localState;
@@ -81,8 +81,8 @@ export function RichReader({ text, state: suppliedState, onState, copy, wrap = t
         const shown = state.nestedCounts?.[key] ?? 100;
         return <Fragment key={key}>{createElement(list.ordered ? 'ol' : 'ul', { ...(list.ordered ? { start: Number(list.start) || 1 } : {}) }, list.items.slice(0, shown).map((item, i) => <li key={`${key}-${i}`}>{item.task && <span className="cx-reader-task" aria-label={item.checked ? t('已完成', 'Completed') : t('未完成', 'Not completed')}>{item.checked ? '☑ ' : '☐ '}</span>}{nodes(item.tokens, `${key}-${i}`)}</li>))}{list.items.length > shown && <button className="cx-button" onClick={() => setState({ ...state, nestedCounts: { ...state.nestedCounts, [key]: shown + 200 } })}>{t(`显示更多列表项（${shown}/${list.items.length}）`, `Show more list items (${shown}/${list.items.length})`)}</button>}</Fragment>;
       }
-      case 'code': return <CodeReader key={key} text={codeTokenText(token)} language={token.lang} wrap={wrap} lineNumbers={lineNumbers} copy={copy} visibleLines={state.codeLines?.[key]} onVisibleLines={count => setState({ ...state, codeLines: { ...state.codeLines, [key]: count } })} />;
-      case 'frontmatter': return <section key={key} data-reader-frontmatter aria-label={t('YAML 元数据原文', 'YAML frontmatter source')}><p className="cx-data-note">{t('YAML 元数据 · 原始分隔符和字段均保留', 'YAML frontmatter · original delimiters and fields retained')}</p><CodeReader text={token.raw} language="yaml" wrap={wrap} lineNumbers={lineNumbers} copy={copy} visibleLines={state.codeLines?.[key]} onVisibleLines={count => setState({ ...state, codeLines: { ...state.codeLines, [key]: count } })} /></section>;
+      case 'code': return <CodeReader key={key} text={codeTokenText(token)} language={token.lang} wrap={wrap} lineNumbers={lineNumbers} copy={copy} chrome={chrome} visibleLines={state.codeLines?.[key]} onVisibleLines={count => setState({ ...state, codeLines: { ...state.codeLines, [key]: count } })} />;
+      case 'frontmatter': return <section key={key} data-reader-frontmatter aria-label={t('YAML 元数据原文', 'YAML frontmatter source')}><p className="cx-data-note">{t('YAML 元数据 · 原始分隔符和字段均保留', 'YAML frontmatter · original delimiters and fields retained')}</p><CodeReader text={token.raw} language="yaml" wrap={wrap} lineNumbers={lineNumbers} copy={copy} chrome={chrome} visibleLines={state.codeLines?.[key]} onVisibleLines={count => setState({ ...state, codeLines: { ...state.codeLines, [key]: count } })} /></section>;
       case 'link': {
         const href = safeReaderUrl(token.href);
         return href ? <a key={key} href={href} title={token.title || undefined} target="_blank" rel="noreferrer noopener">{nodes(token.tokens, key)}</a> : <span key={key}>{nodes(token.tokens, key)} <code>{`(${token.href})`}</code></span>;
@@ -114,7 +114,7 @@ export function RichReader({ text, state: suppliedState, onState, copy, wrap = t
       return <div key={block.id} data-reader-offset={block.offset}>{render(block.token, block.id)}</div>;
     })}
     {document.blocks.length > visibleBlocks && <div className="cx-reader-deferred"><span>{t('剩余已加载段落暂未渲染；复制正文包含这些段落。', 'More loaded paragraphs are deferred. Copy text includes these paragraphs.')}</span><button className="cx-button" onClick={() => setState({ ...state, visibleBlocks: visibleBlocks + 160 })}>{t('显示更多段落', 'Show more paragraphs')}</button></div>}
-    {document.remainder && <div className="cx-reader-deferred"><p>{t('后续已加载内容以普通文本显示，避免一次排版阻塞阅读。正文没有丢弃。', 'The remaining loaded content uses plain text to avoid blocking layout. No text is discarded.')}</p><CodeReader text={document.remainder} wrap={wrap} lineNumbers={lineNumbers} copy={copy} /></div>}
+    {document.remainder && <div className="cx-reader-deferred"><p>{t('后续已加载内容以普通文本显示，避免一次排版阻塞阅读。正文没有丢弃。', 'The remaining loaded content uses plain text to avoid blocking layout. No text is discarded.')}</p><CodeReader text={document.remainder} wrap={wrap} lineNumbers={lineNumbers} copy={copy} chrome={chrome} /></div>}
   </div>;
 }
 export default RichReader;

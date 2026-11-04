@@ -483,3 +483,21 @@ h1{font-size:12px;font-weight:500;white-space:nowrap;margin:0}
 .cx-panel:has(.cx-overview-pane.resizing),.cx-panel:has(.cx-overview-pane.resizing) *{cursor:row-resize!important;user-select:none}
 .cx-panel:has(.cx-inspector.resizing),.cx-panel:has(.cx-inspector.resizing) *{cursor:col-resize!important;user-select:none}
 .cx-inspector-resizer:is(:hover,:focus-visible),.cx-inspector.resizing .cx-inspector-resizer{background:color-mix(in srgb,var(--cx-green) 12%,transparent)}
+
+/* Preview 将分区和外层操作合为一行；格式修正仅在“更多”中出现。 */
+.cx-reader-block{margin-block:10px 18px}
+.cx-reader-block-head{justify-content:flex-start;gap:6px;flex-wrap:wrap;margin-bottom:8px;padding-bottom:5px}
+.cx-reader-block-head>.cx-reader-collapse{margin-right:auto}
+.cx-reader-block-head>.cx-reader-block-tools{margin:0;gap:4px;flex-wrap:nowrap}
+.cx-reader-block-tools .cx-button,.cx-reader-switch button{font-size:11px;padding:3px 7px}
+.cx-reader-more{position:relative;font-size:11px}
+.cx-reader-more summary{cursor:pointer;list-style:none;border-radius:4px;padding:5px 7px;color:var(--cx-muted)}
+.cx-reader-more summary::-webkit-details-marker{display:none}
+.cx-reader-more summary:focus-visible{outline:2px solid var(--cx-green)}
+.cx-reader-format-options{position:absolute;right:0;top:100%;z-index:5;width:220px;max-width:calc(100vw - 48px);padding:10px;display:grid;gap:10px;background:var(--cx-bg);border:1px solid var(--cx-line);border-radius:6px;box-shadow:0 4px 16px #0002}
+.cx-reader-format-options label{display:grid;gap:4px}.cx-reader-format-options select{min-width:0;width:100%;color:var(--cx-ink);background:var(--cx-bg);border:1px solid var(--cx-line);padding:5px}
+.cx-reader-format-options small{color:var(--cx-muted)}
+.cx-reader-source.cx-reader-prose{font-family:inherit;line-height:1.75;border:0;background:transparent;padding:0}
+.cx-reader-search{margin-bottom:10px}
+.cx-reader-block-tools .cx-reader-switch{gap:0}
+.cx-reader-more:not([open])>.cx-reader-format-options{display:none}

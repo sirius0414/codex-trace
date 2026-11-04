@@ -10,7 +10,7 @@ export async function runCollapseAcceptance(page, artifactDir) {
   const toggle = async part => { await page.click(`[data-reader-part="${part}"] > .cx-reader-block-head .cx-reader-collapse`); await settle(); };
   const expanded = part => page.evaluate(part => document.querySelector(`[data-reader-part="${part}"] > .cx-reader-block-head .cx-reader-collapse`)?.getAttribute('aria-expanded') === 'true', part);
   const refresh = async () => { await page.evaluate(() => window.readerFixture.refresh()); await settle(); };
-  const copy = async part => { await page.click(`[data-reader-part="${part}"] .cx-reader-block-tools button:text-is("Copy loaded body")`); await settle(); };
+  const copy = async part => { await page.click(`[data-reader-part="${part}"] .cx-reader-copy`); await settle(); };
   const copyMatches = part => page.evaluate(part => window.qaCollapseCopied === window.readerFixture.currentParts()[part].text, part);
   await mkdir(artifactDir, { recursive: true });
   await page.reload();
@@ -123,15 +123,15 @@ export async function runCollapseAcceptance(page, artifactDir) {
   check('Search includes loaded text inside a collapsed block', await page.evaluate(() => document.querySelector('.cx-reader-search-results button')?.textContent.includes('easy to find')));
   await page.click('.cx-reader-search-results button');
   await settle();
-  check('Search selection expands the block in source view and marks exact text', await expanded('input') && await page.evaluate(() => document.querySelector('[data-reader-hit]')?.textContent === 'easy to find' && [...document.querySelectorAll('[data-reader-part="input"] .cx-reader-block-tools button')].some(button => button.textContent === 'Body source' && button.getAttribute('aria-pressed') === 'true')));
+  check('Search selection expands the block in reading view and marks exact text', await expanded('input') && await page.evaluate(() => document.querySelector('[data-reader-hit]')?.textContent === 'easy to find' && [...document.querySelectorAll('[data-reader-part="input"] .cx-reader-block-tools button')].some(button => button.textContent === 'Read' && button.getAttribute('aria-pressed') === 'true')));
   await copy('input');
   check('Copy after paging and search contains the entire loaded source', await copyMatches('input'));
-  await page.click('[data-reader-part="input"] .cx-reader-block-tools button:text-is("Reading view")');
+  await page.click('[data-reader-part="input"] .cx-reader-block-tools button:text-is("Read")');
   await settle();
-  check('Body source can still switch back to the JSON reading view', await page.evaluate(() => !!document.querySelector('[data-reader-part="input"] .cx-reader-json-tree')));
+  check('JSON reading view remains available after search', await page.evaluate(() => !!document.querySelector('[data-reader-part="input"] .cx-json-text')));
   await select('context');
   await select('partial');
-  check('Search-expanded block and reader mode survive switching', await expanded('input') && await page.evaluate(() => !!document.querySelector('[data-reader-part="input"] .cx-reader-json-tree')));
+  check('Search-expanded block and reader mode survive switching', await expanded('input') && await page.evaluate(() => !!document.querySelector('[data-reader-part="input"] .cx-json-text')));
 
   await select('error');
   await toggle('error');

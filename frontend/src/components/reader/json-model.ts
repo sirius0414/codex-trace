@@ -7,6 +7,8 @@ export type JsonNode = {
   path: string;
   key: string;
   kind: JsonKind;
+  keyStart?: number;
+  keyEnd?: number;
   start: number;
   end: number;
   depth: number;
@@ -50,7 +52,9 @@ export function parseJsonDocument(text: string): JsonParseResult {
         for (;;) {
           whitespace();
           const childIndex = node.children.length;
+          const keyStart = offset;
           const childKey = c === '{' ? readString() : String(childIndex);
+          const keyEnd = offset;
           if (c === '{') { whitespace(); if (text[offset++] !== ':') throw new Error('syntax'); }
           const occurrence = occurrences.get(childKey) ?? 0;
           occurrences.set(childKey, occurrence + 1);
@@ -58,7 +62,9 @@ export function parseJsonDocument(text: string): JsonParseResult {
           const childPath = `${path}/${pointer(childKey)}`;
           // 对象以字段名及同名出现次序识别，前面新增其他字段不会丢失折叠；数组没有可靠身份，只保留索引。
           const childId = c === '{' ? `${id}/key:${pointer(childKey)}:${occurrence}` : `${id}/index:${childIndex}`;
-          node.children.push(value(childPath, childId, childKey, depth + 1, id, childIndex));
+          const child = value(childPath, childId, childKey, depth + 1, id, childIndex);
+          if (c === '{') { child.keyStart = keyStart; child.keyEnd = keyEnd; }
+          node.children.push(child);
           whitespace();
           if (text[offset] === close) break;
           if (text[offset++] !== ',') throw new Error('syntax');

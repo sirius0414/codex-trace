@@ -9,6 +9,7 @@ import { clockTime, duration, localizedKindLabels, latestUsage, metric, relation
 import { usePreferences } from '../preferences';
 import { useInspectorResize } from './useInspectorResize';
 import PreviewReader from './reader/PreviewReader';
+import { meaningfulPreviewExplanation } from './reader/preview-model';
 import { ReaderSettings } from './reader/ReaderSettings';
 import { readReadingState, saveReadingState, readPosition, savePosition, type ReadingState } from './reader/reading-state';
 
@@ -75,14 +76,18 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
     for (const [element] of prior) element.inert = true;
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        // 字段说明先消费 Escape；内部浮层关闭后，再允许收回展开阅读。
-        if (!readerSettingsOpen && event.target instanceof Element && event.target.closest('[data-field-help-open="true"]')) return;
+        // 更多菜单先消费 Escape；第二次再退出展开阅读。
+        if (event.target instanceof Element) {
+          const more = event.target.closest('details[open]') as HTMLDetailsElement | null;
+          if (more) { event.preventDefault(); event.stopImmediatePropagation(); more.open = false; more.querySelector('summary')?.focus(); return; }
+        }
+        // 内部浮层关闭后，再允许收回展开阅读。
         event.preventDefault(); event.stopImmediatePropagation();
         if (readerSettingsOpen) { setReaderSettingsOpen(false); readerSettingsButton.current?.focus({ preventScroll: true }); }
         else updateReading({ ...readingState, expanded: false });
       }
       if (event.key === 'Tab' && inspector && readingState.expanded) {
-        const focusable = [...inspector.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,a[href],[tabindex="0"]')].filter(element => element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden');
+        const focusable = [...inspector.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,summary,a[href],[tabindex="0"]')].filter(element => element.checkVisibility());
         const first = focusable[0], last = focusable.at(-1);
         if (event.shiftKey && (document.activeElement === first || !inspector.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
         else if (!event.shiftKey && (document.activeElement === last || !inspector.contains(document.activeElement))) { event.preventDefault(); first?.focus(); }
@@ -174,12 +179,11 @@ export default function Inspector(props: TraceUIProps & { overlay?: boolean; pre
         return <button key={agent.groupId} className="cx-agent-jump" title={t(`跳转到 ${name} 的记录页面`, `Go to records for ${name}`)} aria-label={t(`跳转到 ${name}`, `Go to ${name}`)} onClick={() => props.onAgentNavigate?.(agent.groupId)}><Icon name="branch" /><span>{name}</span><Icon name="right" /></button>;
       })}</nav>}
       {!event ? <p className="cx-note">{t('所选记录已不在当前快照中。可重新加载历史；不会自动选中其他记录。', 'The selected record is no longer in this snapshot. Reload history to retrieve it; no other record will be selected automatically.')}</p> : view.detailTab === 'summary' ? <><p className="cx-event-intro">{eventKindDescription(event.kind, language)}</p>{facts(event)}<div className="cx-detail-label">{t('本条目模型 token', 'Entry model tokens')}</div><UsageFacts values={event.usage ?? []} label={t('本次模型请求', 'This model request')} />{turn && <><div className="cx-detail-label">{t('本轮累计 token', 'Turn tokens')}</div><UsageFacts values={turn.usage ?? []} label={t('本轮', 'This turn')} /></>}<p className="cx-message">{event.status.explanation}</p>{lineage()}{content('summary', t('已记录概述', 'Recorded summary'), detail?.parts.summary)}</> : view.detailTab === 'preview' ? <>
-        <p className="cx-event-intro">{eventKindDescription(event.kind, language)}</p>
         {previewContent(event)}
         {event.kind === 'compaction' && <p className="cx-data-note">{t('仅展示已记录的摘要。不推测压缩前后 token，也不重建缺失上下文。', 'Only the recorded summary is shown. Token counts before and after compaction are not inferred, and missing context is not reconstructed.')}</p>}
         {createdGroup && lineage()}
       </> : view.detailTab === 'raw' ? content('raw', t('已关联原始内容', 'Associated raw content'), detail?.parts.raw) : <><h2>{t('记录来源与父子关系', 'Record source and parent-child relationships')}</h2>{facts(event)}{lineage()}{content('source', t('来源依据', 'Source evidence'), detail?.parts.source)}</>}
-      {detail?.explanation && <p className="cx-note">{detail.explanation}</p>}
+      {detail?.explanation && (view.detailTab !== 'preview' || meaningfulPreviewExplanation(detail.explanation)) && <p className="cx-note">{view.detailTab === 'preview' ? meaningfulPreviewExplanation(detail.explanation) : detail.explanation}</p>}
       <span className="cx-copy-status" role="status">{copied}</span>
     </div>
   </aside>;

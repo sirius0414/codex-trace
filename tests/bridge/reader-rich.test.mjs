@@ -68,6 +68,9 @@ test('reference link definitions remain visible and never shift following raw ra
 test('language detection accepts strong JS, Python and Bash syntax while respecting explicit hints', () => {
   const examples = [
     ['javascript', 'const result = await fetch("/api");\nconsole.log(result);'],
+    ['javascript', 'text(await tools.exec_command({cmd:"cat /synthetic/SKILL.md",max_output_tokens:6000}));'],
+    ['javascript', '// @exec: {"yield_time_ms": 1000}\ntext(\n  await tools.exec_command({cmd: "pwd"})\n);'],
+    ['javascript', 'image(await tools.render({path: "/synthetic/image.png"}));'],
     ['javascript', 'function greet(name) {\n  return `Hello ${name}`;\n}'],
     ['typescript', 'interface Result { ok: boolean; }\nconst value: Result = {ok: true};'],
     ['python', '# Process a name\ndef greet(name):\n    return name.upper()\n'],
@@ -94,6 +97,9 @@ test('plain prose, logs, ambiguous snippets and code beyond the bounded sample s
     '[INFO] Processing input\n[ERROR] const value = broken();\n[INFO] Retrying',
     '2026-11-04 10:20:00 INFO value=1;\n2026-11-04 10:20:01 ERROR foo() failed;',
     'Traceback (most recent call last):\n  File "main.py", line 7\n    raise ValueError("missing")',
+    'Use text(await tools.exec_command(...)) to read the result.',
+    '[INFO] text(await tools.exec_command({cmd:"pwd"}));',
+    'text is a helper; await tools completion before continuing.',
     'echo hello',
     'git status is the command to inspect changes.',
     'ordinary text\n'.repeat(1000) + 'const result = call();',

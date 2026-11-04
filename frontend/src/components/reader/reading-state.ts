@@ -4,7 +4,7 @@ import type { RichReaderState } from './RichReader';
 import type { ContentPart, TraceEvent } from '../../../../contracts/types';
 import type { DetailPart } from '../../ui-types';
 import { previewBodyPresence, previewCollapseDefaults, type ReaderMode, type TextHit } from './preview-model.ts';
-export type BlockReadingState = { collapsed?: boolean; defaultCollapsed?: boolean; source?: boolean; mode?: ReaderMode; language?: string; json?: JsonReaderState; rich?: RichReaderState; sourceLimit?: number; codeLines?: number; commandLines?: number; patchFiles?: Record<string, {collapsed?:boolean;lines?:number}> };
+export type BlockReadingState = { collapsed?: boolean; defaultCollapsed?: boolean; source?: boolean; mode?: ReaderMode; language?: string; json?: JsonReaderState; rich?: RichReaderState; sourceLimit?: number; sourceOffset?: number; codeLines?: number; };
 export type ReadingState = { expanded: boolean; query: string; blocks: Record<string, BlockReadingState>; hit?: TextHit };
 const states = new Map<string, ReadingState>();
 const positions = new Map<string, number>();

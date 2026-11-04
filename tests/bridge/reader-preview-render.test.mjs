@@ -45,7 +45,7 @@ test('a call with only output renders its only body expanded', () => {
   const html = render(event('toolCall', parts), parts);
   expanded(html, 'output', true);
   assert.match(block(html, 'output'), /The only saved output\./);
-  assert.match(block(html, 'output'), /Copy loaded body/);
+  assert.match(block(html, 'output'), /Copy all loaded original text/);
 });
 
 test('calls and results render opposite defaults when both input and output exist', () => {
@@ -130,7 +130,6 @@ test('collapsed output still exposes pagination and source integrity information
   expanded(html, 'output', false);
   const output = block(html, 'output');
   assert.doesNotMatch(output, /Hidden loaded output\./);
-  assert.match(output, /Loaded content collapsed/);
   assert.match(output, /More content is not loaded/);
   assert.match(output, /Source was truncated/);
   assert.match(output, /Only a source fragment is saved/);
@@ -149,5 +148,50 @@ test('saved source view and search location survive default initialization', () 
   assert.match(html, /1 matches/);
   assert.match(block(html, 'output'), /<pre[^>]*># Exact source/);
   assert.match(block(html, 'output'), /<mark data-reader-hit="true" tabindex="-1">needle<\/mark>/);
-  assert.match(block(html, 'output'), /Copy loaded body/);
+  assert.match(block(html, 'output'), /Copy all loaded original text/);
+});
+
+test('Preview has one loaded-entry search and one copy per visible body, with format controls inside More', () => {
+  for (const text of ['{"a":1,"b":{"c":2}}', '# Heading\n\n```js\nconst x=1;\n```', 'diff --git a/a b/a\n-old\n+new', 'ordinary prose']) {
+    const parts = { output: body(text) }, html = render(event('toolResult', parts), parts);
+    assert.equal((html.match(/type="search"/g) ?? []).length, 1);
+    assert.equal((html.match(/class="cx-button cx-reader-copy"/g) ?? []).length, 1);
+    assert.doesNotMatch(html, /Copy code|Copy entire JSON|Source completeness unknown|bytes loaded|Source marked complete|field directory|Expand depth/);
+    assert.match(html, /<details[\s\S]*<select[\s\S]*<\/details>/);
+    assert.doesNotMatch(html, /cx-reader-integrity/);
+  }
+});
+test('partial JSON keeps load actions and exact loaded source, known truncation is still visible', () => {
+  const parts = { output: body('{"a":', { nextCursor: 'next', readableBytes: 200, sourceTruncated: true, completeness: 'fragment', reader: {format:'json'} }) };
+  const html = render(event('toolResult', parts), parts);
+  assert.match(html, /JSON is not fully loaded/); assert.match(html, /Load more output/);
+  assert.match(html, /Source was truncated/); assert.match(html, /Only a source fragment/);
+  assert.doesNotMatch(html, /bytes loaded|field directory/);
+});
+
+test('late raw-source search keeps a bounded window and original copy entry', () => {
+  const text = 'x'.repeat(500000) + 'late-target';
+  const parts = { output: body(text) };
+  const state = { ...initialState(), hit: {part:'output',start:500000,end:500011,match:'late-target'},
+    blocks:{output:{source:true,sourceOffset:499800,sourceLimit:100000}} };
+  const html = render(event('toolResult',parts),parts,state);
+  assert.ok(html.length<10000);
+  assert.match(html, /<mark data-reader-hit="true" tabindex="-1">late-target<\/mark>/);
+  assert.match(html, /Previous source section/);
+  assert.match(html, /Copy all loaded original text/);
+});
+
+
+test('single-line tool orchestration input is JavaScript code even with a plain text transport', () => {
+  const text = 'text(await tools.exec_command({cmd:"cat /synthetic/SKILL.md",max_output_tokens:6000}));';
+  for (const reader of [undefined, {format:'text',origin:'recorded text'}]) {
+    const parts = { input: body(text, {reader}) };
+    const html = render(event('toolCall', parts, {toolName:'exec'}), parts);
+    assert.match(block(html,'input'), /cx-reader-code/);
+    assert.match(block(html,'input'), /class="hljs-keyword">await/);
+    assert.doesNotMatch(block(html,'input'), /cx-reader-prose/);
+    assert.equal((block(html,'input').match(/cx-reader-copy/g) ?? []).length, 1);
+    const source = render(event('toolCall', parts), parts, {...initialState(),blocks:{input:{source:true}}});
+    assert.match(source, /<pre[^>]*>text\(await tools\.exec_command/);
+  }
 });

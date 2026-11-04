@@ -133,10 +133,13 @@ class ReaderChunkTests(unittest.TestCase):
         tail = self.read()
         identifier = tail['events'][0]['eventId']
         event = next(e for e in self.service.tasks[self.binding['threadId']].projection['events'] if e['eventId'] == identifier)
+        text = '中文' * 35000 + 'needle-outside-preview'
+        self.service.tasks[self.binding['threadId']].projection['details'][identifier]['input'] = text
         hint = {'format': 'json', 'origin': 'synthetic source', 'adapter': 'function'}
         event['content'] = [{'part': 'input', 'reader': hint, 'sourceTruncated': True, 'completeness': 'unknown'}]
         request = {'binding': self.binding, 'generation': tail['generation'], 'eventId': identifier, 'part': 'input', 'chunkCursor': None}
         first = self.service.read_event(request)
+        self.assertIsNotNone(first['chunks'][0]['nextCursor'])
         second = self.service.read_event({**request, 'chunkCursor': first['chunks'][0]['nextCursor']})
         for response in (first, second):
             validate('EventDetail', response)
@@ -144,6 +147,6 @@ class ReaderChunkTests(unittest.TestCase):
             self.assertTrue(response['chunks'][0]['sourceTruncated'])
             self.assertEqual(response['chunks'][0]['completeness'], 'unknown')
         self.assertIsNone(second['chunks'][0]['nextCursor'])
-        self.assertEqual(first['chunks'][0]['text'] + second['chunks'][0]['text'], '中文' * 10000 + 'needle-outside-preview')
+        self.assertEqual(first['chunks'][0]['text'] + second['chunks'][0]['text'], text)
         first['chunks'][0]['reader']['origin'] = 'mutated response'
         self.assertEqual(event['content'][0]['reader']['origin'], 'synthetic source')
