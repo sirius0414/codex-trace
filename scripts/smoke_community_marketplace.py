@@ -121,7 +121,9 @@ def validate_plugin(directory: Path) -> dict:
     for name in (".mcp.json", "mcp.json"):
         launch = json.loads((directory / name).read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
         cwd = "." if name == ".mcp.json" else "${PLUGIN_ROOT}"
-        if launch.get("command") != "uv" or launch.get("args") != expected or launch.get("cwd") != cwd:
+        args = [item.replace("./", "${PLUGIN_ROOT}/", 1) if item.startswith("./") else item
+                for item in expected] if name == "mcp.json" else expected
+        if launch.get("command") != "uv" or launch.get("args") != args or launch.get("cwd") != cwd:
             raise ValueError("invalid-community-uv-command")
     return manifest
 
@@ -288,13 +290,13 @@ def smoke(repository: str, *, ref: str | None = None, codex: Path, uv: Path,
             installed = contained_path(added_plugin["installedPath"], codex_home / "plugins/cache")
             check("installed_cache_matches_git_snapshot", fingerprints(installed) == fingerprints(snapshot / PLUGIN_PATH))
             check("installed_expected_source_revision", fingerprints(installed) == fingerprints(source_plugin))
-            launch = json.loads((installed / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
+            launch = json.loads((installed / "mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
             stage = "resolved_uv_configuration"
             configured = json.loads(cli("mcp", "list", "--json").stdout)
             server = next((item for item in configured if item.get("name") == "codex-trace"), {})
             transport = server.get("transport", {})
             check("cli_resolves_uv_plugin_cwd", transport.get("command") == "uv"
-                  and transport.get("args") == launch["args"]
+                  and transport.get("args") == [item.replace("${PLUGIN_ROOT}", str(installed)) for item in launch["args"]]
                   and Path(transport.get("cwd", "")).is_absolute()
                   and Path(transport["cwd"]).resolve() == installed)
             stage = "marketplace_upgrade"

@@ -49,7 +49,10 @@ class CommunityMarketplaceBuildTests(unittest.TestCase):
         self.assertFalse(any(name.startswith(("runtime/", "runtime-deps/", "node_modules/")) for name in files))
         legacy = json.loads(files[".mcp.json"])["mcpServers"]["codex-trace"]
         modern = json.loads(files["mcp.json"])["mcpServers"]["codex-trace"]
-        self.assertEqual(modern, {"type": "stdio", **legacy, "cwd": "${PLUGIN_ROOT}"})
+        self.assertEqual(modern, {"type": "stdio", **legacy, "cwd": "${PLUGIN_ROOT}",
+            "args": [item.replace("./", "${PLUGIN_ROOT}/", 1) if item.startswith("./") else item for item in legacy["args"]]})
+        self.assertEqual(modern["args"][6], "${PLUGIN_ROOT}/requirements.lock")
+        self.assertEqual(modern["args"][-1], "${PLUGIN_ROOT}/launch.py")
         self.assertEqual(legacy["command"], "uv")
         self.assertEqual(legacy["args"], ["run", "--no-project", "--no-config", "--python", "3.14.2",
             "--with-requirements", "./requirements.lock", "--", "python", "-I", "-B",

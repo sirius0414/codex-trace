@@ -35,14 +35,19 @@ def make_repository(root: Path, env: dict, git: Path) -> Path:
                      "category": "Developer Tools"}]})
     identity = {"name": "codex-trace", "version": "0.2.0", "description": "Synthetic CLI fixture",
                 "mcpServers": "./.mcp.json"}
-    write_json(plugin / "plugin.json", identity)
+    write_json(plugin / "plugin.json", {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        **{key: value for key, value in identity.items() if key != "mcpServers"}})
     write_json(plugin / ".codex-plugin/plugin.json", identity)
     launch = {"command": "uv", "args": ["run", "--no-project", "--no-config", "--python", "3.14.2",
               "--with-requirements", "./requirements.lock", "--", "python", "-I", "-B",
               "./launch.py"], "cwd": "."}
     for name in (".mcp.json", "mcp.json"):
-        write_json(plugin / name, {"mcpServers": {"codex-trace": {
-            **launch, "cwd": "." if name == ".mcp.json" else "${PLUGIN_ROOT}"}}})
+        write_json(plugin / name, {**({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"}
+                                    if name == "mcp.json" else {}), "mcpServers": {"codex-trace": {
+            **({"type": "stdio"} if name == "mcp.json" else {}), **launch,
+            "cwd": "." if name == ".mcp.json" else "${PLUGIN_ROOT}",
+            "args": [item.replace("./", "${PLUGIN_ROOT}/", 1) if item.startswith("./") else item
+                     for item in launch["args"]] if name == "mcp.json" else launch["args"]}}})
     (plugin / "SUPPORT.md").write_text("Synthetic support information.\n", encoding="utf-8")
     (plugin / "launch.py").write_text("# Synthetic fixture; runtime is never invoked by unit tests.\n", encoding="utf-8")
     (plugin / "requirements.lock").write_text("", encoding="utf-8")

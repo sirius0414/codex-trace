@@ -109,7 +109,7 @@
     "contracts/tools.json": "3bbc71943bc819d4057bc4df6f52c5fe87138062b7f04f590755d3e53931a58f",
     "contracts/trajectory.schema.json": "5192216f8beae052fb3af65f0e71fa5a780b153a07a128887d78e546b55bb723",
     "launch.py": "a383df711b09722ec1a69dab2db135371478503a14f95a246c43f64812970a4b",
-    "mcp.json": "f34c5db6d9c243ca5429deb890abdb9d0d67fbabd2b9c13c98cac21eb5185070",
+    "mcp.json": "da749f17d1ac0cf912b786ba4080373b94bc114cf74ccd4800b2fe01b762d3d0",
     "plugin.json": "174d2f8b3eeb1cb52177d7c8faf53ccc3660ac2e21d76c7e9d64ff9de86ed84f",
     "requirements.lock": "ef54dbe8dbc400ab5fcf7ecfea17d668e8617a323f770c0bad1a0c471d0983c5",
     "runtime.json": "181135dbed0678febc244b53ac3732b97243d56def3d5c24d8786a2990ee76e1",

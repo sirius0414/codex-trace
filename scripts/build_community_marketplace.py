@@ -84,13 +84,17 @@ def community_payload(root: Path, assets: Path) -> tuple[str, dict[str, bytes]]:
     portable = json.loads(files["plugin.json"])
     if portable.get("name") != "codex-trace" or portable.get("version") != version:
         raise ValueError("Portable plugin manifest must match the release identity and version")
-    # legacy 0.153 不展开参数中的 PLUGIN_ROOT；两种格式均从插件根运行相对资源。
+    # legacy 0.153 不展开参数中的 PLUGIN_ROOT；现代配置显式定位缓存资源，
+    # 使资源定位不受宿主或运行时对子进程工作目录的处理影响。
     launch = {"command": "uv", "args": ["run", "--no-project", "--no-config", "--python", PYTHON_VERSION,
               "--with-requirements", "./requirements.lock", "--", "python", "-I", "-B",
               "./launch.py"], "cwd": ".",
               "env": {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1"}}
+    modern = {"type": "stdio", **launch, "cwd": "${PLUGIN_ROOT}",
+              "args": [argument.replace("./", "${PLUGIN_ROOT}/", 1)
+                       if argument.startswith("./") else argument for argument in launch["args"]]}
     files["mcp.json"] = json_bytes({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-                                   "mcpServers": {"codex-trace": {"type": "stdio", **launch, "cwd": "${PLUGIN_ROOT}"}}})
+                                   "mcpServers": {"codex-trace": modern}})
     files[".mcp.json"] = json_bytes({"mcpServers": {"codex-trace": launch}})
     legacy = json.loads(files[".codex-plugin/plugin.json"])
     legacy["mcpServers"] = "./.mcp.json"
