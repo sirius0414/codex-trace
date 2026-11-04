@@ -10,6 +10,7 @@ import { rebuildLoadedSnapshot } from './state/rebuild';
 import { ExportCoordinator } from './state/export';
 import { GroupReader } from './state/groups';
 import { TrackingGate } from './state/tracking';
+import { mergeThreadPage } from './state/threads';
 import TraceUI from './components/TraceUI';
 import type { DetailData } from './ui-types';
 import { PreferencesProvider, usePreferences } from './preferences';
@@ -286,7 +287,7 @@ function TrajectoryApp() {
       const result = await client.current.call<ListThreadsResult>('list_threads', { viewSessionId: open.viewSessionId,
         query: threadQuery.current, sourceScope: threadScopeRef.current, cursor });
       if (!gate.current.acceptsOpen(activation, result.viewSessionId) || serial !== threadSerial.current) return;
-      setThreads(previous => append ? [...new Map([...previous, ...result.threads].map(row => [row.threadId, row])).values()] : result.threads);
+      setThreads(previous => mergeThreadPage(previous, result.threads, append));
       threadCursor.current = result.nextCursor; setThreadsMore(!!result.nextCursor);
     } catch (failure) { if (gate.current.acceptsOpen(activation, open.viewSessionId)) showError(failure); }
   }
