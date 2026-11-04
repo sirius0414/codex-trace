@@ -3,6 +3,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from pathlib import PureWindowsPath
+import shlex
 import shutil
 import subprocess
 import sys
@@ -55,6 +57,57 @@ def make_repository(root: Path, env: dict, git: Path) -> Path:
 
 
 class CommunitySmokeInputTests(unittest.TestCase):
+    def test_github_helper_restores_profile_only_inside_credential_subprocess(self):
+        isolated = {"HOME": "/temporary/home", "CODEX_HOME": "/temporary/codex",
+                    "GH_CONFIG_DIR": "/temporary/gh", "GIT_CONFIG_GLOBAL": "/temporary/gitconfig"}
+        before = dict(isolated)
+        original = {"HOME": "/original home", "GH_CONFIG_DIR": "/original gh", "GH_TOKEN": "never-copy-this-token"}
+        with patch.dict(os.environ, original, clear=True), patch.object(smoke.shutil, "which", return_value="/tools/gh"), \
+                patch.object(smoke.Path, "home", return_value=Path("/original home")), patch.object(smoke, "run") as run:
+            smoke.configure_github_auth(isolated, Path("/temporary"), Path("/tools/git"))
+        self.assertEqual(isolated, before)
+        command = run.call_args.args[0]
+        self.assertEqual(command[1:5], ["config", "--file", "/temporary/gitconfig", "credential.https://github.com.helper"])
+        tokens = shlex.split(command[5][1:])
+        self.assertIn("HOME=/original home", tokens)
+        self.assertIn("GH_CONFIG_DIR=/original gh", tokens)
+        self.assertEqual(tokens[-3:], ["/tools/gh", "auth", "git-credential"])
+        self.assertNotIn("never-copy-this-token", command[5])
+        self.assertEqual(run.call_args.kwargs["env"], before)
+
+    def test_github_helper_uses_original_windows_config_locations(self):
+        profile = {"APPDATA": "C:/Users/Test User/AppData/Roaming", "USERPROFILE": "C:/Users/Test User",
+                   "LOCALAPPDATA": "C:/Users/Test User/AppData/Local"}
+        helper = smoke.github_credential_helper(PureWindowsPath("C:/Program Files/GitHub CLI/gh.exe"),
+                                                PureWindowsPath("C:/Users/Test User"), profile, windows=True)
+        tokens = shlex.split(helper[1:])
+        self.assertIn("GH_CONFIG_DIR=" + str(Path(profile["APPDATA"]) / "GitHub CLI"), tokens)
+        for key, value in profile.items():
+            self.assertIn(key + "=" + value, tokens)
+        self.assertEqual(tokens[-3:], ["C:/Program Files/GitHub CLI/gh.exe", "auth", "git-credential"])
+        explicit = smoke.github_credential_helper(Path("/tools/gh"), Path("/home"),
+            {"GH_CONFIG_DIR": "/explicit/gh", "XDG_CONFIG_HOME": "/xdg"}, windows=False)
+        self.assertIn("GH_CONFIG_DIR=/explicit/gh", shlex.split(explicit[1:]))
+        xdg = smoke.github_credential_helper(Path("/tools/gh"), Path("/home"), {"XDG_CONFIG_HOME": "/xdg"}, windows=False)
+        self.assertIn("GH_CONFIG_DIR=" + str(Path("/xdg/gh")), shlex.split(xdg[1:]))
+
+    @unittest.skipUnless(os.name == "posix", "This regression executes the POSIX helper directly")
+    def test_github_helper_quotes_paths_and_keeps_codex_home_isolated(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            gh = root / "gh 'quoted $(touch unsafe)"
+            gh.write_text('#!/bin/sh\nprintf "%s\\n" "$HOME" "$GH_CONFIG_DIR" "$CODEX_HOME" "$@"\n', encoding="utf-8")
+            gh.chmod(0o700)
+            original_home = root / "home 'quoted $(touch unsafe-home)"
+            original_config = root / "gh config 'quoted $(touch unsafe-config)"
+            env = {**os.environ, "HOME": str(root / "isolated"), "CODEX_HOME": str(root / "isolated/.codex")}
+            helper = smoke.github_credential_helper(gh, original_home, {"GH_CONFIG_DIR": str(original_config)}, windows=False)
+            result = subprocess.run(["/bin/sh", "-c", helper[1:] + " get"], cwd=root, env=env,
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout.splitlines(), [str(original_home), str(original_config), env["CODEX_HOME"],
+                                                         "auth", "git-credential", "get"])
+            self.assertEqual(sorted(path.name for path in root.iterdir()), [gh.name])
+
     def test_profile_and_dependency_configuration_are_isolated(self):
         contaminated = {"HOME": "/real/home", "USERPROFILE": "/real/home", "CODEX_HOME": "/real/codex",
                         "CODEX_TRACE_STATE_ROOT": "/real/state", "PYTHONPATH": "/real/python",

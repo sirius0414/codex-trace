@@ -196,13 +196,38 @@ def remove_tree(directory: Path) -> None:
     shutil.rmtree(directory, onexc=retry)
 
 
+def github_credential_helper(gh: Path, home: Path, source_environment: dict[str, str], *, windows: bool) -> str:
+    """仅凭据子进程恢复真实用户路径，使 gh 能读取现有登录和系统凭据库。
+
+    Git 对 !helper 使用 POSIX shell（Windows 也是 Git 自带的 sh），逐项引用
+    环境赋值和程序路径，不能让路径里的空格、引号或替换语法成为命令。只选
+    取配置目录，不提取、复制或写入 token；父进程的隔离环境保持不变。
+    """
+    config = source_environment.get("GH_CONFIG_DIR")
+    if not config:
+        if source_environment.get("XDG_CONFIG_HOME"):
+            config = str(Path(source_environment["XDG_CONFIG_HOME"]) / "gh")
+        elif windows and source_environment.get("APPDATA"):
+            config = str(Path(source_environment["APPDATA"]) / "GitHub CLI")
+        else:
+            config = str(home / ".config/gh")
+    profile = {"HOME": str(home), "GH_CONFIG_DIR": config, "GH_PROMPT_DISABLED": "1",
+               "GH_NO_UPDATE_NOTIFIER": "1", "GH_DEBUG": "", "DEBUG": ""}
+    if windows:
+        for key in ("USERPROFILE", "APPDATA", "LOCALAPPDATA"):
+            if source_environment.get(key):
+                profile[key] = source_environment[key]
+        profile.setdefault("USERPROFILE", str(home))
+    assignments = [name + "=" + shlex.quote(value) for name, value in profile.items()]
+    return "!" + " ".join([*assignments, shlex.quote(gh.as_posix()), "auth", "git-credential"])
+
+
 def configure_github_auth(env: dict[str, str], root: Path, git: Path) -> None:
-    """私有仓库可使用已登录 gh 的凭据接口；不复制或输出 token，不加载用户 Git 配置。"""
+    """只在私有 Git 配置注册 gh helper，不加载用户 Git 配置或更改验收环境。"""
     gh = shutil.which("gh")
     if gh:
-        config = os.environ.get("GH_CONFIG_DIR") or str(Path.home() / ".config/gh")
-        env["GH_CONFIG_DIR"] = config
-        helper = "!" + shlex.quote(Path(gh).absolute().as_posix()) + " auth git-credential"
+        helper = github_credential_helper(Path(gh).absolute(), Path.home(), dict(os.environ),
+                                          windows=sys.platform == "win32")
         run([str(git), "config", "--file", env["GIT_CONFIG_GLOBAL"],
              "credential.https://github.com.helper", helper], cwd=root, env=env)
 
