@@ -31,11 +31,12 @@ def token_snapshot(token=None) -> dict:
     try:
         user = security.GetTokenInformation(token, security.TokenUser)[0]
         owner = security.GetTokenInformation(token, security.TokenOwner)
+        user_sid = security.ConvertSidToStringSid(user)
+        owner_sid = security.ConvertSidToStringSid(owner)
         statistics = security.GetTokenInformation(token, security.TokenStatistics)
-        return {"userSid": security.ConvertSidToStringSid(user),
-                "ownerSid": security.ConvertSidToStringSid(owner),
-                "ownerEqualsUser": user == owner,
-                "ownerIsAdministrators": security.ConvertSidToStringSid(owner) == "S-1-5-32-544",
+        return {"userSid": user_sid, "ownerSid": owner_sid,
+                "ownerEqualsUser": user_sid == owner_sid,
+                "ownerIsAdministrators": owner_sid == "S-1-5-32-544",
                 "elevated": bool(security.GetTokenInformation(token, security.TokenElevation)),
                 "elevationType": security.GetTokenInformation(token, security.TokenElevationType),
                 "tokenId": str(statistics["TokenId"]),
