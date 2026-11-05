@@ -16,6 +16,6 @@
   "schemaVersion": 1,
   "startupDependencyPreparation": true,
   "startupNetworkInstallation": true,
-  "thirdPartyManifestSha256": "b1726b9410afbd2df318022fd93c44ed4479a56e9418d240bd7fe5628ce7e909",
-  "uiSha256": "d1c29a7255743fbf8304e14d4269a4156cdeaf7af98389113d00d0a5e49284a5"
+  "thirdPartyManifestSha256": "db29984b440e8e7af88fcd39dff77e9df10d21283b9b2333739cb5a66849ff25",
+  "uiSha256": "15d1c44140e368b33f811aff2daf2506bb1bfb435d1a9803d9bc6de1a8e256ad"
 }

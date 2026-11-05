@@ -200,6 +200,53 @@ class PrivateBrowserLaunchTests(unittest.TestCase):
                 platform_dev.browser_launch_path(self.directory, value)
 
 
+class WindowsProcessQueryBudgetTests(unittest.TestCase):
+    """模拟查询延迟和失败；原生 CIM/进程身份另由 Windows 集成测试覆盖。"""
+
+    def test_cold_query_can_exceed_old_budget_but_stays_bounded(self):
+        command = 'python.exe "synthetic service.py" --instance-id synthetic'
+
+        def cold_query(arguments, **options):
+            # 不实际等待；模拟超出旧 5 秒门槛、仍在新预算内的首次 CIM 启动。
+            self.assertGreaterEqual(options["timeout"], 12)
+            self.assertLessEqual(options["timeout"], 30)
+            self.assertIn("ProcessId = 12345", arguments[-1])
+            return subprocess.CompletedProcess(arguments, 0,
+                stdout=json.dumps({"started": "synthetic-created-at", "command": command}))
+
+        with mock.patch.object(platform_dev.shutil, "which", return_value="powershell.exe"), \
+                mock.patch.object(platform_dev.subprocess, "run", side_effect=cold_query) as query, \
+                mock.patch.object(platform_dev, "windows_argv", return_value=["python.exe", "synthetic service.py"]) as argv, \
+                mock.patch.object(platform_dev, "windows_process_exited") as exited:
+            result = platform_dev.windows_process_info(12345)
+        self.assertEqual(result["started"], "synthetic-created-at")
+        self.assertEqual(result["command"], command)
+        self.assertEqual(result["group"], 12345)
+        argv.assert_called_once_with(command)
+        query.assert_called_once()
+        exited.assert_not_called()
+
+    def test_query_timeout_is_not_retried_or_accepted_for_live_process(self):
+        failure = subprocess.TimeoutExpired(["powershell.exe"], 30)
+        with mock.patch.object(platform_dev.shutil, "which", return_value="powershell.exe"), \
+                mock.patch.object(platform_dev.subprocess, "run", side_effect=failure) as query, \
+                mock.patch.object(platform_dev, "windows_process_exited", return_value=False) as exited:
+            with self.assertRaises(subprocess.TimeoutExpired) as caught:
+                platform_dev.windows_process_info(12345)
+        self.assertIs(caught.exception, failure)
+        query.assert_called_once()
+        exited.assert_called_once_with(12345)
+
+    def test_query_timeout_accepts_exit_only_after_kernel_confirmation(self):
+        with mock.patch.object(platform_dev.shutil, "which", return_value="powershell.exe"), \
+                mock.patch.object(platform_dev.subprocess, "run", \
+                                  side_effect=subprocess.TimeoutExpired(["powershell.exe"], 30)) as query, \
+                mock.patch.object(platform_dev, "windows_process_exited", return_value=True) as exited:
+            self.assertIsNone(platform_dev.windows_process_info(12345))
+        query.assert_called_once()
+        exited.assert_called_once_with(12345)
+
+
 @unittest.skipUnless(sys.platform == "win32", "requires a native Windows host; never counted as simulated success")
 class WindowsNativeScriptTests(unittest.TestCase):
     def test_cim_query_failure_after_process_exit_is_confirmed_by_kernel(self):

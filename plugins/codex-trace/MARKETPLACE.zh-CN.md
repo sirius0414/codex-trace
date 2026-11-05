@@ -2,7 +2,7 @@
 
 [English](MARKETPLACE.md) | [简体中文](MARKETPLACE.zh-CN.md)
 
-本项目的主要分发渠道是 GitHub 仓库市场 `codex-trace-community`，插件为 `codex-trace`，当前版本标识为 0.2.0。仓库目前为 **PRIVATE**（私有），安装者须拥有 Git 读取权限并配置有效凭据。仓库安装由用户主动注册，不表示获得 OpenAI 公共目录认证。推送、Release 是否公开以及原生平台验证状态，以对应版本的实际记录为准。
+本项目的主要分发渠道是 GitHub 仓库市场 `codex-trace-community`，插件为 `codex-trace`，当前版本标识为 0.2.1。仓库目前为 **PRIVATE**（私有），安装者须拥有 Git 读取权限并配置有效凭据。仓库安装由用户主动注册，不表示获得 OpenAI 公共目录认证。推送、Release 是否公开以及原生平台验证状态，以对应版本的实际记录为准。
 
 ## 社区安装与更新
 
@@ -55,7 +55,7 @@ Windows 使用 `.venv\Scripts\python.exe`。默认入口重新构建前端并固
 
 ## 可选：原生离线插件包
 
-以下保留带内置 Python 的候选包构建方法，供维护者需要按平台提供离线运行包时使用。它不是社区 uv 安装的前置步骤。每个原生系统／架构分别准备、构建和验证；包名如 `codex-trace-0.2.0-darwin-arm64.zip`。
+以下保留带内置 Python 的候选包构建方法，供维护者需要按平台提供离线运行包时使用。它不是社区 uv 安装的前置步骤。每个原生系统／架构分别准备、构建和验证；包名如 `codex-trace-0.2.1-darwin-arm64.zip`。
 
 ## 准备独立运行时
 
@@ -125,7 +125,7 @@ macOS arm64 的命令示例：
 
 ```sh
 .venv/bin/python scripts/smoke_marketplace.py \
-  --archive build/marketplace/codex-trace-0.2.0-darwin-arm64.zip \
+  --archive build/marketplace/codex-trace-0.2.1-darwin-arm64.zip \
   --report build/marketplace-smoke.json
 ```
 

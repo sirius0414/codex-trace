@@ -66,7 +66,7 @@ codex plugin marketplace remove codex-trace-community
 
 ### 可选安装方式
 
-需要独立安装器的用户可按 [发布 ZIP 安装器流程](INSTALL.zh-CN.md#可选发布-zip-安装器) 使用 `codex-trace-0.2.0.zip` 和校验和；该方式要求本机 Python，注册的是 `codex-trace` 市场。维护者也可构建按系统和架构分发的[内置运行时离线候选包](MARKETPLACE.zh-CN.md#可选原生离线插件包)。不要同时启用社区、安装器和开发市场中的同名插件。下载及实际发布状态以 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 为准。
+需要独立安装器的用户可按 [发布 ZIP 安装器流程](INSTALL.zh-CN.md#可选发布-zip-安装器) 使用 `codex-trace-0.2.1.zip` 和校验和；该方式要求本机 Python，注册的是 `codex-trace` 市场。维护者也可构建按系统和架构分发的[内置运行时离线候选包](MARKETPLACE.zh-CN.md#可选原生离线插件包)。不要同时启用社区、安装器和开发市场中的同名插件。下载及实际发布状态以 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 为准。
 
 ### 从 Codex Display 切换
 
@@ -178,7 +178,7 @@ npm run release:build
 
 ```text
 build/releases/
-├── codex-trace-0.2.0.zip
+├── codex-trace-0.2.1.zip
 └── SHA256SUMS
 ```
 
@@ -198,11 +198,11 @@ npm run release:build -- --output build/reproduce
 
 ```sh
 .venv/bin/python scripts/smoke_release.py \
-  --archive build/releases/codex-trace-0.2.0.zip \
+  --archive build/releases/codex-trace-0.2.1.zip \
   --report build/release-smoke.json
 ```
 
-Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`。需要指定 CLI 时加 `--codex`；离线测试可用 `--wheelhouse DIR` 提供预先下载的依赖。验证不会读取真实会话或修改真实插件配置，但 CLI/MCP 测试不能代替桌面入口的人工验收。
+Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.1.zip --report build/release-smoke.json`。需要指定 CLI 时加 `--codex`；离线测试可用 `--wheelhouse DIR` 提供预先下载的依赖。验证不会读取真实会话或修改真实插件配置，但 CLI/MCP 测试不能代替桌面入口的人工验收。
 
 ### GitHub Release
 
