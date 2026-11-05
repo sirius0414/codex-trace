@@ -50,6 +50,12 @@ class ReleaseBuildTests(unittest.TestCase):
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(value, encoding="utf-8", newline="\n")
+        self.document_assets = {name: b"\x89PNG\r\n\x1a\n\x00\xff" + name.encode("ascii")
+                                for name in release.PUBLIC_DOCUMENT_ASSETS}
+        for name, value in self.document_assets.items():
+            path = self.source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(value)
         legal = {"LICENSES/python/mcp@1.30.0/LICENSE": b"Synthetic upstream license\r\n",
                  "THIRD_PARTY_NOTICES.txt": b"Synthetic dependency notices\n"}
         manifest = {"schemaVersion": 1,
@@ -87,9 +93,12 @@ class ReleaseBuildTests(unittest.TestCase):
                 self.assertEqual(archive.read(prefix + stem + '.zh-CN.md'), '# 合成中文文档\n'.encode('utf-8'))
             for name in ('LICENSE.zh-CN.md', 'NOTICE.zh-CN.md'):
                 self.assertEqual(archive.read(prefix + name), '# 合成中文文档\n'.encode('utf-8'))
+            for name, expected in self.document_assets.items():
+                self.assertEqual(archive.read(prefix + name), expected)
 
     def test_allowlist_excludes_environment_tasks_cache_and_arbitrary_plugin_config(self):
-        for name in (".env", "auth.json", "session.jsonl", "plugin/.mcp.json", "plugin/tasks.json", "backend/codex_trace/task.json"):
+        for name in (".env", "auth.json", "session.jsonl", "plugin/.mcp.json", "plugin/tasks.json",
+                     "backend/codex_trace/task.json", "assets/screenshots/unlisted.png"):
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("DO_NOT_SHIP_SYNTHETIC_DATA", encoding="utf-8")

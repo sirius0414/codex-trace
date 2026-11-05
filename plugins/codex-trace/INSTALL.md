@@ -8,7 +8,7 @@ Codex Trace 0.2.1 primarily distributes through this GitHub repository's communi
 
 - A local Codex desktop application and native CLI. Use CLI 0.153.0 or a later compatible version with plugin marketplace support and the read-only history APIs used by this plugin.
 - Git and uv installed and discoverable from the process that starts Codex. `git --version`, `uv --version`, and `codex --version` should succeed in a terminal; Codex launched from the GUI must also find uv.
-- GitHub access for registration and updates. The repository is currently **PRIVATE**; installers must have Git read access and valid local Git credentials. During initial startup, dependency changes, or cache misses, uv needs network access to obtain Python 3.14.2 and the dependencies in `requirements.lock`.
+- GitHub access for registration and updates. This public repository does not require GitHub credentials for installation. During initial startup, dependency changes, or cache misses, uv needs network access to obtain Python 3.14.2 and the dependencies in `requirements.lock`.
 - Windows requires native Codex and local NTFS, without WSL. Start Codex and the terminal as an ordinary user; **Run as administrator is unsupported**. Consult the version's [Release validation records](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.1) for actual platform results; macOS and simulated tests do not establish Windows success. See [WINDOWS.md](WINDOWS.md) for other limitations.
 
 The community workflow does not require manually installing Python first; uv manages it and the dependencies. Do not start the plugin with `sudo` or manually change dependencies in its cached environment.

@@ -2,7 +2,7 @@
 
 [English](MARKETPLACE.md) | [简体中文](MARKETPLACE.zh-CN.md)
 
-The primary distribution channel is the GitHub repository marketplace `codex-trace-community`, with plugin `codex-trace` and current version identifier 0.2.1. The repository is **PRIVATE**; installers need Git read access and valid credentials. Users explicitly register the repository; this does not establish OpenAI public-directory approval. Actual remote records determine whether commits or Releases are accessible and which platforms have been validated.
+The primary distribution channel is the public GitHub repository marketplace `codex-trace-community`, with plugin `codex-trace` and current version identifier 0.2.1. Installation does not require GitHub credentials. Users explicitly register the repository; this does not establish OpenAI public-directory approval. Actual remote records determine whether commits or Releases are accessible and which platforms have been validated.
 
 ## Community installation and updates
 

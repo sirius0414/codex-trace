@@ -8,6 +8,34 @@ Codex Trace 通过本地 Python MCP 服务和随包提供的 React 界面运行�
 
 [社区安装](INSTALL.zh-CN.md#社区市场安装) · [可选发行附件](https://github.com/sirius0414/codex-trace/releases) · [安装指南](INSTALL.zh-CN.md) · [Windows 说明](WINDOWS.zh-CN.md) · [贡献指南](CONTRIBUTING.zh-CN.md)
 
+## 快速安装
+
+准备 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本。本仓库公开可读，安装时无需 GitHub 凭据。
+
+```sh
+codex plugin marketplace add sirius0414/codex-trace
+codex plugin add codex-trace@codex-trace-community
+```
+
+完成[首次使用与依赖预热](INSTALL.zh-CN.md#首次使用与依赖预热)后，重启 Codex 或开启新会话，再通过 **New Tab → 执行轨迹** 打开。
+
+## 界面预览
+
+右键点击 Codex 右上角，在菜单中直接选择 **Codex Trace**。下方操作示意动画按参考截图制作，插件名称使用英文，结尾的界面预览使用示例任务数据。
+
+![操作示意：右键点击 Codex 右上角，在菜单中选择 Codex Trace](assets/demos/open-plugin.gif)
+
+以下使用示例任务数据展示当前界面的执行概览、Agent 导航、事件列表与记录详情。
+
+![Codex Trace 执行概览、事件列表与 Markdown 详情](assets/screenshots/overview.png)
+
+<details>
+<summary>查看工具输入输出详情</summary>
+
+![Codex Trace 工具输入输出详情](assets/screenshots/inspector.png)
+
+</details>
+
 ## 功能
 
 - **查看执行过程**：按轮次浏览消息、工具调用和输入输出，查看概述及原始记录。
@@ -35,14 +63,11 @@ Windows 已有原生实现和 CI 验证流程；是否通过特定版本的原�
 
 ## 安装、更新与卸载
 
-社区分发通过本 GitHub 仓库的插件市场 `codex-trace-community` 安装 `codex-trace`。仓库目前为私有，安装者须具备 Git 读取权限并配置有效凭据。需要 **Git、uv 和支持插件市场的 Codex CLI 0.153.0 或更高兼容版本**；无需 Node.js、手工克隆源码或构建前端。安装步骤与网络、缓存说明见 [INSTALL.md](INSTALL.zh-CN.md)，维护发布流程见 [MARKETPLACE.md](MARKETPLACE.zh-CN.md)。
+社区分发通过本公开 GitHub 仓库的插件市场 `codex-trace-community` 安装 `codex-trace`，无需 GitHub 凭据。需要 **Git、uv 和支持插件市场的 Codex CLI 0.153.0 或更高兼容版本**；无需 Node.js、手工克隆源码或构建前端。安装步骤与网络、缓存说明见 [INSTALL.md](INSTALL.zh-CN.md)，维护发布流程见 [MARKETPLACE.md](MARKETPLACE.zh-CN.md)。
 
 ### 社区市场首次安装
 
-```sh
-codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
-codex plugin add codex-trace@codex-trace-community
-```
+执行[快速安装](#快速安装)中的两条命令，注册仓库市场并安装插件。
 
 插件目录已包含前端、后端、契约和授权文本。首次启动时，uv 准备固定的 Python 3.14.2 及 `requirements.lock` 依赖；首次准备、依赖变化或缓存缺失时需要网络。Python、环境及下载缓存由 uv 在插件目录外管理。
 
@@ -67,12 +92,6 @@ codex plugin marketplace remove codex-trace-community
 ### 可选安装方式
 
 需要独立安装器的用户可按 [发布 ZIP 安装器流程](INSTALL.zh-CN.md#可选发布-zip-安装器) 使用 `codex-trace-0.2.1.zip` 和校验和；该方式要求本机 Python，注册的是 `codex-trace` 市场。维护者也可构建按系统和架构分发的[内置运行时离线候选包](MARKETPLACE.zh-CN.md#可选原生离线插件包)。不要同时启用社区、安装器和开发市场中的同名插件。下载及实际发布状态以 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 为准。
-
-### 从 Codex Display 切换
-
-Codex Trace 是新标识下的安装，不会自动替换旧的 Codex Display。新旧插件、状态目录和导出目录相互独立，索引、阅读状态和导出回执不会自动迁移。
-
-请停用旧插件，安装并确认新版本可用后，再按旧版本的卸载流程处理旧安装；保留原有导出文件。自定义环境变量改用 `CODEX_TRACE_*`，Python 入口改为 `codex_trace.app`。具体步骤见[迁移说明](INSTALL.zh-CN.md#从-codex-display-切换)。
 
 ## 数据与导出
 
@@ -222,7 +241,7 @@ Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive 
 
 | 文档 | 内容 |
 | --- | --- |
-| [INSTALL.md](INSTALL.zh-CN.md) | 社区市场安装与更新、可选安装器、迁移及故障排查 |
+| [INSTALL.md](INSTALL.zh-CN.md) | 社区市场安装与更新、可选安装器及故障排查 |
 | [MARKETPLACE.md](MARKETPLACE.zh-CN.md) | GitHub 社区市场发布、原生离线候选包与验证边界 |
 | [PRIVACY.md](PRIVACY.zh-CN.md)、[SUPPORT.md](SUPPORT.zh-CN.md)、[TERMS.md](TERMS.zh-CN.md) | 数据保存与清理、支持渠道和许可边界 |
 | [WINDOWS.md](WINDOWS.zh-CN.md) | 原生 Windows 实现、文件系统边界与验收方法 |
@@ -233,8 +252,6 @@ Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive 
 
 普通问题反馈与改进建议请提交到 [GitHub Issues](https://github.com/sirius0414/codex-trace/issues)，附系统版本、Python/Codex 版本、复现步骤和去除个人信息的错误摘要。安全或隐私漏洞请按 [安全策略](SECURITY.zh-CN.md) 私密报告。
 
-## 来源与许可
+## 许可证
 
-本项目由作者独立维护。接入可行性研究参考了 [Codex Trajectory](https://github.com/icesixgod/codex-trajectory) 的本地轨迹读取及原生插件入口；早期界面设计参考了 [DeepSeek Harness 的 Trajectory 组件](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory)。
-
-Codex Trace 与上述项目、DeepSeek、OpenAI 无隶属或背书关系。项目自身代码采用 [MIT 许可证](LICENSE)，参考来源见 [NOTICE](NOTICE)。另有 [LICENSE 中文参考译文](LICENSE.zh-CN.md) 与 [NOTICE 中文参考译文](NOTICE.zh-CN.md)，许可证以英文原文为准。第三方组件保留各自的许可条款，完整文本随发布包提供，见[第三方授权清单](https://github.com/sirius0414/codex-trace/blob/main/third_party/THIRD_PARTY_NOTICES.txt)和 [LICENSES](https://github.com/sirius0414/codex-trace/tree/main/third_party/LICENSES/)。
+项目自身代码采用 [MIT 许可证](LICENSE)，另有 [LICENSE 中文参考译文](LICENSE.zh-CN.md)，许可证以英文原文为准。第三方组件保留各自的许可条款，完整文本随发布包提供，见[第三方授权清单](https://github.com/sirius0414/codex-trace/blob/main/third_party/THIRD_PARTY_NOTICES.txt)和 [LICENSES](https://github.com/sirius0414/codex-trace/tree/main/third_party/LICENSES/)。

@@ -151,6 +151,12 @@ class MarketplaceBuildTests(unittest.TestCase):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8", newline="\n")
+        self.document_assets = {name: b"\x89PNG\r\n\x1a\n\x00\xff" + name.encode("ascii")
+                                for name in build.PUBLIC_DOCUMENT_ASSETS}
+        for name, value in self.document_assets.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(value)
         self.installer = {"install.py": b"PRIVATE_INSTALLER_ONLY",
                           "plugin/.codex-plugin/plugin.json": json.dumps(manifest).encode(),
                           "plugin/ui/trajectory-v1.html": b"<html>synthetic UI</html>",
@@ -207,6 +213,8 @@ class MarketplaceBuildTests(unittest.TestCase):
             for name in build.PUBLIC_DOCUMENTS:
                 expected = '# 合成中文文档\n' if '.zh-CN.' in name else '# Synthetic English documentation\n'
                 self.assertEqual(archive.read(name), expected.encode('utf-8'), name)
+            for name, expected in self.document_assets.items():
+                self.assertEqual(archive.read(name), expected, name)
             modern = json.loads(archive.read("mcp.json"))["mcpServers"]["codex-trace"]
             legacy = json.loads(archive.read(".mcp.json"))["mcpServers"]["codex-trace"]
             self.assertEqual(modern, {"type": "stdio", **legacy})

@@ -21,7 +21,8 @@ import tempfile
 import unicodedata
 import zipfile
 
-from build_release import PUBLIC_DOCUMENTS, ROOT, audit_payload, checked_bytes, collect_payload, digest, json_bytes
+from build_release import (PUBLIC_DOCUMENTS, PUBLIC_DOCUMENT_ASSETS, ROOT, audit_payload,
+                           checked_bytes, collect_payload, digest, json_bytes)
 from package_plugin import locked_versions
 from platform_runtime import npm_command
 from prepare_marketplace_runtime import (PROVENANCE, clean_environment, probe_runtime,
@@ -39,7 +40,7 @@ def project_payload(root: Path, assets: Path, runtime: dict) -> tuple[str, dict[
     """复用发布白名单和授权检查；只取插件内容，外部安装器不进入提交包。"""
     version, installer = collect_payload(root, assets)
     files = {name.removeprefix("plugin/"): data for name, data in installer.items() if name.startswith("plugin/")}
-    for name in PUBLIC_DOCUMENTS:
+    for name in (*PUBLIC_DOCUMENTS, *PUBLIC_DOCUMENT_ASSETS):
         files[name] = checked_bytes(root / name, root)
     files["plugin.json"] = checked_bytes(root / "plugin/plugin.json", root)
     files["launch.py"] = checked_bytes(root / "plugin/launch.py", root)

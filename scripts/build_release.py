@@ -31,6 +31,9 @@ PUBLIC_DOCUMENTS = tuple(f"{name}{locale}.md" for name in (
     "README", "INSTALL", "WINDOWS", "MARKETPLACE", "CONTRIBUTING", "SECURITY",
     "PRIVACY", "SUPPORT", "TERMS", "contracts/README", "third_party/README")
     for locale in ("", ".zh-CN")) + ("LICENSE.zh-CN.md", "NOTICE.zh-CN.md")
+# README 的相对图片链接在仓库、安装包和插件包中保持一致。
+PUBLIC_DOCUMENT_ASSETS = ("assets/screenshots/overview.png", "assets/screenshots/inspector.png",
+                          "assets/demos/open-plugin.gif")
 VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?")
 
 
@@ -104,7 +107,8 @@ def collect_payload(root: Path, assets: Path) -> tuple[str, dict[str, bytes]]:
 
     # Explicit top-level allowlist: reviewed user documentation only; no source fixtures,
     # generated configs, probe output, .git, .env or arbitrary JSON data.
-    for name in ("install.py", "install.sh", "install.ps1", *PUBLIC_DOCUMENTS, "LICENSE", "NOTICE", "requirements.lock", "package-lock.json"):
+    for name in ("install.py", "install.sh", "install.ps1", *PUBLIC_DOCUMENTS, *PUBLIC_DOCUMENT_ASSETS,
+                 "LICENSE", "NOTICE", "requirements.lock", "package-lock.json"):
         add(name)
     for name in SCRIPTS:
         add("scripts/" + name)

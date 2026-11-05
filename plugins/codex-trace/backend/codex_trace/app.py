@@ -149,8 +149,8 @@ def entrypoint_icons():
     工具图标需要跟随 MCP 元数据传给宿主，因此编码成 data URI，不依赖宿主
     解析插件目录、访问本机文件路径或发起网络请求。普通读取工具不附带入口图标。
     """
-    # 安装包将 plugin/ 展平到包根；开发源码仍把资源放在 plugin/assets/。
-    assets = ROOT / "assets" if (ROOT / "assets").is_dir() else ROOT / "plugin/assets"
+    # 安装包将 plugin/ 展平到包根；源码的顶层 assets/ 可能仅含文档截图。
+    assets = ROOT / "assets" if (ROOT / "assets/icon.svg").is_file() else ROOT / "plugin/assets"
     data = b64encode((assets / "icon.svg").read_bytes()).decode("ascii")
     return [Icon(src="data:image/svg+xml;base64," + data, mimeType="image/svg+xml", sizes=["any"])]
 

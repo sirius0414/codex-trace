@@ -2,7 +2,7 @@
 
 [English](WINDOWS.md) | [简体中文](WINDOWS.zh-CN.md)
 
-目标环境为 Windows 10/11、本地 NTFS 卷及原生 Codex，无需 WSL。请以普通用户启动 Codex 和终端，不支持“以管理员身份运行”：提权令牌可能把新建文件的所有者设为 Administrators 组，插件会拒绝这类状态文件，而不会接管所有权或放宽保护。社区市场需要 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本，由 uv 管理 Python 3.14.2；首次准备、依赖变化或缓存缺失时需要网络。可选 ZIP 安装器和下方源码开发流程则要求本机 Python 3.14+（含 `compression.zstd`）。普通用户按 [社区市场安装指南](INSTALL.zh-CN.md#社区市场安装) 操作，并遵循其中的私有仓库访问权限与运行时预热要求，无需 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。
+目标环境为 Windows 10/11、本地 NTFS 卷及原生 Codex，无需 WSL。请以普通用户启动 Codex 和终端，不支持“以管理员身份运行”：提权令牌可能把新建文件的所有者设为 Administrators 组，插件会拒绝这类状态文件，而不会接管所有权或放宽保护。社区市场需要 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本，由 uv 管理 Python 3.14.2；首次准备、依赖变化或缓存缺失时需要网络。可选 ZIP 安装器和下方源码开发流程则要求本机 Python 3.14+（含 `compression.zstd`）。普通用户按 [社区市场安装指南](INSTALL.zh-CN.md#社区市场安装) 操作，并遵循其中的网络访问与运行时预热要求，无需 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。
 
 社区渠道的原生测试结果见对应版本的 [GitHub Release 验证记录](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.1)。以下实现说明、macOS 测试与模拟测试不能作为 Windows 通过的证据。
 

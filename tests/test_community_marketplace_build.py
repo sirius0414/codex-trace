@@ -23,6 +23,7 @@ class CommunityMarketplaceBuildTests(unittest.TestCase):
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         self.base, self.source, self.assets = fixture.base, fixture.source, fixture.assets
+        self.document_assets = fixture.document_assets
         self.output = self.source / "plugins/codex-trace"
         additions = {"plugin/plugin.json": '{"name":"codex-trace","version":"1.2.3"}',
                      "plugin/launch.py": '# synthetic relocatable launcher\n',
@@ -48,6 +49,8 @@ class CommunityMarketplaceBuildTests(unittest.TestCase):
         for name in community.PUBLIC_DOCUMENTS:
             expected = '# 合成中文文档\n' if '.zh-CN.' in name else '# Synthetic English documentation\n'
             self.assertEqual(files[name], expected.encode('utf-8'), name)
+        for name, expected in self.document_assets.items():
+            self.assertEqual(files[name], expected, name)
         self.assertNotIn("install.py", files)
         self.assertFalse(any(name.startswith(("runtime/", "runtime-deps/", "node_modules/")) for name in files))
         legacy = json.loads(files[".mcp.json"])["mcpServers"]["codex-trace"]

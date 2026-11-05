@@ -17,8 +17,8 @@ import subprocess
 import sys
 import tempfile
 
-from build_release import (PUBLIC_DOCUMENTS, ROOT, audit_payload, checked_bytes,
-                           collect_payload, digest, json_bytes)
+from build_release import (PUBLIC_DOCUMENTS, PUBLIC_DOCUMENT_ASSETS, ROOT, audit_payload,
+                           checked_bytes, collect_payload, digest, json_bytes)
 from platform_runtime import npm_command
 
 PYTHON_VERSION = "3.14.2"
@@ -78,7 +78,7 @@ def community_payload(root: Path, assets: Path) -> tuple[str, dict[str, bytes]]:
         reject_source_links(directory)
     version, installer = collect_payload(root, assets)
     files = {name.removeprefix("plugin/"): data for name, data in installer.items() if name.startswith("plugin/")}
-    for name in PUBLIC_DOCUMENTS:
+    for name in (*PUBLIC_DOCUMENTS, *PUBLIC_DOCUMENT_ASSETS):
         files[name] = checked_bytes(root / name, root)
     files["plugin.json"] = checked_bytes(root / "plugin/plugin.json", root)
     files["launch.py"] = checked_bytes(root / "plugin/launch.py", root)

@@ -8,6 +8,34 @@ Codex Trace runs through a local Python MCP service and a bundled React interfac
 
 [Community installation](INSTALL.md#community-marketplace-installation) · [Optional release assets](https://github.com/sirius0414/codex-trace/releases) · [Installation guide](INSTALL.md) · [Windows guide](WINDOWS.md) · [Contributing](CONTRIBUTING.md)
 
+## Quick start
+
+Install Git, uv, and Codex CLI 0.153.0 or a later compatible version. This public repository can be installed without GitHub credentials.
+
+```sh
+codex plugin marketplace add sirius0414/codex-trace
+codex plugin add codex-trace@codex-trace-community
+```
+
+Complete [first-use runtime preparation](INSTALL.md#first-use-and-runtime-preparation), restart Codex or start a new session, then open **New Tab → 执行轨迹 (Execution Trace)**.
+
+## Preview
+
+Right-click in the upper-right corner of Codex, then select **Codex Trace** from the menu. The animation follows a reference screenshot, uses the English plugin name, and shows sample task data in the final preview.
+
+![Illustrated walkthrough: right-click in the upper-right corner of Codex and select Codex Trace](assets/demos/open-plugin.gif)
+
+The current interface with sample task data: execution overview, agent navigation, event list, and record details.
+
+![Codex Trace execution overview, event list, and Markdown details](assets/screenshots/overview.png)
+
+<details>
+<summary>Inspect tool inputs and outputs</summary>
+
+![Codex Trace inspector showing tool inputs and outputs](assets/screenshots/inspector.png)
+
+</details>
+
 ## Features
 
 - **Inspect execution:** browse messages, tool calls, inputs, and outputs by turn, with summaries and raw records.
@@ -35,14 +63,11 @@ Windows has a native implementation and a CI validation workflow. Whether a part
 
 ## Install, update, and uninstall
 
-Community distribution installs `codex-trace` from this GitHub repository's `codex-trace-community` marketplace. The repository is currently **PRIVATE**; installers need Git read access and valid credentials. Install **Git, uv, and Codex CLI 0.153.0 or a later compatible version**. Node.js, a manual source checkout, and a frontend build are unnecessary. See [INSTALL.md](INSTALL.md) for installation, network, and cache details, and [MARKETPLACE.md](MARKETPLACE.md) for the maintainer workflow.
+Community distribution installs `codex-trace` from this public GitHub repository's `codex-trace-community` marketplace without GitHub credentials. Install **Git, uv, and Codex CLI 0.153.0 or a later compatible version**. Node.js, a manual source checkout, and a frontend build are unnecessary. See [INSTALL.md](INSTALL.md) for installation, network, and cache details, and [MARKETPLACE.md](MARKETPLACE.md) for the maintainer workflow.
 
 ### First community installation
 
-```sh
-codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
-codex plugin add codex-trace@codex-trace-community
-```
+Run the two commands in [Quick start](#quick-start) to register the repository marketplace and install the plugin.
 
 The plugin directory already contains the frontend, backend, contracts, and license texts. uv prepares pinned Python 3.14.2 and the `requirements.lock` dependencies. Initial preparation, dependency changes, or missing caches require network access. uv manages Python, environments, and download caches outside the plugin directory.
 
@@ -67,12 +92,6 @@ Removal does not automatically delete derived indexes, reading preferences, expo
 ### Optional installation formats
 
 For a separate installer, follow the [release ZIP installer workflow](INSTALL.md#optional-release-zip-installer) using `codex-trace-0.2.1.zip` and its checksums. It requires local Python and registers the `codex-trace` marketplace. Maintainers can also build [platform-specific offline candidates with bundled runtimes](MARKETPLACE.md#optional-native-offline-plugin-package). Do not enable the community, installer, and development copies of the same plugin simultaneously. Download availability and actual publication status are shown in [GitHub Releases](https://github.com/sirius0414/codex-trace/releases).
-
-### Migrating from Codex Display
-
-Codex Trace is an installation under a new identity; it does not automatically replace Codex Display. The old and new plugins, state directories, and export directories are independent. Indexes, reading state, and export receipts are not migrated automatically.
-
-Disable the old plugin, install and verify the new version, then follow the old version's uninstall instructions to remove the old installation. Keep existing export files. Change custom environment variables to `CODEX_TRACE_*` and the Python entry point to `codex_trace.app`. See the [migration instructions](INSTALL.md#migrating-from-codex-display).
 
 ## Data and exports
 
@@ -222,7 +241,7 @@ Conventional filenames contain English documentation; `*.zh-CN.md` files contain
 
 | Document | Contents |
 | --- | --- |
-| [INSTALL.md](INSTALL.md) | Community installation and updates, optional installer, migration, and troubleshooting |
+| [INSTALL.md](INSTALL.md) | Community installation and updates, optional installer, and troubleshooting |
 | [MARKETPLACE.md](MARKETPLACE.md) | Community repository release, optional native offline packages, and validation boundaries |
 | [PRIVACY.md](PRIVACY.md), [TERMS.md](TERMS.md), [SUPPORT.md](SUPPORT.md) | Data access and storage, license boundaries, and support channels |
 | [WINDOWS.md](WINDOWS.md) | Native Windows implementation, filesystem boundaries, and acceptance procedures |
@@ -233,8 +252,6 @@ Conventional filenames contain English documentation; `*.zh-CN.md` files contain
 
 Report ordinary issues and improvement suggestions through [GitHub Issues](https://github.com/sirius0414/codex-trace/issues), including OS and Python/Codex versions, reproduction steps, and an error summary with personal information removed. Report security or privacy vulnerabilities privately according to the [security policy](SECURITY.md).
 
-## References and licensing
+## License
 
-This project is independently maintained by its author. Feasibility research referenced [Codex Trajectory](https://github.com/icesixgod/codex-trajectory) for local trajectory access and native plugin entry points. Early interface design referenced [DeepSeek Harness's Trajectory component](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory).
-
-Codex Trace is not affiliated with or endorsed by those projects, DeepSeek, or OpenAI. The project's own code uses the [MIT License](LICENSE); see [NOTICE](NOTICE) for reference acknowledgments. A [Chinese license translation](LICENSE.zh-CN.md) and [Chinese NOTICE translation](NOTICE.zh-CN.md) are available for reference; the English license text governs. Third-party components retain their respective license terms, and their full texts are included in release packages. See the [third-party notices](https://github.com/sirius0414/codex-trace/blob/main/third_party/THIRD_PARTY_NOTICES.txt) and [LICENSES](https://github.com/sirius0414/codex-trace/tree/main/third_party/LICENSES/).
+The project's own code uses the [MIT License](LICENSE). A [Chinese license translation](LICENSE.zh-CN.md) is available for reference; the English license text governs. Third-party components retain their respective license terms, and their full texts are included in release packages. See the [third-party notices](https://github.com/sirius0414/codex-trace/blob/main/third_party/THIRD_PARTY_NOTICES.txt) and [LICENSES](https://github.com/sirius0414/codex-trace/tree/main/third_party/LICENSES/).
