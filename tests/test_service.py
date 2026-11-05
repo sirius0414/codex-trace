@@ -126,12 +126,35 @@ class ServiceTests(unittest.TestCase):
 
     def test_detail_chunks_preserve_utf8_and_binding(self):
         tail = self.read()
-        request = {"binding": self.binding, "generation": tail["generation"], "eventId": tail["events"][0]["eventId"], "part": "input", "chunkCursor": None}
+        identifier = tail["events"][0]["eventId"]
+        text = "中文🙂\r\n" * 14000 + "needle-outside-preview"
+        self.service.tasks[A].projection["details"][identifier]["input"] = text
+        request = {"binding": self.binding, "generation": tail["generation"], "eventId": identifier, "part": "input", "chunkCursor": None}
         first = self.service.read_event(request)
         validate("EventDetail", first)
+        self.assertEqual(len(first["chunks"][0]["text"]), 65536)
+        self.assertIsNotNone(first["chunks"][0]["nextCursor"])
         second = self.service.read_event({**request, "chunkCursor": first["chunks"][0]["nextCursor"]})
+        validate("EventDetail", second)
         self.assertEqual(second["chunks"][0]["byteOffset"], len(first["chunks"][0]["text"].encode()))
-        self.assertEqual(first["chunks"][0]["text"] + second["chunks"][0]["text"], "中文" * 10000 + "needle-outside-preview")
+        self.assertEqual(first["chunks"][0]["text"] + second["chunks"][0]["text"], text)
+        self.assertIsNone(second["chunks"][0]["nextCursor"])
+
+    def test_regular_outputs_up_to_65536_characters_load_in_one_request(self):
+        tail = self.read()
+        identifier = tail["events"][0]["eventId"]
+        request = {"binding": self.binding, "generation": tail["generation"], "eventId": identifier, "part": "output", "chunkCursor": None}
+        for size in (16385, 65536):
+            with self.subTest(characters=size):
+                text = "中" * size
+                self.service.tasks[A].projection["details"][identifier]["output"] = text
+                result = self.service.read_event(request)
+                validate("EventDetail", result)
+                chunk = result["chunks"][0]
+                self.assertEqual(chunk["text"], text)
+                self.assertEqual(chunk["readableBytes"], len(text.encode()))
+                self.assertIsNone(chunk["nextCursor"])
+
     def test_view_preference_compare_and_swap(self):
         self.read()
         initial = self.service.read_view_state({"binding": self.binding})

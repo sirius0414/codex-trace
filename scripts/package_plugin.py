@@ -48,7 +48,7 @@ except ImportError:
 names=json.loads(sys.argv[1])
 print(json.dumps({'python':sys.version.split()[0],'versionInfo':list(sys.version_info[:3]),'zstdAvailable':available,'packages':{name:importlib.metadata.version(name) for name in names}}))
 """
-    run = subprocess.run([str(python), "-c", command, json.dumps(list(versions))], capture_output=True, text=True, check=True, timeout=30, encoding="utf-8")
+    run = subprocess.run([str(python), "-X", "utf8", "-c", command, json.dumps(list(versions))], capture_output=True, text=True, check=True, timeout=30, encoding="utf-8")
     metadata = json.loads(run.stdout)
     if tuple(metadata.get("versionInfo", [])) < (3, 14) or metadata.get("zstdAvailable") is not True:
         raise ValueError("Python >=3.14 with compression.zstd is required for compressed Codex sources")
@@ -98,7 +98,14 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".codex-trace-package-", dir=output.parent) as temporary:
         staged = Path(temporary) / "plugin"
-        shutil.copytree(ROOT / "plugin", staged, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
+        def ignore_local_plugin_files(directory, names):
+            ignored = set(shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store")(directory, names))
+            # 本机开发包只生成 .mcp.json。根级新版清单会让宿主改找 mcp.json，
+            # 因此只排除便携包入口；必须保留 .codex-plugin/plugin.json。
+            if Path(directory) == ROOT / "plugin":
+                ignored.update({"plugin.json", "launch.py"})
+            return ignored
+        shutil.copytree(ROOT / "plugin", staged, ignore=ignore_local_plugin_files)
         shutil.copytree(backend, staged / "backend" / "codex_trace", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         shutil.copytree(ROOT / "contracts", staged / "contracts", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         (staged / "ui").mkdir()

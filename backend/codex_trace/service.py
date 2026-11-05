@@ -20,6 +20,8 @@ from .domain.projection import PARSER_VERSION
 
 SCHEMA_VERSION = "1.0.0"
 PAGE_SIZE = 200
+# 详情按 Unicode 字符分页，常规正文尽量一次读齐；字节偏移仍按 UTF-8 计算。
+DETAIL_CHUNK_CHARACTERS = 65_536
 # 历史读取受单次页数、缓存条目总数和时间预算约束；触限后保留原游标供继续读取。
 HISTORY_PAGE_BUDGET = 64
 HISTORY_ITEM_LIMIT = 100_000
@@ -597,7 +599,7 @@ class TrajectoryService(Observation):
                 if cursor["event"] != event["eventId"] or cursor["part"] != part or cursor["revision"] != event["eventRevision"]:
                     raise ServiceError("invalidCursor", "详情内容已变化，请重新读取。")
                 offset = cursor["offset"]
-            piece = text[offset:offset + 16384]
+            piece = text[offset:offset + DETAIL_CHUNK_CHARACTERS]
             next_cursor = self._cursor("detail", binding, task, event=event["eventId"], part=part,
                                        revision=event["eventRevision"], offset=offset + len(piece)) if offset + len(piece) < len(text) else None
             ref = next((c for c in event["content"] if c["part"] == part), {})
@@ -605,7 +607,8 @@ class TrajectoryService(Observation):
                     "eventId": event["eventId"], "eventRevision": event["eventRevision"], "availability": "available",
                     "summary": event["preview"], "chunks": [{"part": part, "text": piece, "byteOffset": len(text[:offset].encode()),
                     "readableBytes": len(text.encode()), "nextCursor": next_cursor, "sourceTruncated": ref.get("sourceTruncated", False),
-                    "completeness": ref.get("completeness", "unknown")}], "sources": deepcopy(event["sources"]),
+                    "completeness": ref.get("completeness", "unknown"),
+                    **({"reader": deepcopy(ref["reader"])} if "reader" in ref else {})}], "sources": deepcopy(event["sources"]),
                     "rawAssociation": "recorded" if any(s["kind"] == "raw" for s in event["sources"]) else "notRecorded",
                     "explanation": "原始关联未记录" if part == "raw" and not text else "当前块为已读取内容。"}
 

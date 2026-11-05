@@ -61,6 +61,23 @@ class PlatformScriptSelectionTests(unittest.TestCase):
         with mock.patch.object(runtime, "IS_WINDOWS", True), self.assertRaisesRegex(ValueError, "Batch launchers"):
             runtime.executable(shim)
 
+    def test_official_nested_optional_codex_package_in_global_and_project_installs(self):
+        for layout in ('global', 'project'):
+            for machine, architecture, target in (('AMD64', 'x64', 'x86_64'), ('ARM64', 'arm64', 'aarch64')):
+                with self.subTest(layout=layout, machine=machine):
+                    base = self.root / f'{layout}-{architecture}'
+                    modules = base / 'node_modules'
+                    shim = base / 'codex.cmd' if layout == 'global' else modules / '.bin/codex.cmd'
+                    shim.parent.mkdir(parents=True)
+                    shim.write_text('DO NOT EXECUTE THIS BATCH FILE', encoding='utf-8')
+                    native = modules / f'@openai/codex/node_modules/@openai/codex-win32-{architecture}/vendor/{target}-pc-windows-msvc/bin/codex.exe'
+                    native.parent.mkdir(parents=True)
+                    native.write_bytes(b'synthetic executable')
+                    with mock.patch.object(runtime, 'IS_WINDOWS', True), \
+                            mock.patch.object(runtime.platform, 'machine', return_value=machine):
+                        self.assertEqual(runtime.executable(shim), native)
+                    self.assertEqual(shim.read_text(encoding='utf-8'), 'DO NOT EXECUTE THIS BATCH FILE')
+
     def test_npm_batch_uses_node_cli_argv_with_literal_special_characters(self):
         shim = self.root / "npm.cmd"
         shim.touch()

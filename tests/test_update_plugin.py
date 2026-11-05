@@ -25,6 +25,74 @@ finally:
     sys.path.pop(0)
 
 
+class MarketplaceSourceTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="codex-market-source-")
+        self.addCleanup(temporary.cleanup)
+        self.home = Path(temporary.name).resolve()
+        self.market = self.home / "market"
+        self.market.mkdir()
+        self.entry = {"name": update.MARKET, "root": str(self.market)}
+        environment = mock.patch.dict(os.environ, {"CODEX_HOME": str(self.home)})
+        environment.start()
+        self.addCleanup(environment.stop)
+
+    def config(self, source=None, *, source_type="local", name=None):
+        (self.home / "config.toml").write_text(
+            f"[marketplaces.{json.dumps(name or update.MARKET)}]\n"
+            f"source_type = {json.dumps(source_type)}\n"
+            f"source = {json.dumps(str(source or self.market))}\n", encoding="utf-8")
+
+    def test_missing_metadata_requires_matching_local_directory(self):
+        self.config()
+        self.assertTrue(update.is_local_marketplace(self.entry))
+
+    def test_explicit_metadata_never_falls_back_to_config(self):
+        self.config()
+        for metadata in (None, {}, [], {"sourceType": "git"}, {"sourceType": "unknown"}):
+            with self.subTest(metadata=metadata):
+                self.assertFalse(update.is_local_marketplace({**self.entry, "marketplaceSource": metadata}))
+        self.assertTrue(update.is_local_marketplace({**self.entry, "marketplaceSource": {"sourceType": "local"}}))
+
+    def test_missing_or_invalid_config_is_rejected(self):
+        self.assertFalse(update.is_local_marketplace(self.entry))
+        for config in ("[invalid", "marketplaces = []", f"[marketplaces]\n{json.dumps(update.MARKET)} = 1",
+                       f"[marketplaces.{json.dumps(update.MARKET)}]\nsource_type = 'local'\nsource = 1"):
+            with self.subTest(config=config):
+                (self.home / "config.toml").write_text(config, encoding="utf-8")
+                self.assertFalse(update.is_local_marketplace(self.entry))
+
+    def test_config_must_name_exact_market_and_local_source(self):
+        self.config(name="some-other-market")
+        self.assertFalse(update.is_local_marketplace(self.entry))
+        self.config(source_type="git")
+        self.assertFalse(update.is_local_marketplace(self.entry))
+        self.config()
+        self.assertFalse(update.is_local_marketplace({**self.entry, "name": "some-other-market"}))
+
+    def test_relative_missing_different_and_file_sources_are_rejected(self):
+        other = self.home / "other"
+        other.mkdir()
+        file = self.home / "file"
+        file.write_text("synthetic", encoding="utf-8")
+        for source in ("market", self.home / "missing", other, file):
+            with self.subTest(source=source):
+                self.config(source)
+                self.assertFalse(update.is_local_marketplace(self.entry))
+        self.config()
+        self.assertFalse(update.is_local_marketplace({**self.entry, "root": "market"}))
+
+    def test_unreadable_identity_is_rejected(self):
+        self.config()
+        with mock.patch.object(Path, "samefile", side_effect=PermissionError("synthetic denial")):
+            self.assertFalse(update.is_local_marketplace(self.entry))
+
+    @unittest.skipUnless(os.name == "nt", "Requires native Windows path aliases")
+    def test_windows_verbatim_config_source_matches_cli_normal_path(self):
+        self.config("\\\\?\\" + str(self.market))
+        self.assertTrue(update.is_local_marketplace(self.entry))
+
+
 class UpdatePluginTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="codex-trace-update-test-")

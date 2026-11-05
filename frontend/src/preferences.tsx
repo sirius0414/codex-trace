@@ -8,6 +8,9 @@ type PreferencesContextValue = UIPreferences & {
   setUiStyle: (uiStyle: UIStyle) => void;
   setShowSpanSummary: (showSpanSummary: boolean) => void;
   setShowTimelineCursors: (showTimelineCursors: boolean) => void;
+  setReaderFontSize: (readerFontSize: number) => void;
+  setReaderWrap: (readerWrap: boolean) => void;
+  setReaderLineNumbers: (readerLineNumbers: boolean) => void;
   t: (zh: string, en: string) => string;
 };
 const PreferencesContext = createContext<PreferencesContextValue | null>(null);
@@ -26,6 +29,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     setUiStyle: uiStyle => setPreferences(current => ({ ...current, uiStyle })),
     setShowSpanSummary: showSpanSummary => setPreferences(current => ({ ...current, showSpanSummary })),
     setShowTimelineCursors: showTimelineCursors => setPreferences(current => ({ ...current, showTimelineCursors })),
+    setReaderFontSize: readerFontSize => setPreferences(current => ({ ...current, readerFontSize })),
+    setReaderWrap: readerWrap => setPreferences(current => ({ ...current, readerWrap })),
+    setReaderLineNumbers: readerLineNumbers => setPreferences(current => ({ ...current, readerLineNumbers })),
     t: (zh, en) => preferences.language === 'zh' ? zh : en,
   }), [preferences]);
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;

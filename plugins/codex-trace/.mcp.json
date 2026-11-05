@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "codex-trace": {
+      "args": [
+        "run",
+        "--no-project",
+        "--no-config",
+        "--python",
+        "3.14.2",
+        "--with-requirements",
+        "./requirements.lock",
+        "--",
+        "python",
+        "-I",
+        "-B",
+        "./launch.py"
+      ],
+      "command": "uv",
+      "cwd": ".",
+      "env": {
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUTF8": "1"
+      },
+      "env_vars": [
+        "CODEX_HOME",
+        "CODEX_TRACE_CODEX_EXECUTABLE",
+        "CODEX_TRACE_STATE_ROOT",
+        "CODEX_TRACE_EXPORT_ROOT"
+      ]
+    }
+  }
+}

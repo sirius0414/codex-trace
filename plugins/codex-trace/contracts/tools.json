@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "1.0.0",
+  "schema": "trajectory.schema.json",
+  "transport": "Host-validated app-only MCP result metadata; never content or structuredContent",
+  "tools": {
+    "open_codex_trace": {
+      "input": "OpenRequest",
+      "output": "OpenResult"
+    },
+    "list_threads": {
+      "input": "ListThreadsRequest",
+      "output": "ListThreadsResult"
+    },
+    "read_trajectory": {
+      "input": "ReadTrajectoryRequest",
+      "output": "ThreadSnapshot"
+    },
+    "read_changes": {
+      "input": "ReadChangesRequest",
+      "output": "ChangeBatch"
+    },
+    "read_event": {
+      "input": "ReadEventRequest",
+      "output": "EventDetail"
+    },
+    "query_loaded_events": {
+      "input": "QueryLoadedEventsRequest",
+      "output": "QueryResult"
+    },
+    "save_view_state": {
+      "input": "SaveViewStateRequest",
+      "output": "SaveViewStateResult"
+    },
+    "download_records": {
+      "input": "DownloadRequest",
+      "output": "DownloadResult",
+      "delivery": {
+        "mode": "localZip",
+        "directory": "~/Downloads/Codex Trace/",
+        "clientSelectsDestination": false,
+        "snapshotActions": [
+          "create",
+          "status",
+          "read",
+          "release"
+        ],
+        "saveActions": [
+          "commit",
+          "result"
+        ],
+        "idempotentActions": [
+          "create",
+          "commit"
+        ],
+        "idempotencyKey": "requestId",
+        "saveOutcome": "LocalSaveOutcome",
+        "successCondition": "save.status == verified",
+        "timeoutRecovery": "Query result with the original commit requestId; never create a replacement request merely because the response timed out.",
+        "releaseEffect": "Releases only temporary export resources; cannot delete saved ZIPs or erase commit receipts."
+      }
+    },
+    "read_view_state": {
+      "input": "ReadViewStateRequest",
+      "output": "ReadViewStateResult"
+    }
+  },
+  "error": "ErrorResult"
+}

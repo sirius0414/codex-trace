@@ -111,9 +111,11 @@ class PackagingTests(unittest.TestCase):
 
     def test_runtime_mismatch_is_rejected_before_packaging(self):
         result = subprocess.CompletedProcess([], 0, json.dumps({"python": "3.14.2", "versionInfo": [3, 14, 2], "zstdAvailable": True, "packages": {"mcp": "1.29.0"}}), "")
-        with mock.patch.object(packaging.subprocess, "run", return_value=result):
+        with mock.patch.object(packaging.subprocess, "run", return_value=result) as run:
             with self.assertRaisesRegex(ValueError, "Runtime does not match"):
                 packaging.verify_runtime(Path(sys.executable), {"mcp": "1.30.0"})
+        self.assertEqual(run.call_args.args[0][:4], [sys.executable, "-X", "utf8", "-c"])
+        self.assertTrue(run.call_args.kwargs["check"])
 
     def test_runtime_requires_python_314_and_usable_zstd(self):
         for version, available in (([3, 13, 9], True), ([3, 14, 2], False)):
@@ -182,6 +184,19 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(sentinel.read_text(), "keep existing contents")
         self.assertEqual(list(output.iterdir()), [sentinel])
 
+    def test_local_package_keeps_legacy_manifest_without_portable_root_entrypoints(self):
+        source = self.prepare_source()
+        (source / "plugin/plugin.json").write_text('{"name":"portable-root-manifest"}', encoding="utf-8")
+        (source / "plugin/launch.py").write_text("raise RuntimeError('portable-only')\n", encoding="utf-8")
+        output = self.root / "local-package"
+        with mock.patch.object(packaging, "ROOT", source), mock.patch.object(packaging, "verify_runtime", return_value={}):
+            packaging.build(output, Path(sys.executable), Path(sys.executable), self.assets)
+        self.assertEqual(json.loads((output / ".codex-plugin/plugin.json").read_text())["name"], "codex-trace")
+        self.assertFalse((output / "plugin.json").exists())
+        self.assertFalse((output / "launch.py").exists())
+        self.assertTrue((output / ".mcp.json").is_file())
+        self.assertFalse((output / "mcp.json").exists())
+
     def test_package_imports_after_source_removed_and_excludes_unrelated_files(self):
         source = self.prepare_source()
         output = self.root / "package"
@@ -239,19 +254,32 @@ class PackagingTests(unittest.TestCase):
     def test_production_cache_smoke_is_fully_synthetic_and_isolated(self):
         output = self.root / "package"
         packaging.build(output, Path(sys.executable), Path(sys.executable), self.assets)
-        cache = self.root / "cache"
+        cache = self.root / "cache 中文 空格"
         shutil.copytree(output, cache)
         shutil.rmtree(output)
         shutil.rmtree(self.assets)
         checks = []
         forbidden = self.root / "must-not-be-created"
+        original_run = subprocess.run
+        encoded_path_probes = []
+        def windows_ansi_path_probe(command, *args, **kwargs):
+            command = list(command)
+            if "-c" in command:
+                index = command.index("-c") + 1
+                if "codex_trace.app.__file__" in command[index]:
+                    # 模拟隔离 Windows Python 的管道编码，不能依赖 CI 主机恰好启用 UTF-8。
+                    command[index] = "import sys;sys.stdout.reconfigure(encoding='cp1252',errors='strict');" + command[index]
+                    encoded_path_probes.append(True)
+            return original_run(command, *args, **kwargs)
         with mock.patch.dict(os.environ, {"CODEX_HOME": str(forbidden / "home"),
                 "CODEX_TRACE_STATE_ROOT": str(forbidden / "index"), "CODEX_TRACE_EXPORT_ROOT": str(forbidden / "exports"),
-                "CODEX_TRACE_UI_PATH": str(forbidden / "ui.html"), "PYTHONPATH": str(forbidden / "modules")}):
+                "CODEX_TRACE_UI_PATH": str(forbidden / "ui.html"), "PYTHONPATH": str(forbidden / "modules")}), \
+                mock.patch.object(verification.subprocess, "run", side_effect=windows_ansi_path_probe):
             report = verification.verify_cache(cache, self.root, checks)
+        self.assertEqual(encoded_path_probes, [True])
         self.assertTrue(all(c["passed"] for c in checks), checks)
         self.assertGreater(len(checks), 25)
-        self.assertEqual(report["pluginVersion"], "0.1.0")
+        self.assertEqual(report["pluginVersion"], json.loads((ROOT / "package.json").read_text())["version"])
         self.assertEqual(set(report["historyMethods"]), verification.READ_METHODS)
         self.assertFalse(forbidden.exists())
         self.assertNotIn(verification.SYNTHETIC_BODY, json.dumps(report) + json.dumps(checks))
@@ -263,7 +291,7 @@ class PackagingTests(unittest.TestCase):
         lock = json.loads((ROOT / "package-lock.json").read_text())
         manifest = json.loads((ROOT / "plugin/.codex-plugin/plugin.json").read_text())
         from codex_trace import __version__
-        self.assertEqual({package["version"], lock["version"], lock["packages"][""]["version"], manifest["version"], __version__}, {"0.1.0"})
+        self.assertEqual({package["version"], lock["version"], lock["packages"][""]["version"], manifest["version"], __version__}, {package["version"]})
 
     def test_stderr_privacy_check_scans_whole_stream_without_retaining_text(self):
         client = object.__new__(verification.RpcClient)

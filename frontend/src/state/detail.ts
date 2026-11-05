@@ -1,5 +1,17 @@
 import type { EventDetail } from '../../../contracts/types';
 
+/** 仅记忆字节窗口，切换条目后重新校验来源读取，不缓存可失效的正文或游标。 */
+export class DetailReadWindows {
+  private windows = new Map<string, number>();
+  get(key: string) { return this.windows.get(key) ?? 0; }
+  remember(key: string, text: string) {
+    this.windows.delete(key);
+    this.windows.set(key, new TextEncoder().encode(text).length);
+    if (this.windows.size > 600) this.windows.delete(this.windows.keys().next().value!);
+  }
+  clear() { this.windows.clear(); }
+}
+
 /** 刷新时至少补齐此前显示的 UTF-8 字节窗口，避免首块替换长正文造成阅读跳动。 */
 export async function readDetailWindow(read: (cursor: string | null) => Promise<EventDetail>, byteLength: number): Promise<EventDetail> {
   let result = await read(null);

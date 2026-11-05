@@ -153,10 +153,20 @@ class DerivedStore:
             if self._identity(info) != self._file_identity:
                 raise StorageError("storage-file-replaced")
             for suffix in ("-journal", "-wal", "-shm"):
+                name = self.path.name + suffix
                 try:
-                    sidecar = os.stat(self.path.name + suffix, dir_fd=current, follow_symlinks=False)
+                    sidecar = os.stat(name, dir_fd=current, follow_symlinks=False)
                 except FileNotFoundError:
                     continue
+                # SQLite DELETE 提交会移除 journal；macOS 的路径 stat 可能在
+                # 取得 vnode 后遇到 unlink，返回私有普通文件的 nlink=0。
+                # 只对此状态重查一次：消失可接受，仍在则照常严格校验。
+                if (sidecar.st_nlink == 0 and stat.S_ISREG(sidecar.st_mode)
+                        and sidecar.st_uid == os.getuid() and not stat.S_IMODE(sidecar.st_mode) & 0o077):
+                    try:
+                        sidecar = os.stat(name, dir_fd=current, follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
                 self._check_file(sidecar)
                 if stat.S_IMODE(sidecar.st_mode) & 0o077:
                     raise StorageError("unsafe-storage-permissions")

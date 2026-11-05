@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 from package_plugin import executable, locked_versions, verify_runtime
 from platform_runtime import IS_WINDOWS, npm_command, state_root, venv_python
@@ -28,6 +29,34 @@ SELECTOR = f"{PLUGIN}@{MARKET}"
 
 def codex_home() -> Path:
     return Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser().absolute()
+
+
+def is_local_marketplace(entry: dict) -> bool:
+    """确认来源是本地目录；仅在 CLI 完全缺失来源字段时核对当前配置。"""
+    if "marketplaceSource" in entry:
+        source = entry["marketplaceSource"]
+        return isinstance(source, dict) and source.get("sourceType") == "local"
+    # Codex 0.153.0 在 Windows 上可能用不同路径表示查表，遗漏来源元数据。
+    # 只接受同名配置中的本地绝对目录，且文件系统身份必须与 CLI 返回值一致；
+    # 显式的未知/远端元数据不能被配置覆盖，读不到或无法确认身份也必须拒绝。
+    try:
+        if entry.get("name") != MARKET:
+            return False
+        with (codex_home() / "config.toml").open("rb") as stream:
+            config = tomllib.load(stream)
+        markets = config.get("marketplaces")
+        source = markets.get(MARKET) if isinstance(markets, dict) else None
+        if not isinstance(source, dict) or source.get("source_type") != "local":
+            return False
+        configured, reported = source.get("source"), entry.get("root")
+        if not isinstance(configured, str) or not configured or not isinstance(reported, str) or not reported:
+            return False
+        configured_path, reported_path = Path(configured), Path(reported)
+        return (configured_path.is_absolute() and reported_path.is_absolute()
+                and configured_path.is_dir() and reported_path.is_dir()
+                and configured_path.samefile(reported_path))
+    except (OSError, ValueError):
+        return False
 
 
 def run(command: list[str], *, log_path: Path | None = None) -> str:
@@ -147,9 +176,13 @@ def install(output: Path) -> dict:
     manifest = json.loads((package / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
     if manifest.get("name") != PLUGIN:
         raise ValueError("只能更新 codex-trace。")
+    # 使用已验证包中的编号，分步安装时当前源码或 dist 可能已是另一份构建。
+    runtime_path = package / "runtime.json"
+    runtime = json.loads(runtime_path.read_text(encoding="utf-8")) if runtime_path.is_file() else {}
+    build_id = (runtime.get("frontendBuild") or {}).get("buildId")
     previous = next((entry for entry in cli_json(codex, "plugin", "marketplace", "list", "--json")["marketplaces"]
                      if entry["name"] == MARKET), None)
-    if previous and previous.get("marketplaceSource", {}).get("sourceType") != "local":
+    if previous and not is_local_marketplace(previous):
         raise ValueError("同名市场不是本地来源，不能自动替换。")
     old_root = Path(previous["root"]) if previous else None
     replacing = old_root is None or old_root.resolve() != marketplace.resolve()
@@ -180,7 +213,7 @@ def install(output: Path) -> dict:
                 or transport.get("command") != launch["command"] or transport.get("args") != launch["args"]
                 or any(transport.get("env", {}).get(key) != value for key, value in launch["env"].items())):
             raise ValueError("MCP 未启用或启动配置未指向本次安装。")
-        report = {"passed": True, "pluginId": SELECTOR, "version": manifest["version"],
+        report = {"passed": True, "pluginId": SELECTOR, "version": manifest["version"], "buildId": build_id,
             "installedPath": str(cache), "marketplace": str(marketplace), "verifiedFileCount": len(expected),
             "uiSha256": expected["ui/trajectory-v1.html"], "mcpCwdVerified": True,
             "hostUiReloaded": False}
@@ -221,7 +254,7 @@ def main() -> int:
             print(f"准备完成；安装命令：python3 scripts/update_plugin.py --install-prepared {output}")
             return 0
         result = install(output)
-        print(f"更新完成：{result['installedPath']}\n校验通过：{result['verifiedFileCount']} 个文件\n安装报告：{output / 'installed.json'}")
+        print(f"更新完成：{result['installedPath']}\n构建编号：{result['buildId'] or '未知（安装包未记录）'}\n校验通过：{result['verifiedFileCount']} 个文件\n安装报告：{output / 'installed.json'}")
         print("请重新加载插件资源；若仍显示旧界面，请在方便时重启 Codex。")
         return 0
     except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:

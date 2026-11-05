@@ -1,5 +1,7 @@
-type IconName = 'pause' | 'play' | 'down' | 'right' | 'up' | 'download' | 'close' | 'search' | 'alert' | 'user' | 'model' | 'tool' | 'context' | 'compaction' | 'branch' | 'copy' | 'info' | 'database' | 'usage' | 'zoomIn' | 'zoomOut' | 'check' | 'settings';
+type IconName = 'pause' | 'play' | 'down' | 'right' | 'up' | 'download' | 'close' | 'search' | 'alert' | 'user' | 'model' | 'tool' | 'context' | 'compaction' | 'branch' | 'copy' | 'info' | 'database' | 'usage' | 'zoomIn' | 'zoomOut' | 'check' | 'settings' | 'expand' | 'contract';
 const paths: Record<IconName, string> = {
+  expand: 'M8 3H3v5m13-5h5v5M3 16v5h5m8 0h5v-5',
+  contract: 'M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5',
   settings: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M10 2h4l.7 3 2 .9 2.8-.9 2 3.5-2.1 2.1v2.8l2.1 2.1-2 3.5-2.8-.9-2 .9-.7 3h-4l-.7-3-2-.9-2.8.9-2-3.5 2.1-2.1v-2.8L2.5 8.5l2-3.5 2.8.9 2-.9z',
   pause: 'M7 3H4v18h3z M17 3h3v18h-3z',
   play: 'M6 3l15 9-15 9z', down: 'M5 9l7 7 7-7', right: 'M9 5l7 7-7 7', up: 'M5 15l7-7 7 7',

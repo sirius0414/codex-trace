@@ -1,7 +1,7 @@
-import type { ThreadSnapshot, ThreadSummary, ViewState, ContentPart } from '../../contracts/types';
+import type { ThreadSnapshot, ThreadSummary, ViewState, ContentPart, ReaderMetadata } from '../../contracts/types';
 
 /** UI 缓存已拼接正文与续读游标；跨请求的绑定/版本核验由状态层在写入前完成。 */
-export type DetailPart = { text: string; nextCursor: string | null; completeness: string; sourceTruncated: boolean };
+export type DetailPart = { text: string; nextCursor: string | null; completeness: string; sourceTruncated: boolean; readableBytes?: number | null; reader?: ReaderMetadata };
 export type DetailData = { eventId: string; summary: string; parts: Partial<Record<ContentPart, DetailPart>>; explanation: string };
 export type TraceUIProps = {
   snapshot: ThreadSnapshot | null;
@@ -27,7 +27,7 @@ export type TraceUIProps = {
   onSelect: (eventId: string | null) => void;
   onAgentNavigate?: (groupId: string, eventId?: string) => void;
   onLoadEarlier: (groupId?: string) => void;
-  onMoreDetail: (part: ContentPart) => void;
+  onMoreDetail: (part: ContentPart, readAll?: boolean) => void;
   onExport: () => void;
   onRetry: () => void;
 };

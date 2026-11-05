@@ -1,0 +1,84 @@
+name: Optional bundled-runtime candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - name: Prepare build dependencies and native wheels
+        run: |
+          npm ci
+          python -m pip install -r requirements.lock
+          python -m pip download --only-binary=:all: --dest build/marketplace-wheels -r requirements.lock
+      - name: Check contracts and packaging regressions
+        run: |
+          python contracts/generate_types.py --check
+          python -m unittest discover -s tests -p "test_marketplace*.py"
+          python -m unittest discover -s tests -p "test_plugin_metadata.py"
+      - name: Fetch checksum-pinned standalone runtime and upstream licenses
+        run: python scripts/fetch_marketplace_runtime.py --output build/marketplace-runtime
+      - name: Install pinned native Codex CLI
+        run: npm install -g @openai/codex@0.153.0
+      - name: Build two complete native candidates
+        run: |
+          python scripts/build_marketplace.py --runtime build/marketplace-runtime --wheelhouse build/marketplace-wheels --output build/marketplace
+          python scripts/build_marketplace.py --runtime build/marketplace-runtime --wheelhouse build/marketplace-wheels --output build/marketplace-reproduce
+      - name: Compare exact candidate bytes
+        shell: python
+        run: |
+          from pathlib import Path
+          archives = list(Path('build/marketplace').glob('*.zip'))
+          assert len(archives) == 1
+          archive = archives[0]
+          assert archive.read_bytes() == (Path('build/marketplace-reproduce') / archive.name).read_bytes()
+          assert Path('build/marketplace/SHA256SUMS').read_bytes() == Path('build/marketplace-reproduce/SHA256SUMS').read_bytes()
+      - name: Verify the candidate in a disposable profile
+        shell: python
+        run: |
+          from pathlib import Path
+          import subprocess, sys
+          archive, = Path('build/marketplace').glob('*.zip')
+          command = [sys.executable, 'scripts/smoke_marketplace.py', '--archive', str(archive), '--report', 'build/marketplace-smoke.json']
+          if sys.platform == 'darwin':
+              command += ['--deny-network']
+          subprocess.run(command, check=True)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: marketplace-evidence-${{ matrix.os }}
+          path: |
+            build/marketplace/*.verification.json
+            build/marketplace-smoke.json
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-candidate-${{ matrix.os }}
+          path: |
+            build/marketplace/*.zip
+            build/marketplace/SHA256SUMS
+          if-no-files-found: error
+      # Optional native bundled-runtime experiment only. It never writes a
+      # GitHub Release and does not gate the Git repository community channel.

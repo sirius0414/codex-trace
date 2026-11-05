@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import hashlib
 import multiprocessing
+import os as native_os
 from pathlib import Path
 import sys
 import tempfile
@@ -12,6 +13,7 @@ import time
 import unittest
 from unittest import mock
 from uuid import uuid4
+from platform_fixtures import wait_for_windows_change_tick
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
 from codex_trace.platform import filesystem as os
@@ -219,17 +221,102 @@ class ExportManagerTests(unittest.TestCase):
         queue = context.Queue()
         args = (str(self.root), str(self.destination.root), self.binding, created['exportId'], self.commit_key, queue)
         processes = [context.Process(target=commit_process, args=args) for _ in range(2)]
-        for process in processes: process.start()
-        for process in processes:
-            process.join(10)
-            self.assertEqual(process.exitcode, 0)
-        states = [queue.get(timeout=1) for _ in processes]
-        self.assertTrue(all(s in ('pending', 'verified') for s in states))
-        self.assertEqual(self.manager.result(self.binding, self.commit_key)['save']['status'], 'verified')
-        self.assertEqual(len(list(self.destination.root.glob('*.zip'))), 1)
+        try:
+            for process in processes: process.start()
+            # 先等待全部子进程；首个失败不能触发临时目录清理，遮蔽仍运行进程的原始故障。
+            for process in processes: process.join(10)
+            self.assertEqual([process.exitcode for process in processes], [0, 0])
+            states = [queue.get(timeout=1) for _ in processes]
+            self.assertTrue(all(s in ('pending', 'verified') for s in states))
+            self.assertEqual(self.manager.result(self.binding, self.commit_key)['save']['status'], 'verified')
+            self.assertEqual(len(list(self.destination.root.glob('*.zip'))), 1)
+        finally:
+            # 超时或启动/断言失败也必须先回收子进程，再交给 unittest 删除合成文件。
+            for process in processes:
+                if process.pid is not None and process.is_alive():
+                    process.terminate()
+            for process in processes:
+                if process.pid is not None:
+                    process.join()
+            queue.close()
+            queue.join_thread()
+
+    def test_lock_creation_race_opens_only_the_existing_same_name(self):
+        name = 'synthetic-concurrent.lock'
+        original_open = os.open
+        attempts = []
+        winning_identity = []
+        def raced(path, flags, mode=0o777, *, dir_fd=None):
+            if path == name and dir_fd == self.manager.directory:
+                attempts.append(flags)
+                if len(attempts) == 1:
+                    descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+                    try:
+                        info = os.fstat(descriptor)
+                        winning_identity.append((info.st_dev, info.st_ino))
+                    finally:
+                        os.close(descriptor)
+                    raise FileNotFoundError('synthetic concurrent creator won')
+            return original_open(path, flags, mode, dir_fd=dir_fd)
+        with mock.patch.object(os, 'open', side_effect=raced), \
+                mock.patch.object(self.manager, '_check_directory', wraps=self.manager._check_directory) as checked:
+            with self.manager._lock(name[:-5]) as acquired:
+                self.assertTrue(acquired)
+            self.assertEqual(checked.call_count, 2)
+        self.assertEqual(len(attempts), 2)
+        self.assertTrue(attempts[0] & os.O_CREAT)
+        self.assertEqual(attempts[1], os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
+        saved = os.stat(name, dir_fd=self.manager.directory, follow_symlinks=False)
+        self.assertEqual((saved.st_dev, saved.st_ino), winning_identity[0])
+
+    def test_lock_creation_race_does_not_recreate_a_missing_lock(self):
+        name = 'synthetic-still-missing.lock'
+        original_open = os.open
+        attempts = []
+        def missing(path, flags, mode=0o777, *, dir_fd=None):
+            if path == name and dir_fd == self.manager.directory:
+                attempts.append(flags)
+                if len(attempts) == 1:
+                    raise FileNotFoundError('synthetic missing lock')
+            return original_open(path, flags, mode, dir_fd=dir_fd)
+        with mock.patch.object(os, 'open', side_effect=missing), self.assertRaises(FileNotFoundError):
+            with self.manager._lock(name[:-5]):
+                self.fail('a missing lock must not be acquired')
+        self.assertEqual(len(attempts), 2)
+        self.assertFalse(attempts[1] & os.O_CREAT)
+        self.assertFalse((self.manager.root / name).exists())
+
+    def test_lock_creation_race_still_rejects_a_hardlinked_lock(self):
+        name = 'synthetic-hardlinked.lock'
+        source = self.base / 'synthetic-foreign-file'
+        source.write_bytes(b'unchanged synthetic bytes')
+        original_mode = source.stat().st_mode
+        original_open = os.open
+        def unsafe(path, flags, mode=0o777, *, dir_fd=None):
+            if path == name and flags & os.O_CREAT and dir_fd == self.manager.directory:
+                native_os.link(source, self.manager.root / name)
+                raise FileNotFoundError('synthetic concurrent unsafe lock')
+            return original_open(path, flags, mode, dir_fd=dir_fd)
+        with mock.patch.object(os, 'open', side_effect=unsafe), self.assertRaises(ExportError) as caught:
+            with self.manager._lock(name[:-5]):
+                self.fail('a hardlinked lock must not be acquired')
+        self.assertEqual(caught.exception.code, 'unreadable')
+        self.assertEqual(source.read_bytes(), b'unchanged synthetic bytes')
+        self.assertEqual(source.stat().st_mode, original_mode)
+
+    def test_lock_creation_race_rechecks_directory_before_fallback_open(self):
+        with mock.patch.object(self.manager, '_check_directory', side_effect=[
+                None, ExportError('unreadable', 'synthetic replaced directory')]) as checked, \
+                mock.patch.object(os, 'open', side_effect=FileNotFoundError('synthetic race')) as opened, \
+                self.assertRaises(ExportError):
+            with self.manager._lock('synthetic-directory-race'):
+                self.fail('a replaced directory must not be used')
+        self.assertEqual(checked.call_count, 2)
+        self.assertEqual(opened.call_count, 1)
     def test_private_snapshot_mutation_fails_and_never_writes_source_back(self):
         created = self.create()
         path = self.manager.root / (created['exportId'] + '.zip')
+        wait_for_windows_change_tick()
         path.write_bytes(b'x' * created['totalBytes'])
         with self.assertRaises(ExportError): self.manager.read(self.binding, created['exportId'], None)
         result = self.commit(created)
@@ -239,9 +326,11 @@ class ExportManagerTests(unittest.TestCase):
     def test_chunk_rejects_same_size_rewrite_with_restored_mtime(self):
         created = self.create()
         path = self.manager.root / (created['exportId'] + '.zip')
-        before = path.stat()
+        before = os.stat(path)
+        wait_for_windows_change_tick()
         path.write_bytes(b'x' * before.st_size)
         os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertNotEqual(os.stat(path).st_ctime_ns, before.st_ctime_ns)
         with self.assertRaises(ExportError):
             self.manager.read(self.binding, created['exportId'], None)
     def test_snapshot_quota_is_explicit(self):

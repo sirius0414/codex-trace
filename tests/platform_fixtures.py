@@ -1,6 +1,13 @@
 """跨平台测试资源；只跳过缺少 Windows 符号链接权限的单个链接用例。"""
 import os
+import time
 from codex_trace.platform import filesystem
+
+
+def wait_for_windows_change_tick():
+    """时间戳突变夹具在写入前跨过 NTFS 时钟粒度；不是生产同步或错误重试。"""
+    if os.name == "nt":
+        time.sleep(0.05)
 
 
 def assert_private_mode(test, path, expected):

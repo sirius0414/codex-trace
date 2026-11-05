@@ -1,42 +1,48 @@
-# 代码规范与 CR 指南
+# Coding conventions and review guide
 
-本仓库使用 Python 后端、React/TypeScript 前端和 JSON Schema 契约。提交应聚焦一个目的，避免将行为修改、批量格式化和注释补充混在同一变更中。
+[English](CONTRIBUTING.md) | [简体中文](CONTRIBUTING.zh-CN.md)
 
-## 注释要求
+This repository uses a Python backend, a React/TypeScript frontend, and JSON Schema contracts. Keep each change focused on one purpose. Avoid combining behavior changes, bulk formatting, and comment additions in a single change.
 
-- 新增或修改复杂模块时，在模块入口说明职责、上下游和主要数据边界。Python 使用模块 docstring；TypeScript/JavaScript 使用简短的模块注释。
-- 非显然的公共接口、状态归约器和有副作用的操作，需要说明输入约束、输出语义及失败／恢复方式。Python 使用 docstring，TypeScript/JavaScript 优先使用 JSDoc；类型已经表达的参数无需重复罗列。
-- 在关键分支旁解释设计原因和不可破坏的约束，尤其是异步响应失效、身份校验、版本与游标、增量合并、证据不足、文件发布及幂等重试。审阅者应能在代码附近找到依据。
-- 新增业务说明优先使用中文；保留协议字段、状态名和 API 名称的原文。已有准确的英文注释可以保留。
-- 注释解释“为什么”和“边界是什么”，不逐行翻译代码。简单取值、直观渲染和普通循环无需凑注释数量；复杂分支也不能仅靠函数命名代替说明。
-- 修改行为时同步更新相关注释。只描述当前代码能保证的事实，不把假设、降级结果或未验证的宿主行为写成保证。
-- `contracts/types.ts` 是生成文件；契约形状在 JSON Schema 中修改，类型生成规则在 `contracts/generate_types.py` 中维护，运行生成器后检查一致性。
+## Comments
 
-## 关键约束
+- When adding or changing a complex module, explain its responsibilities, upstream and downstream interactions, and main data boundaries at the module entry point. Use a module docstring in Python and a short module comment in TypeScript/JavaScript.
+- For non-obvious public interfaces, state reducers, and operations with side effects, explain input constraints, output semantics, and failure/recovery behavior. Use Python docstrings and preferably JSDoc in TypeScript/JavaScript. Do not repeat parameter information already expressed by types.
+- Explain design choices and invariants beside critical branches, especially invalidation of asynchronous responses, identity checks, versions and cursors, incremental merging, insufficient evidence, file publication, and idempotent retries. Reviewers should find the reasoning close to the code.
+- Prefer Chinese for new explanations of application behavior; retain the original spelling of protocol fields, state names, and API names. Existing accurate English comments may remain.
+- Comments explain why the code works this way and where its boundaries lie; they do not translate code line by line. Simple value access, straightforward rendering, and ordinary loops do not need filler comments. Complex branches still need explanations beyond function names.
+- Update relevant comments when changing behavior. Describe only what the current code guarantees; do not present assumptions, fallback behavior, or unverified host behavior as guarantees.
+- `contracts/types.ts` is generated. Change contract shapes in JSON Schema, maintain generation rules in `contracts/generate_types.py`, and run the generator to check consistency.
 
-CR 时重点检查这些约束是否能从实现及就近注释中确认：
+## Key invariants
 
-- 正式入口的任务数据通过 app-only MCP `_meta` 传递；`content` 和 `structuredContent` 不携带任务正文。`server.py` 是保留的 M0 诊断入口，不作为正式数据通道。
-- 已选择任务的异步响应核对完整 `Binding`；同一任务 ID 不能代替来源、会话和选择 epoch 的匹配。选择前的 open/list 响应校验各自的页面会话及请求代次。generation、revision 和游标各有自己的作用域。
-- 已记录内容、运行状态和读取状态分别处理；证据不足保留未知，用量快照不直接相加，通信关系不自动成为父子关系。
-- 原始来源读取校验身份、根目录及继承范围；导出范围独立于 UI 筛选、折叠和分页，多来源采集不能声称是原子快照。
-- 保存超时保留原请求标识并核对结果。只有 `verified` 表示保存已读回校验；`unknown` 不能触发另一次新请求保存。释放临时资源不撤销已受理保存、不删除最终文件。
+During review, check that the implementation and nearby comments establish these invariants:
 
-## CR 阅读入口
+- Task data at the production entry point travels through app-only MCP `_meta`; `content` and `structuredContent` do not carry task bodies. `server.py` remains an M0 diagnostic entry point, not the production data channel.
+- Asynchronous responses for a selected task must match the complete `Binding`. Matching the task ID alone cannot replace matching the source, session, and selection epoch. Before selection, open/list responses validate their own page session and request generation. Generation, revision, and cursors each have their own scope.
+- Recorded content, execution state, and reading state are handled separately. Insufficient evidence remains unknown. Usage snapshots are not added directly, and communication relationships do not automatically become parent-child relationships.
+- Reads of raw sources validate identity, source root, and inherited scope. Export scope is independent of UI filters, folding, and pagination. Collection from multiple sources must not be described as an atomic snapshot.
+- A save timeout retains the original request identifier so its result can be checked. Only `verified` means that the saved bytes were read back and checked; `unknown` must not start another save with a new request. Releasing temporary resources does not cancel an accepted save or delete final files.
 
-| 关注点 | 主要入口 |
+## Review entry points
+
+| Area | Main entry points |
 | --- | --- |
-| MCP 注册、宿主身份和私有结果 | `backend/codex_trace/app.py`、`service.py` |
-| 历史／原始来源、证据投影、共享观察 | `backend/codex_trace/adapters/`、`domain/`、`observation.py` |
-| 冻结导出、持久回执和本地发布 | `backend/codex_trace/raw_export.py`、`exports.py`、`export_store.py` |
-| 前端请求调度、状态合并及恢复 | `frontend/src/main.tsx`、`bridge/`、`state/` |
-| 列表分组、概览和阅读锚点 | `frontend/src/components/model.ts`、`EventList.tsx`、`Overview.tsx` |
-| 构建、离线打包、更新及隔离验证 | `vite.config.ts`、`scripts/` |
-| 请求／响应契约 | `contracts/README.md`、`trajectory.schema.json`、`tools.json` |
+| MCP registration, host identity, and private results | `backend/codex_trace/app.py`, `service.py` |
+| History/raw sources, evidence projection, and shared observation | `backend/codex_trace/adapters/`, `domain/`, `observation.py` |
+| Frozen exports, persistent receipts, and local publication | `backend/codex_trace/raw_export.py`, `exports.py`, `export_store.py` |
+| Frontend request scheduling, state merging, and recovery | `frontend/src/main.tsx`, `bridge/`, `state/` |
+| List grouping, overview, and reading anchors | `frontend/src/components/model.ts`, `EventList.tsx`, `Overview.tsx` |
+| Builds, offline packaging, updates, and isolated verification | `vite.config.ts`, `scripts/` |
+| Request/response contracts | `contracts/README.md`, `trajectory.schema.json`, `tools.json` |
 
-## 验证
+## Documentation languages
 
-按变更范围运行相关检查；涉及多个层次时执行完整检查。使用已安装的依赖，环境准备见 [README](README.md#构建与验证)。
+Public project documentation has an English version at the conventional filename and a Simplified Chinese version ending in `.zh-CN.md`. Update both versions together when changing instructions or policies, including language links, commands, examples, and support limitations. This requirement applies to documentation; source comments do not need duplicate translations. Keep upstream license texts unchanged.
+
+## Verification
+
+Run checks appropriate to the change; run the complete checks when a change spans multiple layers. Use the installed dependencies; see the [README](README.md#build-and-verification) for environment setup.
 
 ```sh
 npm run build
@@ -46,4 +52,4 @@ PYTHONPATH=backend:tests .venv/bin/python -m unittest discover -s tests -v
 git diff --check
 ```
 
-注释变更也应核对注释与实际分支一致，并确认没有夹带执行逻辑修改。测试需使用合成任务及临时目录；真实插件更新和桌面入口验收按 README 的独立流程执行。
+For comment changes, also confirm that the comments match the actual branches and that no execution logic changes are mixed in. Tests must use synthetic tasks and temporary directories. Follow the separate README procedures for actual plugin updates and desktop entry-point acceptance checks.

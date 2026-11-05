@@ -41,7 +41,7 @@ def default_root():
 def check_python(python):
     probe = "import sys,venv,ensurepip; from compression import zstd; assert sys.version_info >= (3,14); assert zstd.decompress(zstd.compress(b'ok')) == b'ok'"
     try:
-        subprocess.run([str(python), '-I', '-c', probe], check=True, capture_output=True, timeout=30)
+        subprocess.run([str(python), '-I', '-X', 'utf8', '-c', probe], check=True, capture_output=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as error:
         raise ValueError('需要 Python 3.14+（含 venv、pip 和 compression.zstd）。请安装 python.org 官方 Python，或用 --python 指定解释器。') from error
 
@@ -137,11 +137,12 @@ def locked_root(root):
 
 
 def create_runtime(python, runtime, requirements, log):
-    subprocess.run([str(python), '-I', '-m', 'venv', str(runtime)], check=True, timeout=180)
+    # -I 忽略 PYTHONUTF8；显式启用 UTF-8，让 Windows 管道/日志支持中文安装路径。
+    subprocess.run([str(python), '-I', '-X', 'utf8', '-m', 'venv', str(runtime)], check=True, timeout=180)
     target = venv_python(runtime)
     with log.open('w', encoding='utf-8') as stream:
-        subprocess.run([str(target), '-I', '-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', '--no-deps', '--requirement', str(requirements)], stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=600)
-        subprocess.run([str(target), '-I', '-m', 'pip', 'check'], stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=60)
+        subprocess.run([str(target), '-I', '-X', 'utf8', '-m', 'pip', 'install', '--disable-pip-version-check', '--no-input', '--no-deps', '--requirement', str(requirements)], stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=600)
+        subprocess.run([str(target), '-I', '-X', 'utf8', '-m', 'pip', 'check'], stdout=stream, stderr=subprocess.STDOUT, check=True, timeout=60)
     return verify_runtime(target, locked_versions(requirements))
 
 
@@ -149,7 +150,7 @@ def verify_backend(python, package):
     """Load the packaged backend from an isolated Python process before registration."""
     probe = "import sys;sys.path.insert(0,sys.argv[1]);import codex_trace.app"
     with (package.parent / 'verification.log').open('w', encoding='utf-8') as log:
-        subprocess.run([str(python), '-I', '-B', '-c', probe, str(package / 'backend')], check=True, stdout=log, stderr=subprocess.STDOUT, timeout=60)
+        subprocess.run([str(python), '-I', '-X', 'utf8', '-B', '-c', probe, str(package / 'backend')], check=True, stdout=log, stderr=subprocess.STDOUT, timeout=60)
 
 
 def prepare(bundle, transaction, python, codex, record):
@@ -169,7 +170,7 @@ def prepare(bundle, transaction, python, codex, record):
         'thirdPartyManifestSha256': hashlib.sha256((package / 'third-party-manifest.json').read_bytes()).hexdigest()})
     verify_backend(target, package)
     marketplace = transaction / 'marketplace'
-    subprocess.run([str(python), '-B', str(bundle / 'scripts/prepare_marketplace.py'), '--package', str(package), '--output', str(marketplace)], check=True, capture_output=True, timeout=60)
+    subprocess.run([str(python), '-X', 'utf8', '-B', str(bundle / 'scripts/prepare_marketplace.py'), '--package', str(package), '--output', str(marketplace)], check=True, capture_output=True, timeout=60)
     catalog_path = marketplace / '.agents/plugins/marketplace.json'
     catalog = read_json(catalog_path)
     catalog['name'], catalog['interface']['displayName'] = MARKET, 'Codex Trace'
@@ -193,7 +194,7 @@ def ensure_owned_market(root, codex):
     entry = next((e for e in entries if e['name'] == MARKET), None)
     if entry:
         location = Path(entry['root']).resolve()
-        if entry.get('marketplaceSource', {}).get('sourceType') != 'local' or not location.is_relative_to((root / 'transactions').resolve()):
+        if not update.is_local_marketplace(entry) or not location.is_relative_to((root / 'transactions').resolve()):
             raise ValueError('同名 codex-trace 市场不是此安装器管理的来源；为避免影响现有插件，未作修改。')
 
 
@@ -311,7 +312,8 @@ def main():
                 result = recover(root, codex)
             else:
                 result = uninstall(root, codex)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        # CLI JSON 保持 ASCII，成功结果中的中文路径不能因 Windows 管道编码而误报失败。
+        print(json.dumps(result, ensure_ascii=True, indent=2))
         return 0
     except (OSError, ValueError, RuntimeError, KeyError, subprocess.SubprocessError) as error:
         print(f'Codex Trace: {error}', file=sys.stderr)

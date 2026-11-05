@@ -34,6 +34,10 @@ npm: eventsource-parser 3.1.1
 Declared license: MIT
   LICENSES/npm/eventsource-parser@3.1.1/LICENSE
 
+npm: highlight.js 11.11.1
+Declared license: BSD-3-Clause
+  LICENSES/npm/highlight.js@11.11.1/LICENSE
+
 npm: isexe 2.0.0
 Declared license: ISC
   LICENSES/npm/isexe@2.0.0/LICENSE
@@ -41,6 +45,10 @@ Declared license: ISC
 npm: jose 6.2.13
 Declared license: MIT
   LICENSES/npm/jose@6.2.13/LICENSE.md
+
+npm: marked 15.0.12
+Declared license: MIT
+  LICENSES/npm/marked@15.0.12/LICENSE.md
 
 npm: path-key 3.1.1
 Declared license: MIT

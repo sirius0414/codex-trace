@@ -1,5 +1,5 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=auto eol=lf
 
 # Preserve exact bytes in synthetic raw-record fixtures.
 /tests/fixtures/contracts/unknown-and-partial.bin binary
@@ -8,3 +8,10 @@
 /third_party/LICENSES/** -text
 /third_party/manifest.json text eol=lf
 /third_party/THIRD_PARTY_NOTICES.txt text eol=lf
+
+# Generated distribution files carry byte hashes and must survive Windows checkout unchanged.
+/plugins/codex-trace/** -text
+/.agents/plugins/marketplace.json text eol=lf
+
+# Generated upstream license copies remain byte-exact; review their recorded hashes.
+/plugins/codex-trace/LICENSES/** -diff

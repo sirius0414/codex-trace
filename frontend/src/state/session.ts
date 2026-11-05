@@ -95,7 +95,8 @@ export function mergeDetail(current: DetailData | null, response: EventDetail, a
     const prefix = append && previous && chunk.byteOffset === previousBytes ? previous.text : '';
     if (append && previous && chunk.byteOffset !== previousBytes) continue;
     result.parts[chunk.part] = { text: prefix + chunk.text, nextCursor: chunk.nextCursor,
-      completeness: chunk.completeness, sourceTruncated: chunk.sourceTruncated };
+      completeness: chunk.completeness, sourceTruncated: chunk.sourceTruncated,
+      readableBytes: chunk.readableBytes, ...(chunk.reader ? { reader: chunk.reader } : {}) };
   }
   return result;
 }

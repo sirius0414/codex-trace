@@ -319,6 +319,36 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertIn("release 0.1.0", (self.installed_cache() / "ui/trajectory-v1.html").read_text(encoding="utf-8"))
         self.assert_preserved()
 
+    def test_missing_cli_source_uses_matching_config_for_both_install_guards(self):
+        self.perform_install(self.bundle())
+        registry = json.loads(self.fake.registry.read_text(encoding="utf-8"))
+        entry = registry["codex-trace"]
+        entry.pop("marketplaceSource")
+        write_json(self.fake.registry, registry)
+        config = self.codex_home / "config.toml"
+        config.write_text('[marketplaces.codex-trace]\nsource_type = "local"\nsource = '
+                          + json.dumps(entry["root"]) + "\n", encoding="utf-8")
+        self.sentinels[config] = config.read_bytes()
+        result = self.perform_install(self.bundle("0.2.0"))
+        self.assertTrue(result["passed"])
+        self.assert_preserved()
+
+    def test_missing_cli_source_cannot_claim_foreign_directory(self):
+        foreign = self.root / "foreign-market"
+        foreign.mkdir()
+        registry = json.loads(self.fake.registry.read_text(encoding="utf-8"))
+        registry["codex-trace"] = {"name": "codex-trace", "root": str(foreign)}
+        write_json(self.fake.registry, registry)
+        config = self.codex_home / "config.toml"
+        config.write_text('[marketplaces.codex-trace]\nsource_type = "local"\nsource = '
+                          + json.dumps(str(foreign)) + "\n", encoding="utf-8")
+        self.sentinels[config] = config.read_bytes()
+        with self.assertRaisesRegex(ValueError, "市场"):
+            self.perform_install(self.bundle())
+        self.assertEqual(json.loads(self.fake.registry.read_text(encoding="utf-8")), registry)
+        self.assertFalse(self.runtime_calls)
+        self.assert_preserved()
+
     def test_foreign_same_named_marketplace_is_not_replaced(self):
         registry = json.loads(self.fake.registry.read_text(encoding="utf-8"))
         registry["codex-trace"] = {"name": "codex-trace", "root": str(self.root / "someone else's market"),
@@ -391,6 +421,73 @@ class ReleasePrerequisiteTests(unittest.TestCase):
         with mock.patch.object(self.install.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "python")):
             with self.assertRaisesRegex(ValueError, r"Python 3\.14.*venv.*compression.zstd"):
                 self.install.check_python(Path(sys.executable))
+
+    def test_isolated_python_probes_explicitly_enable_utf8(self):
+        with tempfile.TemporaryDirectory(prefix="installer 中文 path ") as temporary:
+            root = Path(temporary)
+            package = root / "plugin with spaces"
+            package.mkdir()
+            with mock.patch.object(self.install.subprocess, "run") as run:
+                self.install.check_python(Path(sys.executable))
+                self.install.verify_backend(Path(sys.executable), package)
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(len(commands), 2)
+            for call in run.call_args_list:
+                self.assertEqual(call.args[0][:4], [sys.executable, "-I", "-X", "utf8"])
+                self.assertTrue(call.kwargs["check"])
+            self.assertEqual(commands[1][-1], str(package / "backend"))
+            # 执行相同受控解释器选项，验证即使环境要求关闭 UTF-8 仍能输出中文。
+            result = subprocess.run([*commands[0][:4], "-c",
+                "import sys;assert sys.flags.isolated and sys.flags.utf8_mode;print(sys.argv[1])", str(root)],
+                env={**os.environ, "PYTHONUTF8": "0"}, capture_output=True, text=True, encoding="utf-8", check=True, timeout=15)
+            self.assertEqual(result.stdout.strip(), str(root))
+
+    def test_runtime_creation_preserves_isolation_unicode_arguments_and_errors(self):
+        with tempfile.TemporaryDirectory(prefix="installer 中文 path ") as temporary:
+            root = Path(temporary)
+            python = root / "python 空格.exe"
+            runtime = root / "runtime 空格"
+            requirements = root / "requirements 中文.lock"
+            requirements.write_text("mcp==1.30.0\n", encoding="utf-8")
+            target = self.install.venv_python(runtime)
+            with mock.patch.object(self.install.subprocess, "run") as run, \
+                    mock.patch.object(self.install, "verify_runtime", return_value={"verified": True}) as verified:
+                self.assertEqual(self.install.create_runtime(python, runtime, requirements, root / "pip.log"), {"verified": True})
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(commands[0], [str(python), "-I", "-X", "utf8", "-m", "venv", str(runtime)])
+            self.assertEqual(commands[1][:7], [str(target), "-I", "-X", "utf8", "-m", "pip", "install"])
+            self.assertEqual(commands[1][-2:], ["--requirement", str(requirements)])
+            self.assertEqual(commands[2], [str(target), "-I", "-X", "utf8", "-m", "pip", "check"])
+            self.assertTrue(all(call.kwargs["check"] for call in run.call_args_list))
+            verified.assert_called_once_with(target, {"mcp": "1.30.0"})
+            for failed_stage in range(3):
+                failure = subprocess.CalledProcessError(17, commands[failed_stage])
+                with self.subTest(failed_stage=failed_stage), \
+                        mock.patch.object(self.install.subprocess, "run", side_effect=[None] * failed_stage + [failure]) as run, \
+                        mock.patch.object(self.install, "verify_runtime") as verified, \
+                        self.assertRaises(subprocess.CalledProcessError) as caught:
+                    self.install.create_runtime(python, runtime, requirements, root / "pip.log")
+                self.assertEqual(caught.exception.returncode, 17)
+                self.assertEqual(run.call_count, failed_stage + 1)
+                verified.assert_not_called()
+
+    def test_successful_install_json_roundtrips_through_windows_ansi_stdout(self):
+        with tempfile.TemporaryDirectory(prefix="installer 中文 path ") as temporary:
+            root = Path(temporary)
+            result = {"installedPath": str(root / "已安装 插件"), "verified": True}
+            output = io.BytesIO()
+            with io.TextIOWrapper(output, encoding="cp1252", errors="strict") as stream, \
+                    contextlib.redirect_stdout(stream), contextlib.redirect_stderr(io.StringIO()), \
+                    mock.patch.object(sys, "argv", ["install.py", "install", "--root", str(root)]), \
+                    mock.patch.object(sys, "platform", "win32"), \
+                    mock.patch.object(self.install, "default_root", return_value=root), \
+                    mock.patch.object(self.install, "find_codex", return_value=Path(sys.executable)), \
+                    mock.patch.object(self.install, "find_python", return_value=Path(sys.executable)), \
+                    mock.patch.object(self.install, "install", return_value=result) as installed:
+                self.assertEqual(self.install.main(), 0)
+                stream.flush()
+                self.assertEqual(json.loads(output.getvalue().decode("ascii")), result)
+                installed.assert_called_once()
 
     def test_missing_codex_explains_native_executable_override(self):
         with mock.patch.object(self.install, "executable", side_effect=ValueError("not installed")):

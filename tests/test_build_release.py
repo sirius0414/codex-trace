@@ -41,13 +41,15 @@ class ReleaseBuildTests(unittest.TestCase):
             "contracts/tools.json": '{}',
             "LICENSE": "Synthetic project license\n", "NOTICE": "Synthetic notice\n",
             "install.py": 'print("synthetic installer")\n', "install.sh": '#!/bin/sh\n',
-            "install.ps1": '# synthetic installer\n', "INSTALL.md": '# Synthetic instructions\n',
+            "install.ps1": '# synthetic installer\n',
+            **{name: '# 合成中文文档\n' if '.zh-CN.' in name else '# Synthetic English documentation\n'
+               for name in release.PUBLIC_DOCUMENTS},
             **{"scripts/" + name: '# synthetic helper\n' for name in release.SCRIPTS},
         }
         for name, value in sources.items():
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(value, encoding="utf-8")
+            path.write_text(value, encoding="utf-8", newline="\n")
         legal = {"LICENSES/python/mcp@1.30.0/LICENSE": b"Synthetic upstream license\r\n",
                  "THIRD_PARTY_NOTICES.txt": b"Synthetic dependency notices\n"}
         manifest = {"schemaVersion": 1,
@@ -79,6 +81,12 @@ class ReleaseBuildTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(archive.read(prefix + name)).hexdigest(), expected)
             self.assertNotIn(prefix + "plugin/.mcp.json", archive.namelist())
             self.assertEqual(archive.getinfo(prefix + "install.sh").external_attr >> 16, 0o100755)
+            for stem in ('README', 'INSTALL', 'WINDOWS', 'MARKETPLACE', 'CONTRIBUTING', 'SECURITY',
+                         'PRIVACY', 'SUPPORT', 'TERMS', 'contracts/README', 'third_party/README'):
+                self.assertEqual(archive.read(prefix + stem + '.md'), b'# Synthetic English documentation\n')
+                self.assertEqual(archive.read(prefix + stem + '.zh-CN.md'), '# 合成中文文档\n'.encode('utf-8'))
+            for name in ('LICENSE.zh-CN.md', 'NOTICE.zh-CN.md'):
+                self.assertEqual(archive.read(prefix + name), '# 合成中文文档\n'.encode('utf-8'))
 
     def test_allowlist_excludes_environment_tasks_cache_and_arbitrary_plugin_config(self):
         for name in (".env", "auth.json", "session.jsonl", "plugin/.mcp.json", "plugin/tasks.json", "backend/codex_trace/task.json"):

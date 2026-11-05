@@ -170,22 +170,51 @@ for line in sys.stdin:
     return launcher, source, methods
 
 
-def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
+def verify_cache(installed: Path, root: Path, checks: list[dict], *, portable: bool = False,
+                 command_prefix: list[str] | None = None, community: bool = False,
+                 uv_executable: Path | None = None, uv_cache_dir: Path | None = None,
+                 community_environment: dict[str, str] | None = None) -> dict:
     """Exercise the real cache-local app/SDK against only the fake app-server."""
     from jsonschema import Draft202012Validator, FormatChecker
 
+    installed, root = installed.resolve(), root.resolve()
+    if portable and community:
+        raise ValueError("Select exactly one runtime mode")
+    relocatable = portable or community
+    base_environment = {key: value for key, value in os.environ.items()
+        if not community or (not key.upper().startswith(("CODEX", "PYTHON", "UV_", "GIT_"))
+                             and key not in ("VIRTUAL_ENV", "CONDA_PREFIX"))}
     manifest = json.loads((installed / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-    launch = json.loads((installed / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
+    launch = json.loads((installed / ("mcp.json" if relocatable else ".mcp.json")).read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
+    if relocatable:
+        # 模拟宿主公开占位符展开；完整 smoke 另行核验真实 CLI 的解析结果。
+        launch = {**launch, "command": launch["command"].replace("${PLUGIN_ROOT}", str(installed)),
+                  "args": [argument.replace("${PLUGIN_ROOT}", str(installed)) for argument in launch["args"]],
+                  "cwd": launch.get("cwd", ".").replace("${PLUGIN_ROOT}", str(installed))}
+        if launch["command"].startswith("./"):
+            launch["command"] = str(installed / launch["command"][2:])
+    prefix = command_prefix or []
     cwd = (installed / launch.get("cwd", ".")).resolve()
     def check(operation, passed):
         checks.append({"operation": operation, "passed": bool(passed)})
         if not passed:
             raise RuntimeError(operation + " failed")
     check("cache_copy_backend_exists", (installed / "backend/codex_trace/app.py").is_file())
-    check("relative_cwd_resolves_inside_cache", cwd == installed / "backend")
-    check("absolute_python_and_app_server", Path(launch["command"]).is_absolute()
-          and Path(launch["env"]["CODEX_TRACE_CODEX_EXECUTABLE"]).is_absolute())
-    check("module_entrypoint", launch["args"] == ["-m", "codex_trace.app"])
+    if community:
+        check("community_uv_command", launch["command"] == "uv" and uv_executable is not None)
+        check("community_cwd_resolves_inside_cache", cwd == installed)
+        check("community_isolated_entrypoint", launch["args"][-5:-1] == ["--", "python", "-I", "-B"]
+              and (cwd / launch["args"][-1]).resolve() == installed / "launch.py")
+        launch["command"] = str(uv_executable)
+    elif portable:
+        check("portable_cwd_resolves_inside_cache", cwd.is_relative_to(installed))
+        check("portable_python_resolves_inside_cache", Path(launch["command"]).is_relative_to(installed / "runtime"))
+        check("isolated_portable_entrypoint", launch["args"] == ["-I", "-B", str(installed / "launch.py")])
+    else:
+        check("relative_cwd_resolves_inside_cache", cwd == installed / "backend")
+        check("absolute_python_and_app_server", Path(launch["command"]).is_absolute()
+              and Path(launch["env"]["CODEX_TRACE_CODEX_EXECUTABLE"]).is_absolute())
+        check("module_entrypoint", launch["args"] == ["-m", "codex_trace.app"])
     runtime = json.loads((installed / "runtime.json").read_text(encoding="utf-8"))
     legal_manifest = (installed / "third-party-manifest.json").read_bytes()
     check("third_party_manifest_matches_checksum", runtime.get("thirdPartyManifestSha256") == hashlib.sha256(legal_manifest).hexdigest())
@@ -193,27 +222,98 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
     check("third_party_license_documents_verified", True)
     check("project_license_and_notice_present", all((installed / name).is_file() and (installed / name).read_bytes().strip() for name in ("LICENSE", "NOTICE")))
     check("runtime_matches_current_platform", runtime.get("platform", sys.platform) == sys.platform)
-    check("runtime_paths_match_manifest", runtime.get("runtimePython") == launch["command"]
-          and runtime.get("appServerExecutable") == launch["env"]["CODEX_TRACE_CODEX_EXECUTABLE"])
-    check("startup_never_installs_dependencies", runtime.get("startupNetworkInstallation") is False
-          and runtime.get("runtimeBundled") is False and runtime.get("entrypoint") == "codex_trace.app")
-    fake, source, methods = synthetic_history(root, launch["command"])
+    if community:
+        check("community_runtime_declaration", runtime.get("runtimeManagement") == "uv"
+              and runtime.get("runtimeBundled") is False and runtime.get("startupDependencyPreparation") is True
+              and runtime.get("entrypoint") == "codex_trace.marketplace"
+              and sys.platform in runtime.get("platforms", []))
+        check("community_requirements_checksum", runtime.get("requirementsSha256") == hashlib.sha256((installed / "requirements.lock").read_bytes()).hexdigest())
+    elif portable:
+        check("runtime_paths_match_manifest", str(installed / runtime["runtimeExecutable"]) == launch["command"])
+    else:
+        check("runtime_paths_match_manifest", runtime.get("runtimePython") == launch["command"]
+              and runtime.get("appServerExecutable") == launch["env"]["CODEX_TRACE_CODEX_EXECUTABLE"])
+    if not community:
+        check("startup_never_installs_dependencies", runtime.get("startupNetworkInstallation") is False
+              and runtime.get("runtimeBundled") is portable
+              and runtime.get("entrypoint") == ("codex_trace.marketplace" if portable else "codex_trace.app"))
+    interpreter = launch["command"]
+    managed_environment = {}
+    if community:
+        # uv 的解释器和依赖缓存位于验收目录；冷启动允许准备依赖，随后实际 MCP
+        # 使用同一缓存。包根保持只读，既不复用开发 venv，也不修改用户的 uv 缓存。
+        if uv_cache_dir is None:
+            raise ValueError("Community verification requires an explicit isolated uv cache")
+        root.mkdir(parents=True, exist_ok=True)
+        managed_environment = {"UV_CACHE_DIR": str(uv_cache_dir),
+            "UV_PYTHON_INSTALL_DIR": str(uv_cache_dir.parent / "python-managed"),
+            "UV_PYTHON_PREFERENCE": "only-managed", **(community_environment or {})}
+        setup_env = {**base_environment, **managed_environment, "HOME": str(root), "USERPROFILE": str(root),
+            "LOCALAPPDATA": str(root / "AppData/Local"), "CODEX_HOME": str(root / "codex-home"),
+            "PYTHONDONTWRITEBYTECODE": "1"}
+        for key in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "CONDA_PREFIX"):
+            setup_env.pop(key, None)
+        uv_arguments = launch["args"][:launch["args"].index("--")]
+        ready = subprocess.run([launch["command"], *uv_arguments, "--", "python", "-I", "-B", "-c",
+            "import json,sys;print(json.dumps({'executable':sys._base_executable,'version':list(sys.version_info[:3])}))"],
+            cwd=cwd, env=setup_env, capture_output=True, text=True, encoding="utf-8", timeout=600, check=True)
+        managed_python = json.loads(ready.stdout)
+        interpreter = managed_python["executable"]
+        check("community_uv_prepared_pinned_python", managed_python["version"] == [3, 14, 2]
+              and Path(interpreter).is_absolute() and Path(interpreter).is_file())
+    fake, source, methods = synthetic_history(root, interpreter)
     (root / "Downloads").mkdir(mode=0o700)
     original_source = source.read_bytes()
     source_before = source.stat()
     # Override every local-data path after applying the package environment.
-    # Do not override HOME: only documented constructor configuration is used.
-    runtime_env = {**os.environ, **launch.get("env", {}), "CODEX_HOME": str(root / "codex-home"),
+    # Legacy validation uses documented data-path overrides; the portable probe
+    # additionally isolates the entire user profile below.
+    runtime_env = {**base_environment, **launch.get("env", {}), "CODEX_HOME": str(root / "codex-home"),
                    "CODEX_TRACE_CODEX_EXECUTABLE": str(fake), "CODEX_TRACE_STATE_ROOT": str(root / "index"),
                    "CODEX_TRACE_EXPORT_ROOT": str(root / "Downloads/Codex Trace"), "PYTHONDONTWRITEBYTECODE": "1"}
     for key in ("PYTHONPATH", "PYTHONHOME", "CODEX_TRACE_UI_PATH", "CODEX_TRACE_AUDIT_PATH"):
         runtime_env.pop(key, None)
-    module = subprocess.run([launch["command"], "-c", "import codex_trace.app;print(codex_trace.app.__file__)"],
+    runtime_env.update(managed_environment)
+    if relocatable:
+        # 不从宿主 PATH 或用户 site-packages 借用解释器、依赖；历史替身使用绝对路径。
+        runtime_env.update({"PATH": "", "HOME": str(root), "USERPROFILE": str(root),
+                            "LOCALAPPDATA": str(root / "AppData/Local")})
+
+    def python_probe(code, *arguments):
+        if relocatable:
+            bootstrap = ("import sys,site;sys.path[:0]=" + repr([str(installed / "backend"), str(installed / "runtime-deps")])
+                         + ";site.addsitedir(" + repr(str(installed / "runtime-deps")) + ");")
+            if community:
+                return [*prefix, launch["command"], *uv_arguments, "--", "python", "-I", "-B", "-c", bootstrap + code, *arguments]
+            return [*prefix, interpreter, "-I", "-B", "-c", bootstrap + code, *arguments]
+        return [*prefix, launch["command"], "-c", code, *arguments]
+
+    # -I 忽略 PYTHONUTF8；Windows 管道可能仍使用 ANSI 编码。路径用 ASCII JSON
+    # 往返，不要求子进程的默认 stdout 编码能表示缓存目录中的中文。
+    module = subprocess.run(python_probe("import json,codex_trace.app;print(json.dumps(codex_trace.app.__file__, ensure_ascii=True))"),
                             cwd=cwd, env=runtime_env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
-    check("imports_backend_from_installed_cache", Path(module.stdout.strip()).resolve() == installed / "backend/codex_trace/app.py")
+    check("imports_backend_from_installed_cache", Path(json.loads(module.stdout)).resolve() == installed / "backend/codex_trace/app.py")
     contract = json.loads((installed / "contracts/trajectory.schema.json").read_text(encoding="utf-8"))
     tool_contracts = json.loads((installed / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
-    client = RpcClient([launch["command"], *launch["args"]], cwd, runtime_env)
+    command = [*prefix, launch["command"], *launch["args"]]
+    windows_synthetic_override = relocatable and sys.platform == "win32"
+    if windows_synthetic_override:
+        # Windows 不能把 .py 假装成原生 Codex。先单独核对真正入口启动，再仅在
+        # 合成链路进程替换发现函数；被测包的启动脚本和业务实现均保持原始字节。
+        startup = RpcClient(command, cwd, {**runtime_env, "CODEX_TRACE_CODEX_EXECUTABLE": interpreter})
+        try:
+            handshake = startup.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                "clientInfo": {"name": "codex-trace-portable-startup", "version": "0.1.0"}})
+            check("native_windows_production_launcher_starts", handshake.get("serverInfo", {}).get("name") == "codex-trace")
+            startup.send("notifications/initialized", {})
+            check("native_windows_production_resources", bool(startup.request("resources/list", {}).get("resources")))
+        finally:
+            startup.close()
+        code = ("import runpy; from pathlib import Path; import codex_trace.marketplace as entry;"
+                "entry.discover_codex=lambda:Path(" + repr(str(fake)) + ");"
+                "runpy.run_path(" + repr(str(installed / "launch.py")) + ",run_name='__main__')")
+        command = python_probe(code)
+    client = RpcClient(command, cwd, runtime_env)
     try:
         initialized = client.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
             "clientInfo": {"name": "codex-trace-install-smoke", "version": "0.1.0"}})
@@ -322,8 +422,8 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
         check("synthetic_export_saved_only_in_temporary_destination", receipt["status"] == "verified" and saved.parent == root / "Downloads/Codex Trace"
               and saved.is_file() and saved.read_bytes() == archive_bytes)
         # 从缓存后端检查权限：Windows 的 Path.stat() 不表达真实 owner SID/DACL。
-        permissions = subprocess.run([launch["command"], "-c",
-            "import sys;from codex_trace.platform import filesystem as fs;print(fs.stat(sys.argv[1],follow_symlinks=False).st_mode & 0o777)", str(saved)],
+        permissions = subprocess.run(python_probe(
+            "import sys;from codex_trace.platform import filesystem as fs;print(fs.stat(sys.argv[1],follow_symlinks=False).st_mode & 0o777)", str(saved)),
             cwd=cwd, env=runtime_env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
         check("synthetic_export_permissions_are_private", int(permissions.stdout.strip()) == 0o600)
         check("saved_bytes_match_receipt", receipt["bytes"] == len(archive_bytes) and receipt["sha256"] == hashlib.sha256(archive_bytes).hexdigest())
@@ -336,7 +436,9 @@ def verify_cache(installed: Path, root: Path, checks: list[dict]) -> dict:
         check("all_tool_results_are_private_and_schema_valid", called == {tool["name"] for tool in tools})
         summary = {"serverVersion": initialized["serverInfo"]["version"], "pluginVersion": manifest["version"],
                    "uiBytes": len(bundled.encode()), "uiSha256": hashlib.sha256(bundled.encode()).hexdigest(),
-                   "entrypointResources": uris, "toolNames": [t["name"] for t in tools], "runtimeBoundToLocalInterpreter": True}
+                   "entrypointResources": uris, "toolNames": [t["name"] for t in tools], "runtimeBoundToLocalInterpreter": not relocatable,
+                   "runtimeManagement": "uv" if community else ("bundled" if portable else "installer"),
+                   "windowsSyntheticDiscoveryOverride": windows_synthetic_override}
     finally:
         client.close()
     check("source_bytes_and_metadata_unchanged", source.read_bytes() == original_source

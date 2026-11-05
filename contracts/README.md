@@ -1,5 +1,7 @@
 # Local payload contracts
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 `trajectory.schema.json` is the authoritative JSON Schema (Draft 2020-12), version
 `1.0.0`. Its default root validates `ThreadSnapshot`; the reusable definitions
 also cover the other service payloads listed in `tools.json`. This is a proposed
@@ -81,7 +83,7 @@ The service chooses the ZIP filename and resolves the destination; requests neve
 accept a path, directory, filename or overwrite flag. `LocalExportPath` is an
 output-only absolute path. Existing POSIX paths remain valid. On Windows the
 receipt uses a native local-drive path, for example
-`C:\Users\张 三\Downloads\Codex Trace\codex-trace-a.zip`. UNC shares,
+`C:\测试 用户\Downloads\Codex Trace\codex-trace-a.zip`. UNC shares,
 drive-relative paths, device namespaces, alternate data streams, DOS device
 names and components ending in a dot or space are excluded. Network filesystem
 locking and atomic publication are outside this local export contract.
@@ -160,3 +162,59 @@ catalogue says which definition each example validates against. Scenario inputs
 cover delayed cross-task responses, repeated/declining usage, saved output
 updates and communication-versus-parentage. They are test specifications for
 later implementation, not claims that those reducers already exist.
+
+## Preview reading metadata
+
+`ContentRef.reader` and `ContentChunk.reader` are optional, backward-compatible
+`ReaderMetadata`. They describe one body part, independently of its paging,
+`sourceTruncated`, and `OutputCompleteness`. A JSON format hint is not a claim
+that the currently loaded chunk parses or contains every field. The service
+returns the same metadata on each chunk without interpreting partial JSON.
+
+The projection supplies format evidence for commandExecution, fileChange,
+structured MCP/dynamic-tool values, and legacy function arguments. Messages
+use a Markdown *reading convention*, identified as such in `origin`; this is
+not a source declaration that every message is Markdown. Command argument
+arrays remain JSON arrays. A known command without recorded shell information
+does not acquire a guessed Bash language. Unknown tools receive structure
+hints only, with no invented parameter descriptions. Confirmed call/result
+identity remains the sole mechanism for sharing a tool identity with a result.
+
+`FieldDescription` uses JSON Pointer paths and separates `scope: protocol`
+from `scope: tool`. Descriptions can carry a type, unit, required flag, enum,
+source URL/version, and a `versionMatch` of `exact` or `reference`. Optional
+`format`/`language` hints apply only at the described path. Description text
+and links are data, never executable content. Missing definitions are omitted.
+Metadata is bundled and returned with the body; hovering never fetches a schema.
+
+Current external-reference coverage (reviewed 2026-11-03):
+
+- `exec_command` and `functions.exec_command`: ten input parameters and six
+  output fields; `write_stdin`/`functions.write_stdin`: four input parameters
+  and those output fields, from the official
+  [shell tool definitions](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/handlers/shell_spec.rs).
+- Known MCP result envelopes: `content`, `isError`, `structuredContent` and
+  verified text-content blocks, from
+  [MCP 2025-06-18 Tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).
+  These descriptions never describe the tool's arbitrary input arguments or
+  the business fields within `structuredContent`.
+- Known fileChange entries: their recorded `diff` body, from the
+  [app-server schema](https://github.com/openai/codex/blob/main/codex-rs/app-server-protocol/schema/json/v2/ThreadStartResponse.json).
+  Update diffs and added/deleted file contents retain different format hints.
+
+The historical sources read by this repository do not currently preserve tool
+schemas or a negotiated MCP protocol version. All external definitions above
+therefore have `versionMatch: reference`, including when a producer version
+happens to be present. A producer version alone is not proof of a tool schema
+match. Requiredness and enum values describe the reference, not validation of
+historical invocations. Unknown fields remain readable without an explanation.
+
+For raw tool fields, Preview takes the original JSON value substring from the
+associated physical record. String values decode only their JSON string
+wrapper; object/array/numeric values retain numeric lexemes, key order,
+whitespace and duplicate keys. Raw remains the entire associated record.
+API values arrive already decoded by the API client; `origin` explicitly says
+`API decoded projection`. Their transport-byte spelling cannot be recovered
+from that API projection; associated Raw records remain the evidence where
+available. Reader metadata never upgrades unknown source completeness or
+infers truncation from log wording.

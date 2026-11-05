@@ -1,0 +1,21 @@
+{
+  "appServerExecutable": "discovered-at-startup",
+  "dependencyPreparation": "when-not-cached",
+  "distribution": "github-repository-marketplace",
+  "entrypoint": "codex_trace.marketplace",
+  "launcherCommand": "uv",
+  "minimumPython": "3.14",
+  "platforms": [
+    "darwin",
+    "win32"
+  ],
+  "pythonVersion": "3.14.2",
+  "requirementsSha256": "ef54dbe8dbc400ab5fcf7ecfea17d668e8617a323f770c0bad1a0c471d0983c5",
+  "runtimeBundled": false,
+  "runtimeManagement": "uv",
+  "schemaVersion": 1,
+  "startupDependencyPreparation": true,
+  "startupNetworkInstallation": true,
+  "thirdPartyManifestSha256": "b1726b9410afbd2df318022fd93c44ed4479a56e9418d240bd7fe5628ce7e909",
+  "uiSha256": "d1c29a7255743fbf8304e14d4269a4156cdeaf7af98389113d00d0a5e49284a5"
+}

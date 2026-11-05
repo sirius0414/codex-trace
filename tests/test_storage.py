@@ -10,9 +10,12 @@ from pathlib import Path
 import sqlite3
 import stat
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest import mock
 from uuid import UUID
 
+from backend.codex_trace import storage
 from backend.codex_trace.storage import DerivedStore, StorageError
 from platform_fixtures import assert_private_mode, symlink
 
@@ -153,6 +156,68 @@ class StorageTests(unittest.TestCase):
         with self.assertRaises(StorageError):
             DerivedStore(self.root)
         self.assertEqual(target.read_bytes(), b"synthetic")
+
+    def sidecar_stat_sequence(self, values, *, name="derived.sqlite3-journal"):
+        """Inject the OS unlink observation deterministically; SQLite still runs normally."""
+        original = storage.os.stat
+        observations = iter(values)
+        calls = []
+
+        def observe(path, *args, **kwargs):
+            if path == name:
+                calls.append((path, kwargs))
+                value = next(observations)
+                if isinstance(value, Exception):
+                    raise value
+                return value
+            return original(path, *args, **kwargs)
+
+        return mock.patch.object(storage.os, "stat", side_effect=observe), calls
+
+    def sidecar_metadata(self, **changes):
+        return SimpleNamespace(**({"st_mode": stat.S_IFREG | 0o600,
+                                   "st_uid": storage.os.getuid(), "st_nlink": 0} | changes))
+
+    def test_removed_private_sidecar_is_rechecked_and_missing_or_valid_replacement_is_accepted(self):
+        for suffix in ("-journal", "-wal", "-shm"):
+            for replacement in (FileNotFoundError(), self.sidecar_metadata(st_nlink=1)):
+                patcher, calls = self.sidecar_stat_sequence(
+                    [self.sidecar_metadata(), replacement], name="derived.sqlite3" + suffix)
+                with self.subTest(suffix=suffix, replacement=type(replacement).__name__), patcher:
+                    self.assertIsNone(self.store.get_receipt("synthetic-unlink-race"))
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(calls[0], calls[1])
+                self.assertFalse(calls[0][1]["follow_symlinks"])
+
+    def test_unsafe_sidecar_is_not_retried_even_if_it_would_disappear(self):
+        for changes in ({"st_mode": stat.S_IFLNK | 0o600}, {"st_mode": stat.S_IFDIR | 0o700},
+                        {"st_uid": "synthetic-foreign-owner"}, {"st_mode": stat.S_IFREG | 0o640},
+                        {"st_nlink": 2}):
+            patcher, calls = self.sidecar_stat_sequence([self.sidecar_metadata(**changes), FileNotFoundError()])
+            with self.subTest(changes=changes), patcher, self.assertRaises(StorageError):
+                self.store.get_receipt("synthetic-unsafe-sidecar")
+            self.assertEqual(len(calls), 1)
+
+    def test_sidecar_recheck_still_rejects_unsafe_or_unlinked_replacement(self):
+        for changes in ({}, {"st_nlink": 2}, {"st_mode": stat.S_IFLNK | 0o600, "st_nlink": 1},
+                        {"st_uid": "synthetic-foreign-owner", "st_nlink": 1},
+                        {"st_mode": stat.S_IFREG | 0o640, "st_nlink": 1}):
+            patcher, calls = self.sidecar_stat_sequence([self.sidecar_metadata(), self.sidecar_metadata(**changes)])
+            with self.subTest(changes=changes), patcher, self.assertRaises(StorageError):
+                self.store.get_receipt("synthetic-replaced-sidecar")
+            self.assertEqual(len(calls), 2)
+
+    def test_sidecar_recheck_does_not_ignore_other_io_errors(self):
+        patcher, calls = self.sidecar_stat_sequence([self.sidecar_metadata(), PermissionError("synthetic")])
+        with patcher, self.assertRaises(PermissionError):
+            self.store.get_receipt("synthetic-inaccessible-sidecar")
+        self.assertEqual(len(calls), 2)
+
+    def test_main_database_with_zero_links_remains_an_error(self):
+        patcher, calls = self.sidecar_stat_sequence([self.sidecar_metadata(), FileNotFoundError()], name="derived.sqlite3")
+        with patcher, self.assertRaisesRegex(StorageError, "unsafe-storage-file"):
+            self.store.get_receipt("synthetic-unlinked-database")
+        self.assertEqual(len(calls), 1)
 
     def test_directory_replacement_or_database_replacement_stops_writes(self):
         if os.name == "nt":

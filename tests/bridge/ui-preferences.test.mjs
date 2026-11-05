@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { readUIPreferences, saveUIPreferences, localizeClientError, UI_PREFERENCES_KEY, uiStyles } from '../../frontend/src/ui-preferences.ts';
+import { readUIPreferences, saveUIPreferences, localizeClientError, UI_PREFERENCES_KEY, uiStyles, readerDefaults } from '../../frontend/src/ui-preferences.ts';
 import { kindLabels, statusLabels, localizedKindLabels, localizedStatusLabels, makeRows, overviewFrame, relationshipEndpoints } from '../../frontend/src/components/model.ts';
 
 function memoryStorage(initial = null) {
@@ -23,33 +23,33 @@ test('client errors translate only known UI messages and preserve arbitrary sour
 
 test('first use follows the preferred browser language and defaults to classic style', () => {
   for (const languages of [[], ['zh-CN'], ['zh-TW', 'en-US'], ['fr-FR']]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'zh', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false });
+    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'zh', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
   }
   for (const languages of [['en'], ['en-US', 'zh-CN'], ['EN-gb']]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false });
+    assert.deepEqual(readUIPreferences(memoryStorage(), languages), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
   }
 });
 
 test('malformed, primitive and array storage values fall back without throwing', () => {
   for (const saved of ['', '{broken', 'null', 'false', '42', '"en"', '[]', '[{"language":"en"}]']) {
-    assert.deepEqual(readUIPreferences(memoryStorage(saved), ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false });
+    assert.deepEqual(readUIPreferences(memoryStorage(saved), ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
   }
 });
 
 test('invalid fields fall back independently while valid fields remain usable', () => {
   for (const language of ['fr', '', null, 7, {}, ['en']]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language, uiStyle: 'soft' })), ['en-US']), { language: 'en', uiStyle: 'soft', showSpanSummary: false, showTimelineCursors: false });
+    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language, uiStyle: 'soft' })), ['en-US']), { language: 'en', uiStyle: 'soft', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
   }
   for (const uiStyle of ['dark', '', null, 7, {}, ['terminal'], 'toString', '__proto__']) {
-    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'zh', uiStyle })), ['en-US']), { language: 'zh', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false });
+    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'zh', uiStyle })), ['en-US']), { language: 'zh', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
   }
   for (const showSpanSummary of ['true', 'false', '', null, 0, 1, {}, []]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', showSpanSummary }))), { language: 'en', uiStyle: 'soft', showSpanSummary: false, showTimelineCursors: false });
+    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', showSpanSummary }))), { language: 'en', uiStyle: 'soft', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
   }
   for (const showTimelineCursors of ['true', 'false', '', null, 0, 1, {}, []]) {
-    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', showSpanSummary: true, showTimelineCursors }))), { language: 'en', uiStyle: 'soft', showSpanSummary: true, showTimelineCursors: false });
+    assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', showSpanSummary: true, showTimelineCursors }))), { language: 'en', uiStyle: 'soft', showSpanSummary: true, showTimelineCursors: false, ...readerDefaults });
   }
-  assert.deepEqual(readUIPreferences(memoryStorage('{}'), ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false });
+  assert.deepEqual(readUIPreferences(memoryStorage('{}'), ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
 });
 
 test('missing or denied storage preserves defaults and never blocks saving', () => {
@@ -58,15 +58,15 @@ test('missing or denied storage preserves defaults and never blocks saving', () 
     setItem() { throw new Error('Storage quota exceeded'); },
   };
   for (const storage of [null, denied]) {
-    assert.deepEqual(readUIPreferences(storage, ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false });
-    assert.doesNotThrow(() => saveUIPreferences(storage, { language: 'en', uiStyle: 'terminal', showSpanSummary: true, showTimelineCursors: true }));
+    assert.deepEqual(readUIPreferences(storage, ['en-US']), { language: 'en', uiStyle: 'classic', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
+    assert.doesNotThrow(() => saveUIPreferences(storage, { language: 'en', uiStyle: 'terminal', showSpanSummary: true, showTimelineCursors: true, ...readerDefaults }));
   }
 });
 
 test('every language and style persists independently of task data', () => {
   for (const language of ['zh', 'en']) for (const uiStyle of uiStyles) for (const showSpanSummary of [false, true]) for (const showTimelineCursors of [false, true]) {
     const storage = memoryStorage();
-    const expected = { language, uiStyle, showSpanSummary, showTimelineCursors };
+    const expected = { language, uiStyle, showSpanSummary, showTimelineCursors, ...readerDefaults };
     const withTaskContent = { ...expected, threadId: 'private-task', events: ['private-content'], filters: { text: 'secret' } };
     saveUIPreferences(storage, withTaskContent);
     assert.equal(storage.entries.size, 1);
@@ -74,7 +74,7 @@ test('every language and style persists independently of task data', () => {
     assert.deepEqual(readUIPreferences(storage, language === 'zh' ? ['en-US'] : ['zh-CN']), expected);
     assert.ok(!storage.getItem(UI_PREFERENCES_KEY).includes('private'));
   }
-  assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', events: ['private-content'] }))), { language: 'en', uiStyle: 'soft', showSpanSummary: false, showTimelineCursors: false });
+  assert.deepEqual(readUIPreferences(memoryStorage(JSON.stringify({ language: 'en', uiStyle: 'soft', events: ['private-content'] }))), { language: 'en', uiStyle: 'soft', showSpanSummary: false, showTimelineCursors: false, ...readerDefaults });
 });
 
 test('localized kind, status and relationship labels keep their original keys and endpoints', () => {
@@ -91,6 +91,21 @@ test('localized kind, status and relationship labels keep their original keys an
     assert.deepEqual(english.map(([, id]) => id), chinese.map(([, id]) => id));
     assert.notDeepEqual(english.map(([label]) => label), chinese.map(([label]) => label));
     assert.deepEqual(relation, { type, fromThreadId: 'from', toThreadId: 'to' });
+  }
+});
+
+test('reader preferences migrate old storage, validate independently and persist without body state', () => {
+  const storage = memoryStorage(JSON.stringify({ language: 'zh', readerFontSize: 999, readerWrap: 'false', readerLineNumbers: true }));
+  const preferences = readUIPreferences(storage);
+  assert.equal(preferences.readerFontSize, 15);
+  assert.equal(preferences.readerWrap, true);
+  assert.equal(preferences.readerLineNumbers, true);
+  for (const size of [13, 14, 15, 16, 18, 20]) {
+    const next = { ...preferences, readerFontSize: size, readerWrap: false };
+    saveUIPreferences(storage, { ...next, query: 'private body', blocks: { input: 'secret' } });
+    assert.deepEqual(readUIPreferences(storage), next);
+    assert.ok(!storage.getItem(UI_PREFERENCES_KEY).includes('private'));
+    assert.ok(!storage.getItem(UI_PREFERENCES_KEY).includes('secret'));
   }
 });
 

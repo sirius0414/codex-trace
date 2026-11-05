@@ -548,6 +548,9 @@
         },
         "completeness": {
           "$ref": "#/$defs/OutputCompleteness"
+        },
+        "reader": {
+          "$ref": "#/$defs/ReaderMetadata"
         }
       },
       "required": [
@@ -1754,22 +1757,48 @@
               "maximum": 9007199254740991,
               "multipleOf": 1000
             },
-            "basis": { "const": "threadCreatedAt" },
-            "precision": { "const": "second" },
-            "explanation": { "type": "string", "minLength": 1 }
+            "basis": {
+              "const": "threadCreatedAt"
+            },
+            "precision": {
+              "const": "second"
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1
+            }
           },
-          "required": ["timestampMs", "basis", "precision", "explanation"],
+          "required": [
+            "timestampMs",
+            "basis",
+            "precision",
+            "explanation"
+          ],
           "additionalProperties": false
         },
         {
           "type": "object",
           "properties": {
-            "timestampMs": { "type": "null" },
-            "basis": { "const": "notRecorded" },
-            "precision": { "const": "notRecorded" },
-            "explanation": { "type": "string", "minLength": 1 }
+            "timestampMs": {
+              "type": "null"
+            },
+            "basis": {
+              "const": "notRecorded"
+            },
+            "precision": {
+              "const": "notRecorded"
+            },
+            "explanation": {
+              "type": "string",
+              "minLength": 1
+            }
           },
-          "required": ["timestampMs", "basis", "precision", "explanation"],
+          "required": [
+            "timestampMs",
+            "basis",
+            "precision",
+            "explanation"
+          ],
           "additionalProperties": false
         }
       ]
@@ -2044,6 +2073,9 @@
         },
         "completeness": {
           "$ref": "#/$defs/OutputCompleteness"
+        },
+        "reader": {
+          "$ref": "#/$defs/ReaderMetadata"
         }
       },
       "required": [
@@ -3721,6 +3753,147 @@
         "preferenceRevision",
         "state"
       ]
+    },
+    "ReaderFormat": {
+      "type": "string",
+      "enum": [
+        "text",
+        "markdown",
+        "code",
+        "json",
+        "diff"
+      ]
+    },
+    "FieldDescription": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "protocol",
+            "tool"
+          ]
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "descriptionEn": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "enum": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100
+        },
+        "sourceUrl": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^https://"
+        },
+        "sourceVersion": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "versionMatch": {
+          "type": "string",
+          "enum": [
+            "exact",
+            "reference"
+          ]
+        },
+        "format": {
+          "$ref": "#/$defs/ReaderFormat"
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "path",
+        "scope",
+        "description",
+        "sourceUrl",
+        "sourceVersion",
+        "versionMatch"
+      ],
+      "additionalProperties": false
+    },
+    "ReaderMetadata": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/ReaderFormat"
+        },
+        "language": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "origin": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "adapter": {
+          "type": "string",
+          "enum": [
+            "command",
+            "patch",
+            "function"
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldDescription"
+          },
+          "maxItems": 256
+        },
+        "auxiliary": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 128
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "format",
+        "origin"
+      ],
+      "additionalProperties": false
     }
   }
 }

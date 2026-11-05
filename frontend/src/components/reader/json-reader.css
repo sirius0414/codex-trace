@@ -1,0 +1,7 @@
+/* JSON 与代码共享字号/行号和主题；局部按钮不建立字段树或额外工具栏。 */
+.cx-reader-json{min-width:0}
+.cx-json-text{background:var(--cx-soft);border:1px solid var(--cx-line);border-radius:5px;margin:0}
+.cx-json-fold,.cx-json-window{display:inline;border:1px solid var(--cx-line);border-radius:3px;background:var(--cx-bg);color:var(--cx-green);font:inherit;padding:0 4px;white-space:inherit;overflow-wrap:anywhere;vertical-align:baseline}
+.cx-json-collapse{font-size:11px;color:var(--cx-muted);margin-left:8px}
+.cx-reader .cx-json-fold,.cx-reader .cx-json-window{min-height:0}
+.cx-json-fold:focus-visible,.cx-json-window:focus-visible{outline:2px solid var(--cx-green);outline-offset:2px}
