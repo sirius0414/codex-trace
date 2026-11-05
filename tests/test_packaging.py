@@ -111,9 +111,11 @@ class PackagingTests(unittest.TestCase):
 
     def test_runtime_mismatch_is_rejected_before_packaging(self):
         result = subprocess.CompletedProcess([], 0, json.dumps({"python": "3.14.2", "versionInfo": [3, 14, 2], "zstdAvailable": True, "packages": {"mcp": "1.29.0"}}), "")
-        with mock.patch.object(packaging.subprocess, "run", return_value=result):
+        with mock.patch.object(packaging.subprocess, "run", return_value=result) as run:
             with self.assertRaisesRegex(ValueError, "Runtime does not match"):
                 packaging.verify_runtime(Path(sys.executable), {"mcp": "1.30.0"})
+        self.assertEqual(run.call_args.args[0][:4], [sys.executable, "-X", "utf8", "-c"])
+        self.assertTrue(run.call_args.kwargs["check"])
 
     def test_runtime_requires_python_314_and_usable_zstd(self):
         for version, available in (([3, 13, 9], True), ([3, 14, 2], False)):

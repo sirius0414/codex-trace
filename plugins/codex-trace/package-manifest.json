@@ -118,7 +118,7 @@
     "backend/codex_trace/server.py": "a14c7da5a00f58719bb6876506dbb00c95c436d499bc3afc469317861a5476f5",
     "backend/codex_trace/service.py": "6fb1c550fcccda3a6fa5d0ff762ec652f49ae43ab8d7d7824268d1a34494d93c",
     "backend/codex_trace/storage.py": "0526c1b90e951e6bed113f581cade7345fa33cdca243cf855bae5b5b48bb2510",
-    "build-info.json": "d9e7de8b8a7940dcc14049049212ba2d1509c13d284fc6b817f52680c0e7bfb7",
+    "build-info.json": "034579e659146f0a0402a852e75e6097898ef6b44c39f3995649df8b49ed4a6f",
     "contracts/README.md": "a1b85b10d65b2ea9ed2dc0cd01392be3574fdf658a1b4571880abedee1da2fdf",
     "contracts/README.zh-CN.md": "56436cd4e015afe0588dc1d4985bd9db9559ff6eaedb67e0964775e5646016b2",
     "contracts/tools.json": "3bbc71943bc819d4057bc4df6f52c5fe87138062b7f04f590755d3e53931a58f",
@@ -127,11 +127,11 @@
     "mcp.json": "da749f17d1ac0cf912b786ba4080373b94bc114cf74ccd4800b2fe01b762d3d0",
     "plugin.json": "174d2f8b3eeb1cb52177d7c8faf53ccc3660ac2e21d76c7e9d64ff9de86ed84f",
     "requirements.lock": "ef54dbe8dbc400ab5fcf7ecfea17d668e8617a323f770c0bad1a0c471d0983c5",
-    "runtime.json": "2c7e25a879f629b17f44d41953b6f105f178074193d6933c2ef6ae8f1d8037c4",
+    "runtime.json": "20d2b53cde8009ecaf8ef9b3e84f227a86246c854a7d7fbcee711d43da68f9ba",
     "third-party-manifest.json": "b1726b9410afbd2df318022fd93c44ed4479a56e9418d240bd7fe5628ce7e909",
     "third_party/README.md": "5e740da822329df0fdc98378e470dd702d35ea6f6c125502e081fa4f4a7a429f",
     "third_party/README.zh-CN.md": "0f36bcb0053d443a979aeb3c4a10981f2010d9ed11e08b5a7166fa5f0b9b5058",
-    "ui/trajectory-v1.html": "3a0e16249547390efb08ad92e92c01bad8ebab58c722826694007467e158627f"
+    "ui/trajectory-v1.html": "d1c29a7255743fbf8304e14d4269a4156cdeaf7af98389113d00d0a5e49284a5"
   },
   "name": "codex-trace",
   "runtimeBundled": false,

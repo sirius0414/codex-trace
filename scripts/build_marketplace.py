@@ -70,7 +70,7 @@ def install_dependencies(python: Path, wheelhouse: Path, requirements: Path, tar
     # pip 在 Windows 用 ZIP 构造命令入口；1970 的 SOURCE_DATE_EPOCH 会使其失败。
     # 固定为 ZIP 可表达的最早日期；这些未使用的命令入口随后仍统一排除。
     env.update(PIP_NO_INDEX="1", PIP_NO_CACHE_DIR="1", PIP_NO_COMPILE="1", SOURCE_DATE_EPOCH="315532800")
-    result = subprocess.run([str(python), "-I", "-B", "-m", "pip", "--isolated", "install",
+    result = subprocess.run([str(python), "-I", "-X", "utf8", "-B", "-m", "pip", "--isolated", "install",
                              "--no-index", "--find-links", str(wheelhouse), "--only-binary=:all:",
                              "--no-deps", "--no-compile", "--disable-pip-version-check", "--no-input",
                              "--target", str(target), "--requirement", str(requirements)],

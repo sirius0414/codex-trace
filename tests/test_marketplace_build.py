@@ -161,6 +161,26 @@ class MarketplaceBuildTests(unittest.TestCase):
         target.mkdir()
         (target / "mcp.py").write_text("# synthetic dependency\n")
 
+    def test_offline_dependency_install_uses_utf8_without_changing_safe_arguments(self):
+        python = self.base / "Python 中文/python.exe"
+        wheels = self.base / "wheelhouse 中文 空格"
+        wheels.mkdir()
+        requirements = self.base / "requirements 中文.lock"
+        target = self.base / "dependencies 中文 空格"
+        home = self.base / "home 中文 空格"
+        with mock.patch.object(build.subprocess, "run", return_value=mock.Mock(returncode=0)) as run:
+            build.install_dependencies(python, wheels, requirements, target, home)
+        command = run.call_args.args[0]
+        self.assertEqual(command[:9], [str(python), "-I", "-X", "utf8", "-B", "-m", "pip", "--isolated", "install"])
+        self.assertIn("--no-index", command)
+        self.assertEqual(command[command.index("--find-links") + 1], str(wheels))
+        self.assertEqual(command[command.index("--target") + 1], str(target))
+        self.assertEqual(command[command.index("--requirement") + 1], str(requirements))
+        self.assertEqual(run.call_args.kwargs["encoding"], "utf-8")
+        with mock.patch.object(build.subprocess, "run", return_value=mock.Mock(returncode=17, stdout="", stderr="synthetic failure")), \
+                self.assertRaisesRegex(RuntimeError, "Offline runtime dependency installation failed"):
+            build.install_dependencies(python, wheels, requirements, target, home)
+
     def build(self, name="out", *, platform="darwin", architecture="arm64"):
         runtime = {**self.provenance, "platform": platform, "architecture": architecture}
         if platform == "win32":

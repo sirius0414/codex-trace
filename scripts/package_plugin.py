@@ -48,7 +48,7 @@ except ImportError:
 names=json.loads(sys.argv[1])
 print(json.dumps({'python':sys.version.split()[0],'versionInfo':list(sys.version_info[:3]),'zstdAvailable':available,'packages':{name:importlib.metadata.version(name) for name in names}}))
 """
-    run = subprocess.run([str(python), "-c", command, json.dumps(list(versions))], capture_output=True, text=True, check=True, timeout=30, encoding="utf-8")
+    run = subprocess.run([str(python), "-X", "utf8", "-c", command, json.dumps(list(versions))], capture_output=True, text=True, check=True, timeout=30, encoding="utf-8")
     metadata = json.loads(run.stdout)
     if tuple(metadata.get("versionInfo", [])) < (3, 14) or metadata.get("zstdAvailable") is not True:
         raise ValueError("Python >=3.14 with compression.zstd is required for compressed Codex sources")
