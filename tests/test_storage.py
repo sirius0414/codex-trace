@@ -191,7 +191,7 @@ class StorageTests(unittest.TestCase):
 
     def test_unsafe_sidecar_is_not_retried_even_if_it_would_disappear(self):
         for changes in ({"st_mode": stat.S_IFLNK | 0o600}, {"st_mode": stat.S_IFDIR | 0o700},
-                        {"st_uid": storage.os.getuid() + 1}, {"st_mode": stat.S_IFREG | 0o640},
+                        {"st_uid": "synthetic-foreign-owner"}, {"st_mode": stat.S_IFREG | 0o640},
                         {"st_nlink": 2}):
             patcher, calls = self.sidecar_stat_sequence([self.sidecar_metadata(**changes), FileNotFoundError()])
             with self.subTest(changes=changes), patcher, self.assertRaises(StorageError):
@@ -200,7 +200,7 @@ class StorageTests(unittest.TestCase):
 
     def test_sidecar_recheck_still_rejects_unsafe_or_unlinked_replacement(self):
         for changes in ({}, {"st_nlink": 2}, {"st_mode": stat.S_IFLNK | 0o600, "st_nlink": 1},
-                        {"st_uid": storage.os.getuid() + 1, "st_nlink": 1},
+                        {"st_uid": "synthetic-foreign-owner", "st_nlink": 1},
                         {"st_mode": stat.S_IFREG | 0o640, "st_nlink": 1}):
             patcher, calls = self.sidecar_stat_sequence([self.sidecar_metadata(), self.sidecar_metadata(**changes)])
             with self.subTest(changes=changes), patcher, self.assertRaises(StorageError):
