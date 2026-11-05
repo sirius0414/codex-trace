@@ -319,6 +319,36 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertIn("release 0.1.0", (self.installed_cache() / "ui/trajectory-v1.html").read_text(encoding="utf-8"))
         self.assert_preserved()
 
+    def test_missing_cli_source_uses_matching_config_for_both_install_guards(self):
+        self.perform_install(self.bundle())
+        registry = json.loads(self.fake.registry.read_text(encoding="utf-8"))
+        entry = registry["codex-trace"]
+        entry.pop("marketplaceSource")
+        write_json(self.fake.registry, registry)
+        config = self.codex_home / "config.toml"
+        config.write_text('[marketplaces.codex-trace]\nsource_type = "local"\nsource = '
+                          + json.dumps(entry["root"]) + "\n", encoding="utf-8")
+        self.sentinels[config] = config.read_bytes()
+        result = self.perform_install(self.bundle("0.2.0"))
+        self.assertTrue(result["passed"])
+        self.assert_preserved()
+
+    def test_missing_cli_source_cannot_claim_foreign_directory(self):
+        foreign = self.root / "foreign-market"
+        foreign.mkdir()
+        registry = json.loads(self.fake.registry.read_text(encoding="utf-8"))
+        registry["codex-trace"] = {"name": "codex-trace", "root": str(foreign)}
+        write_json(self.fake.registry, registry)
+        config = self.codex_home / "config.toml"
+        config.write_text('[marketplaces.codex-trace]\nsource_type = "local"\nsource = '
+                          + json.dumps(str(foreign)) + "\n", encoding="utf-8")
+        self.sentinels[config] = config.read_bytes()
+        with self.assertRaisesRegex(ValueError, "市场"):
+            self.perform_install(self.bundle())
+        self.assertEqual(json.loads(self.fake.registry.read_text(encoding="utf-8")), registry)
+        self.assertFalse(self.runtime_calls)
+        self.assert_preserved()
+
     def test_foreign_same_named_marketplace_is_not_replaced(self):
         registry = json.loads(self.fake.registry.read_text(encoding="utf-8"))
         registry["codex-trace"] = {"name": "codex-trace", "root": str(self.root / "someone else's market"),

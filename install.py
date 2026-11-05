@@ -194,7 +194,7 @@ def ensure_owned_market(root, codex):
     entry = next((e for e in entries if e['name'] == MARKET), None)
     if entry:
         location = Path(entry['root']).resolve()
-        if entry.get('marketplaceSource', {}).get('sourceType') != 'local' or not location.is_relative_to((root / 'transactions').resolve()):
+        if not update.is_local_marketplace(entry) or not location.is_relative_to((root / 'transactions').resolve()):
             raise ValueError('同名 codex-trace 市场不是此安装器管理的来源；为避免影响现有插件，未作修改。')
 
 
