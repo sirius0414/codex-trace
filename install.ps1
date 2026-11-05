@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $Installer = Join-Path $PSScriptRoot 'install.py'
 if ($env:CODEX_TRACE_PYTHON) {
     & $env:CODEX_TRACE_PYTHON -B $Installer @args
-    exit $LASTEXITCODE
+    exit $global:LASTEXITCODE
 }
 foreach ($Candidate in @('python3.14', 'python3', 'python', 'py')) {
     if (Get-Command $Candidate -ErrorAction SilentlyContinue) {
@@ -16,9 +16,10 @@ foreach ($Candidate in @('python3.14', 'python3', 'python', 'py')) {
         $SavedErrorPreference = $ErrorActionPreference
         try {
             $ErrorActionPreference = 'Continue'
-            $LASTEXITCODE = 1
+            # Native processes update the global exit code; a script-local value shadows it.
+            $global:LASTEXITCODE = 1
             & $Candidate @Prefix -I -c 'import sys; from compression import zstd; assert sys.version_info >= (3,14)' 2>$null
-            $Supported = ($LASTEXITCODE -eq 0)
+            $Supported = ($global:LASTEXITCODE -eq 0)
         } catch {
             $Supported = $false
         } finally {
@@ -26,7 +27,7 @@ foreach ($Candidate in @('python3.14', 'python3', 'python', 'py')) {
         }
         if ($Supported) {
             & $Candidate @Prefix -B $Installer @args
-            exit $LASTEXITCODE
+            exit $global:LASTEXITCODE
         }
     }
 }
