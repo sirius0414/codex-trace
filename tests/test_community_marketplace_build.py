@@ -44,12 +44,17 @@ class CommunityMarketplaceBuildTests(unittest.TestCase):
         self.assertIn("contracts/trajectory.schema.json", files)
         self.assertIn("ui/trajectory-v1.html", files)
         self.assertIn("LICENSES/python/mcp@1.30.0/LICENSE", files)
-        self.assertTrue(set(community.RELEASE_DOCUMENTS) <= files.keys())
+        self.assertTrue(set(community.PUBLIC_DOCUMENTS) <= files.keys())
+        for name in community.PUBLIC_DOCUMENTS:
+            expected = '# 合成中文文档\n' if '.zh-CN.' in name else '# Synthetic English documentation\n'
+            self.assertEqual(files[name], expected.encode('utf-8'), name)
         self.assertNotIn("install.py", files)
         self.assertFalse(any(name.startswith(("runtime/", "runtime-deps/", "node_modules/")) for name in files))
         legacy = json.loads(files[".mcp.json"])["mcpServers"]["codex-trace"]
         modern = json.loads(files["mcp.json"])["mcpServers"]["codex-trace"]
-        self.assertEqual(modern, {"type": "stdio", **legacy, "cwd": "${PLUGIN_ROOT}",
+        self.assertEqual(legacy["env_vars"], ["CODEX_HOME", "CODEX_TRACE_CODEX_EXECUTABLE", "CODEX_TRACE_STATE_ROOT", "CODEX_TRACE_EXPORT_ROOT"])
+        self.assertNotIn("env_vars", modern)
+        self.assertEqual(modern, {"type": "stdio", **{key: value for key, value in legacy.items() if key != "env_vars"}, "cwd": "${PLUGIN_ROOT}",
             "args": [item.replace("./", "${PLUGIN_ROOT}/", 1) if item.startswith("./") else item for item in legacy["args"]]})
         self.assertEqual(modern["args"][6], "${PLUGIN_ROOT}/requirements.lock")
         self.assertEqual(modern["args"][-1], "${PLUGIN_ROOT}/launch.py")

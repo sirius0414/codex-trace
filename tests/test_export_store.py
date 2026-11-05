@@ -9,6 +9,7 @@ from pathlib import Path
 import stat
 import sys
 import tempfile
+import time
 import tracemalloc
 import unittest
 from unittest import mock
@@ -95,6 +96,10 @@ class ExportStoreTests(unittest.TestCase):
             if os.fstat(fd).st_ino == original.st_ino:
                 current_total += len(chunk)
                 if not removed:
+                    # 合成用例要制造可观察的 ChangeTime 变化，跨过 Windows 时钟粒度；
+                    # 此等待仅属于测试夹具，不是生产同步机制。
+                    if sys.platform == "win32":
+                        time.sleep(0.05)
                     temporary.unlink()
                     removed = True
                 if not chunk:
@@ -145,6 +150,9 @@ class ExportStoreTests(unittest.TestCase):
             chunk = real_read(fd, size)
             if not chunk and not changed and os.fstat(fd).st_ino == original.st_ino:
                 changed = True
+                # 保证合成的同字节重写跨过 Windows 时钟粒度，仍严格要求拒绝 ctime 变化。
+                if sys.platform == "win32":
+                    time.sleep(0.05)
                 saved.write_bytes(PAYLOAD)
                 os.utime(saved, ns=(original.st_atime_ns, original.st_mtime_ns))
             return chunk

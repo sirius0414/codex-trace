@@ -1,46 +1,48 @@
-# Codex Trace 隐私说明
+# Codex Trace privacy notice
 
-更新日期：2026-11-04。适用于本仓库维护的 Codex Trace 0.2.0。本项目的维护者名称为 Codex Trace contributors；项目主页与联系入口见 [SUPPORT.md](SUPPORT.md)。
+[English](PRIVACY.md) | [简体中文](PRIVACY.zh-CN.md)
 
-Codex Trace 在本机读取、显示和导出 Codex 已保存的任务记录。插件会保存本地派生数据及导出文件；“只读”指不修改被观察的 Codex 任务来源，不代表不保存数据。
+Updated: 2026-11-04. Applies to Codex Trace 0.2.0 maintained in this repository. The project is maintained under the name Codex Trace contributors; see [SUPPORT.md](SUPPORT.md) for the project homepage and contact options.
 
-## 读取什么、用于什么
+Codex Trace reads, displays, and exports task records that Codex has saved locally. The plugin stores derived local data and exported files. “Read-only” means it does not modify the Codex task sources being observed; it does not mean that no data is stored.
 
-插件通过本地 Codex CLI 的只读 app-server history API 读取任务列表、元数据、轮次和条目，并读取 `CODEX_HOME` 下的 `sessions/` 与 `archived_sessions/`。`CODEX_HOME` 默认是用户目录中的 `.codex`。这些记录可能包含任务标题与标识、时间、消息正文、代码、工具参数及输出、保存的推理片段、文件路径、用量和 Agent 关系。
+## What is read and why
 
-这些数据用于任务选择、轨迹浏览、搜索、增量观察、来源核对和导出。查看已确认子 Agent 时会读取对应子任务。导出会独立枚举所选任务及已确认子任务的已知原始来源，范围不因当前页面的搜索、筛选、折叠或分页而缩小。原始记录中的凭据、个人信息或业务内容不会因导出自动脱敏，请在分享 ZIP 前自行检查。
+The plugin reads task lists, metadata, turns, and entries through the local Codex CLI's read-only app-server history API, and reads `sessions/` and `archived_sessions/` under `CODEX_HOME`. By default, `CODEX_HOME` is `.codex` in the user's home directory. These records may contain task titles and identifiers, timestamps, message bodies, code, tool arguments and outputs, saved reasoning fragments, file paths, usage, and Agent relationships.
 
-插件校验任务身份、来源根目录和继承范围。它不通过 history API 创建、续写或中断任务，也不写入 Codex 会话数据库。来源缺失、格式变化或读取上限可能使显示和导出不完整。
+This data supports task selection, trace browsing, search, incremental observation, source verification, and export. Viewing a confirmed child Agent reads the corresponding child task. Export independently enumerates the known raw sources of the selected task and its confirmed child tasks; its scope is not narrowed by the current page's search, filters, folded sections, or pagination. Export does not automatically redact credentials, personal information, or business content from raw records. Review a ZIP before sharing it.
 
-## 本地保存位置与期限
+The plugin validates task identity, source roots, and inherited scope. It does not create, continue, or interrupt tasks through the history API, and does not write to the Codex session database. Missing sources, format changes, or read limits may leave displays and exports incomplete.
 
-| 数据 | 默认位置 | 保存与清理行为 |
+## Local storage and retention
+
+| Data | Default location | Retention and cleanup |
 | --- | --- | --- |
-| 派生 SQLite 数据库 | macOS：`~/.local/share/codex-trace/index/derived.sqlite3`；Windows：`%LOCALAPPDATA%\codex-trace\index\derived.sqlite3` | 保存任务投影摘要、来源引用、阅读偏好、来源实例标识及导出回执。摘要可能含任务内容片段；当前投影缓存不重复保存完整详情字段。无自动删除期限。 |
-| 临时导出 ZIP | 上述 `index/exports/` | 默认在创建后 30 分钟到期，服务运行时定期清理可确认归属的快照；服务停止期间不会定时清理。保存状态为 `pending` 或 `unknown` 时保留恢复所需材料，直至结果明确。释放临时快照不会删除持久回执或最终 ZIP。 |
-| 最终导出 ZIP | macOS：`~/Downloads/Codex Trace/`；Windows：`%USERPROFILE%\Downloads\Codex Trace\` | 包含采集到的原始记录、来源清单与哈希，由用户管理，无自动删除期限。 |
-| 安装记录与运行环境 | macOS：`~/.local/share/codex-trace/installations/<标识>/`；Windows：`%LOCALAPPDATA%\codex-trace\installations\<标识>\` | 保存安装事务、配置、诊断日志及独立 Python 环境，供更新和恢复使用。安装标识由 Codex 来源目录路径计算。卸载保留这些材料。 |
-| 可选原生离线包的运行时与依赖 | 由安装该包的宿主管理的插件缓存目录 | 包含程序、运行时、依赖与许可证；不作为任务数据缓存。宿主决定安装包缓存的保留和移除行为。 |
-| 社区市场 Python、依赖与下载缓存 | uv 管理的外部目录，具体位置遵循本机 uv 配置 | 首次启动准备 Python 3.14.2 与锁定依赖。缓存可能供其他程序复用，由 uv 管理保留及清理；插件卸载不会主动删除。 |
-| 界面偏好 | 宿主允许时使用页面的 `localStorage` | 保存语言、样式、字号、换行和行号等显示选项，无插件设置的自动删除期限；不在此处保存任务正文。 |
-| 页面导出恢复标识 | 宿主允许时使用页面的 `sessionStorage` | 保存来源/任务 ID、导出请求 ID、导出 ID 与阶段；不保存正文、清单或最终路径。生命周期由宿主页面存储控制。 |
+| Derived SQLite database | macOS: `~/.local/share/codex-trace/index/derived.sqlite3`; Windows: `%LOCALAPPDATA%\codex-trace\index\derived.sqlite3` | Stores task projection summaries, source references, reading preferences, source instance identifiers, and export receipts. Summaries may contain task excerpts; the current projection cache does not duplicate complete detail fields. No automatic deletion period is set. |
+| Temporary export ZIPs | `index/exports/` under the directory above | Expire 30 minutes after creation by default. While running, the service periodically cleans up snapshots whose ownership it can establish; it does not perform scheduled cleanup while stopped. A save in `pending` or `unknown` state retains the materials needed for recovery until the result is known. Releasing a temporary snapshot does not delete persistent receipts or the final ZIP. |
+| Final export ZIPs | macOS: `~/Downloads/Codex Trace/`; Windows: `%USERPROFILE%\Downloads\Codex Trace\` | Contain collected raw records, a source manifest, and hashes. Managed by the user, with no automatic deletion period. |
+| Installation records and runtime environments | macOS: `~/.local/share/codex-trace/installations/<id>/`; Windows: `%LOCALAPPDATA%\codex-trace\installations\<id>\` | Store installation transactions, configuration, diagnostic logs, and isolated Python environments for updates and recovery. The installation identifier is derived from the Codex source-directory path. Uninstallation retains these materials. |
+| Runtime and dependencies in an optional native offline package | The plugin cache managed by the host that installs the package | Contains the program, runtime, dependencies, and licenses; it is not a task-data cache. The host determines package-cache retention and removal. |
+| Community marketplace Python, dependencies, and download caches | External directories managed by uv, according to its local configuration | Initial preparation obtains Python 3.14.2 and locked dependencies. Other applications may reuse these caches. uv manages retention and cleanup; plugin uninstallation does not proactively delete them. |
+| UI preferences | Page `localStorage`, when allowed by the host | Stores display options such as language, style, font size, wrapping, and line numbers. The plugin sets no automatic deletion period. Task bodies are not stored here. |
+| Page export-recovery identifiers | Page `sessionStorage`, when allowed by the host | Stores source/task IDs, export request IDs, export IDs, and phases; not bodies, manifests, or final paths. Its lifetime is controlled by the host's page storage. |
 
-上表的 `installations/` 目录适用于发布 ZIP 安装器渠道；社区包的程序由宿主缓存，Python 与依赖由 uv 在插件目录外管理；可选原生离线包将运行时与依赖放在宿主插件缓存中。各渠道沿用相同的任务状态与最终导出目录。`CODEX_TRACE_STATE_ROOT`、`CODEX_TRACE_EXPORT_ROOT` 或安装器的自定义路径可以改变相应位置。开发浏览器模式还会在 `build/dev-browser/` 保存调试索引、日志、启动入口和导出，请参照实际启动配置定位。操作系统备份、同步工具及用户另行复制的文件由相应工具管理，不随插件清理而删除。
+The `installations/` directories above apply to the release ZIP installer channel. The host caches the community plugin program, while uv manages Python and dependencies outside that directory. Optional native offline packages keep their runtime and dependencies in the host's plugin cache. All channels retain the same task-state and final-export directories. `CODEX_TRACE_STATE_ROOT`, `CODEX_TRACE_EXPORT_ROOT`, or custom installer paths can change the corresponding locations. Development browser mode also stores debugging indexes, logs, launch entry points, and exports under `build/dev-browser/`; use the actual launch configuration to locate them. Operating-system backups, synchronization tools, and files copied separately by users are managed by those tools and are not deleted by plugin cleanup.
 
-## 数据传递与网络
+## Data transfer and network access
 
-正式界面通过本地 MCP 服务和宿主的应用私有结果 `_meta` 接收任务数据，普通工具结果的 `content` 与 `structuredContent` 不承载任务正文。这是插件的数据通道设计，不代替宿主的权限和数据处理规则。
+The production UI receives task data through the local MCP service and the host's app-private result `_meta`. Ordinary tool-result `content` and `structuredContent` do not carry task bodies. This describes the plugin's data channel; it does not replace the host's permissions or data-handling rules.
 
-当前插件没有用于把轨迹上传到项目维护者服务器的功能，也没有项目自建的分析或广告服务。社区市场注册和更新会访问 GitHub；首次启动、依赖变化或缓存缺失时，uv 会从其配置的分发来源获取固定 Python 3.14.2 和锁定依赖。发布 ZIP 安装器获取 Python 依赖时也可能访问网络；只有可选原生离线包内置运行时及依赖，启动器无需下载它们。Codex 自身的运行，以及用户打开外部链接或提交问题时也可能访问网络，这些服务有各自的数据处理规则。向 GitHub Issues 主动提交的文字和附件会交给 GitHub，并可能公开展示。请不要提交原始会话、完整导出 ZIP、凭据或未脱敏的日志。
+The current plugin has no feature for uploading traces to servers operated by the project maintainers, and the project operates no analytics or advertising service. Community marketplace registration and updates access GitHub. During initial preparation, dependency changes, or cache misses, uv obtains pinned Python 3.14.2 and locked dependencies from its configured distribution sources. The release ZIP installer may also use the network to obtain Python dependencies. Only the optional native offline package includes its runtime and dependencies, so its launcher does not download them. Codex itself, external links opened by users, and issue submissions may also use the network; those services have their own data-handling rules. Text and attachments voluntarily submitted to GitHub Issues are sent to GitHub and may be displayed publicly. Do not submit raw sessions, complete export ZIPs, credentials, or unredacted logs.
 
-## 卸载与删除数据
+## Uninstallation and data deletion
 
-安装器的卸载操作移除本插件及对应本地市场注册，保留索引、偏好、回执、安装记录、旧运行环境和最终导出。卸载不会删除 Codex 原始任务记录。
+The installer's uninstall operation removes this plugin and its corresponding local marketplace registration. It retains indexes, preferences, receipts, installation records, old runtime environments, and final exports. Uninstallation does not delete original Codex task records.
 
-社区市场可通过 `codex plugin remove codex-trace@codex-trace-community` 卸载插件，并用 `codex plugin marketplace remove codex-trace-community` 移除市场注册；其他宿主安装渠道使用对应插件卸载入口。Codex Trace 没有在宿主卸载时自动删除自身状态目录或最终 ZIP 的卸载钩子；宿主是否移除程序缓存由该宿主管理，uv 共享缓存另由 uv 管理。不能将程序缓存移除视为全部任务派生数据已删除。
+For the community marketplace, uninstall with `codex plugin remove codex-trace@codex-trace-community` and remove registration with `codex plugin marketplace remove codex-trace-community`. Other host-installed channels use their corresponding uninstall entry point. Codex Trace has no uninstall hook that automatically deletes its state directories or final ZIPs when the host uninstalls it. The host controls removal of its program cache, while uv manages its shared caches separately. Removing the program cache does not mean all derived task data has been deleted.
 
-需要清理本地数据时，先在界面核对所有未决导出，确认已保存文件的路径与校验结果，再停用插件并停止其本地服务，关闭相关页面。随后可使用系统文件管理器删除实际配置对应的插件状态目录、安装目录和不再需要的最终 ZIP，并使用宿主提供的页面存储管理方式清除界面偏好及恢复标识。不要删除 `.codex/sessions` 或 `.codex/archived_sessions` 来清理本插件缓存。
+To clean up local data, first check all outstanding exports in the UI and confirm the paths and verification results of saved files. Then disable the plugin, stop its local service, and close the relevant pages. You can then use the system file manager to delete the plugin state directory, installation directories, and final ZIPs that are no longer needed, using their actual configured locations. Use the host's page-storage controls to clear UI preferences and recovery identifiers. Do not delete `.codex/sessions` or `.codex/archived_sessions` to clear this plugin's cache.
 
-在 `pending`、`unknown` 或结果未确认时删除快照、数据库或页面恢复标识，会失去核对同一次请求的材料；这不能证明最终 ZIP 尚未生成，也不能撤销已经受理的保存。清理前应先解决未决请求。删除派生数据库会重置阅读偏好、来源实例标识与历史回执，之后浏览时可能重新生成摘要缓存。
+Deleting snapshots, the database, or page recovery identifiers while a save is `pending`, `unknown`, or otherwise unconfirmed removes the materials needed to check that same request. It does not prove that a final ZIP was never created, and it cannot cancel a save that has already been accepted. Resolve outstanding requests before cleanup. Deleting the derived database resets reading preferences, source instance identifiers, and historical receipts; later browsing may recreate summary caches.
 
-本项目没有持有用户本机文件的远程副本，维护者无法远程代为删除这些文件。隐私相关问题可通过 [支持入口](SUPPORT.md) 提交不含敏感材料的问题说明。
+The project holds no remote copy of files stored on your computer, and maintainers cannot delete those files remotely on your behalf. For privacy questions, use the [support options](SUPPORT.md) to submit a description that contains no sensitive materials. Report security or privacy vulnerabilities privately as described in [SECURITY.md](SECURITY.md).

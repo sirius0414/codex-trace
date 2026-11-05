@@ -146,8 +146,8 @@ class MarketplaceBuildTests(unittest.TestCase):
         manifest = {"name": "codex-trace", "version": "1.2.3", "interface": {"displayName": "Synthetic"}}
         for name, content in {"plugin/plugin.json": json.dumps(manifest), "plugin/launch.py": "# synthetic launcher\n",
                               "requirements.lock": "mcp==1.30.0\n",
-                              **{name: '# Synthetic release documentation\n'
-                                 for name in build.RELEASE_DOCUMENTS}}.items():
+                              **{name: '# 合成中文文档\n' if '.zh-CN.' in name else '# Synthetic English documentation\n'
+                                 for name in build.PUBLIC_DOCUMENTS}}.items():
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8", newline="\n")
@@ -184,8 +184,9 @@ class MarketplaceBuildTests(unittest.TestCase):
             self.assertTrue({"plugin.json", "mcp.json", ".mcp.json", "launch.py", "runtime/bin/python3",
                              "runtime-deps/mcp.py", "PRIVACY.md", "SUPPORT.md", "TERMS.md"} <= names)
             self.assertNotIn("install.py", names)
-            for name in build.RELEASE_DOCUMENTS:
-                self.assertEqual(archive.read(name), b'# Synthetic release documentation\n')
+            for name in build.PUBLIC_DOCUMENTS:
+                expected = '# 合成中文文档\n' if '.zh-CN.' in name else '# Synthetic English documentation\n'
+                self.assertEqual(archive.read(name), expected.encode('utf-8'), name)
             modern = json.loads(archive.read("mcp.json"))["mcpServers"]["codex-trace"]
             legacy = json.loads(archive.read(".mcp.json"))["mcpServers"]["codex-trace"]
             self.assertEqual(modern, {"type": "stdio", **legacy})

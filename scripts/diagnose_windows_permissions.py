@@ -17,6 +17,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 
 
 def token_snapshot(token=None) -> dict:
@@ -73,6 +74,49 @@ def object_snapshot(path: Path, user_sid: str) -> dict:
                 for ace in dacl)}
 
 
+def timestamp_probes(fs, root: Path) -> list[dict]:
+    """用原生 ChangeTime 区分时间粒度和硬链接删除可见性；不依赖 stdlib creation time。"""
+    result = []
+    def snapshot(descriptor):
+        info = fs.fstat(descriptor)
+        return {key: getattr(info, key) for key in
+                ("st_ino", "st_nlink", "st_size", "st_atime_ns", "st_mtime_ns", "st_ctime_ns")}
+    for operation in ("unlink", "rewrite-identical-restore-mtime"):
+        for delay in (0, 0.05, 0.2):
+            path = root / f"timestamp-{operation}-{delay}"
+            payload = b"synthetic published bytes\n" * 10000
+            path.write_bytes(payload)
+            link = path.with_suffix(".link")
+            if operation == "unlink":
+                os.link(path, link)
+            descriptor = fs.open(path, fs.O_RDONLY | fs.O_NOFOLLOW)
+            try:
+                before = snapshot(descriptor)
+                while fs.read(descriptor, 65536):
+                    pass
+                if delay:
+                    time.sleep(delay)
+                if operation == "unlink":
+                    link.unlink()
+                else:
+                    path.write_bytes(payload)
+                    fs.utime(path, ns=(before["st_atime_ns"], before["st_mtime_ns"]))
+                after = snapshot(descriptor)
+                time.sleep(0.05)
+                settled = snapshot(descriptor)
+            finally:
+                fs.close(descriptor)
+            descriptor = fs.open(path, fs.O_RDONLY | fs.O_NOFOLLOW)
+            try:
+                reopened = snapshot(descriptor)
+            finally:
+                fs.close(descriptor)
+            result.append({"operation": operation, "delayBeforeMutationSeconds": delay,
+                           "before": before, "after": after, "after50ms": settled,
+                           "afterReopen": reopened})
+    return result
+
+
 def file_probes(user_sid: str) -> dict:
     """分别观察默认创建、显式 owner 创建及 SQLite 继承 DACL 的真实 NTFS 行为。"""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
@@ -116,6 +160,7 @@ def file_probes(user_sid: str) -> dict:
         except Exception as error:
             result["productionDerivedStore"] = {"passed": False, "errorType": type(error).__name__,
                                                  "errorCode": str(error)}
+        result["nativeTimestampProbes"] = timestamp_probes(fs, root)
     return result
 
 

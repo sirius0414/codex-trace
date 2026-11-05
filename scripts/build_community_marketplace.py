@@ -17,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 
-from build_release import (RELEASE_DOCUMENTS, ROOT, audit_payload, checked_bytes,
+from build_release import (PUBLIC_DOCUMENTS, ROOT, audit_payload, checked_bytes,
                            collect_payload, digest, json_bytes)
 from platform_runtime import npm_command
 
@@ -26,6 +26,7 @@ MARKETPLACE_NAME = "codex-trace-community"
 PACKAGE_MANIFEST = "package-manifest.json"
 CATALOG_PATH = ".agents/plugins/marketplace.json"
 DISTRIBUTION = "github-repository-marketplace"
+USER_ENV_VARS = ["CODEX_HOME", "CODEX_TRACE_CODEX_EXECUTABLE", "CODEX_TRACE_STATE_ROOT", "CODEX_TRACE_EXPORT_ROOT"]
 
 
 def catalog() -> dict:
@@ -77,7 +78,7 @@ def community_payload(root: Path, assets: Path) -> tuple[str, dict[str, bytes]]:
         reject_source_links(directory)
     version, installer = collect_payload(root, assets)
     files = {name.removeprefix("plugin/"): data for name, data in installer.items() if name.startswith("plugin/")}
-    for name in RELEASE_DOCUMENTS:
+    for name in PUBLIC_DOCUMENTS:
         files[name] = checked_bytes(root / name, root)
     files["plugin.json"] = checked_bytes(root / "plugin/plugin.json", root)
     files["launch.py"] = checked_bytes(root / "plugin/launch.py", root)
@@ -95,7 +96,9 @@ def community_payload(root: Path, assets: Path) -> tuple[str, dict[str, bytes]]:
                        if argument.startswith("./") else argument for argument in launch["args"]]}
     files["mcp.json"] = json_bytes({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
                                    "mcpServers": {"codex-trace": modern}})
-    files[".mcp.json"] = json_bytes({"mcpServers": {"codex-trace": launch}})
+    # Codex 0.153 只从 legacy overlay 读取 env_vars；现代 schema 不接受此字段。
+    # 仅透传已有的本机配置入口，保留自定义 Codex 用户目录及存储位置的语义。
+    files[".mcp.json"] = json_bytes({"mcpServers": {"codex-trace": {**launch, "env_vars": USER_ENV_VARS}}})
     legacy = json.loads(files[".codex-plugin/plugin.json"])
     legacy["mcpServers"] = "./.mcp.json"
     files[".codex-plugin/plugin.json"] = json_bytes(legacy)

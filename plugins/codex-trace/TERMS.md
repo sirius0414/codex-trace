@@ -1,23 +1,27 @@
-# Codex Trace 使用说明与许可
+# Codex Trace usage and licensing
 
-更新日期：2026-11-04。Codex Trace 由 Codex Trace contributors 独立维护。本文件说明本项目的使用边界，软件授权以仓库内的 [MIT LICENSE](LICENSE) 为准，不在 MIT 许可之外增加软件使用或分发限制。随包第三方组件遵循各自许可证与署名要求，见 [NOTICE](NOTICE) 及第三方授权文件。
+[English](TERMS.md) | [简体中文](TERMS.zh-CN.md)
 
-## 功能与支持范围
+Updated: 2026-11-04. Codex Trace is independently maintained by Codex Trace contributors. This document describes the project's usage boundaries. Software licensing is governed by the repository's [MIT LICENSE](LICENSE); this document adds no restrictions on software use or distribution beyond that license. Bundled third-party components remain subject to their own licenses and attribution requirements; see [NOTICE](NOTICE) and the third-party license files.
 
-Codex Trace 用于在受支持的本地 Codex 桌面环境中查看已经保存的执行记录，并按用户操作导出本地 ZIP。读取来源不修改 Codex 任务；保存阅读偏好、派生摘要和导出会写入插件自身的本地文件。数据范围、保存期限和删除方法见 [PRIVACY.md](PRIVACY.md)。
+Chinese reference translations are available for [LICENSE](LICENSE.zh-CN.md) and [NOTICE](NOTICE.zh-CN.md); the English originals remain unchanged.
 
-插件依赖兼容的 Codex CLI/history API、Python 运行环境和本地文件系统。当前平台要求与限制见 [README.md](README.md) 和 [WINDOWS.md](WINDOWS.md)。本项目不承诺适配所有历史或未来的宿主版本，也不提供云端任务执行或网页端运行功能。
+## Features and support scope
 
-记录只能反映来源已保存的信息。界面中的缺失内容、未知状态、用量和时间范围应结合来源说明理解。搜索与筛选主要针对已加载记录；导出包含所选任务及已确认子任务的已知来源，各来源可能在不同时间采集。ZIP 校验成功表示保存的字节已核验，不保证原始来源完整或构成同一时刻的快照。只有显示“本地导出已校验”及实际路径时，才确认该次保存成功；超时或结果未确认时应继续核对原请求。
+Codex Trace displays saved execution records in supported local Codex desktop environments and exports local ZIPs at the user's request. Reading sources does not modify Codex tasks. Saving reading preferences, derived summaries, and exports writes to the plugin's own local files. See [PRIVACY.md](PRIVACY.md) for data scope, retention, and deletion.
 
-社区仓库市场通过用户主动注册 GitHub 仓库分发；uv 管理固定 Python 与锁定依赖，首次准备、依赖变化或缓存缺失时可能联网。可选安装器和内置运行时包有各自前置条件，详见 [安装指南](INSTALL.md)。社区发布不表示通过 OpenAI 公共目录审核。
+The plugin depends on compatible Codex CLI/history APIs, a Python runtime, and a local filesystem. See [README.md](README.md) and [WINDOWS.md](WINDOWS.md) for current platform requirements and limitations. The project does not promise compatibility with every past or future host version, and does not provide cloud task execution or operation in a web-hosted environment.
 
-## 数据与第三方服务
+Records can reflect only information saved by their sources. Interpret missing content, unknown states, usage, and time ranges in the UI alongside the source explanations. Search and filters mainly apply to loaded records. Exports include known sources for the selected task and confirmed child tasks, and different sources may be collected at different times. Successful ZIP verification means the saved bytes have been checked; it does not guarantee complete original sources or a snapshot taken at one instant. A save is confirmed only when the UI shows that the local export is verified and displays its actual path. After a timeout or an unconfirmed result, continue checking the original request.
 
-使用者应确认自己有权读取、导出及分享所涉及的任务内容，并在分享前检查个人信息、凭据和第三方材料。本软件的 MIT 许可不授予任务内容或第三方服务的额外权利。
+The community repository marketplace distributes through users explicitly registering the GitHub repository. uv manages pinned Python and locked dependencies, and may use the network during initial preparation, dependency changes, or cache misses. Optional installers and bundled-runtime packages have their own prerequisites; see the [installation guide](INSTALL.md). Community publication does not establish OpenAI public-directory approval.
 
-Codex、ChatGPT、依赖分发服务及 GitHub 各有独立条款。项目不代表 OpenAI，清单中的开发者名称与链接不表示已获官方认证、目录审核或上架批准。
+## Data and third-party services
 
-## 许可中的保证与支持
+Users should ensure they have the right to read, export, and share the task content involved, and review personal information, credentials, and third-party materials before sharing. This software's MIT license grants no additional rights to task content or third-party services.
 
-软件按 MIT 许可所载的现状提供，相关无担保和责任条款以 [LICENSE](LICENSE) 原文为准。问题反馈方式见 [SUPPORT.md](SUPPORT.md)；本项目未承诺固定响应时间或持续可用性。
+Codex, ChatGPT, dependency-distribution services, and GitHub each have their own terms. This project does not represent OpenAI. Developer names and links in the manifests do not mean that official identity verification, directory review, or listing approval has been obtained.
+
+## Warranty and support under the license
+
+The software is provided as is under the MIT license. Its warranty disclaimer and liability terms are governed by the original [LICENSE](LICENSE). See [SUPPORT.md](SUPPORT.md) for feedback channels. The project promises no fixed response time or continuous availability.

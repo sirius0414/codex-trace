@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 
 from platform_runtime import executable
 from verify_install import verify_cache
+from verify_codex_host_startup import verify_host_startup
 
 MARKETPLACE = "codex-trace-community"
 SELECTOR = "codex-trace@" + MARKETPLACE
@@ -31,6 +32,7 @@ LOCAL_GIT_ALIAS = "https://community-smoke.invalid/repository.git"
 FIXTURE_BRANCH = "codex-trace-smoke-validation"
 UPDATE_MARKER = "\nCommunity marketplace synthetic update verification.\n"
 UV_OPTIONS = {"UV_FIND_LINKS", "UV_NO_INDEX", "UV_OFFLINE"}
+USER_ENV_VARS = ["CODEX_HOME", "CODEX_TRACE_CODEX_EXECUTABLE", "CODEX_TRACE_STATE_ROOT", "CODEX_TRACE_EXPORT_ROOT"]
 
 
 def isolated_environment(home: Path, uv_cache_dir: Path) -> dict[str, str]:
@@ -125,6 +127,9 @@ def validate_plugin(directory: Path) -> dict:
                 for item in expected] if name == "mcp.json" else expected
         if launch.get("command") != "uv" or launch.get("args") != args or launch.get("cwd") != cwd:
             raise ValueError("invalid-community-uv-command")
+        if ((name == ".mcp.json" and launch.get("env_vars") != USER_ENV_VARS)
+                or (name == "mcp.json" and "env_vars" in launch)):
+            raise ValueError("invalid-community-user-environment-overlay")
     return manifest
 
 
@@ -297,8 +302,11 @@ def smoke(repository: str, *, ref: str | None = None, codex: Path, uv: Path,
             transport = server.get("transport", {})
             check("cli_resolves_uv_plugin_cwd", transport.get("command") == "uv"
                   and transport.get("args") == [item.replace("${PLUGIN_ROOT}", str(installed)) for item in launch["args"]]
+                  and transport.get("env_vars") == USER_ENV_VARS
                   and Path(transport.get("cwd", "")).is_absolute()
                   and Path(transport["cwd"]).resolve() == installed)
+            stage = "real_codex_host_startup"
+            report["hostStartup"] = verify_host_startup(installed, root, codex, uv, env, checks)
             stage = "marketplace_upgrade"
             before_update = fingerprints(installed)
             # 私有缓存污染探针证明 plugin add 真正替换目录；同一远端 commit 也可验收。

@@ -1,5 +1,7 @@
 # Local payload contracts
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 `trajectory.schema.json` is the authoritative JSON Schema (Draft 2020-12), version
 `1.0.0`. Its default root validates `ThreadSnapshot`; the reusable definitions
 also cover the other service payloads listed in `tools.json`. This is a proposed
@@ -81,7 +83,7 @@ The service chooses the ZIP filename and resolves the destination; requests neve
 accept a path, directory, filename or overwrite flag. `LocalExportPath` is an
 output-only absolute path. Existing POSIX paths remain valid. On Windows the
 receipt uses a native local-drive path, for example
-`C:\Users\张 三\Downloads\Codex Trace\codex-trace-a.zip`. UNC shares,
+`C:\测试 用户\Downloads\Codex Trace\codex-trace-a.zip`. UNC shares,
 drive-relative paths, device namespaces, alternate data streams, DOS device
 names and components ending in a dot or space are excluded. Network filesystem
 locking and atomic publication are outside this local export contract.

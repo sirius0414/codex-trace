@@ -44,7 +44,7 @@ def make_repository(root: Path, env: dict, git: Path) -> Path:
     for name in (".mcp.json", "mcp.json"):
         write_json(plugin / name, {**({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"}
                                     if name == "mcp.json" else {}), "mcpServers": {"codex-trace": {
-            **({"type": "stdio"} if name == "mcp.json" else {}), **launch,
+            **({"type": "stdio"} if name == "mcp.json" else {"env_vars": smoke.USER_ENV_VARS}), **launch,
             "cwd": "." if name == ".mcp.json" else "${PLUGIN_ROOT}",
             "args": [item.replace("./", "${PLUGIN_ROOT}/", 1) if item.startswith("./") else item
                      for item in launch["args"]] if name == "mcp.json" else launch["args"]}}})
@@ -272,9 +272,11 @@ class CommunitySmokeGitTests(unittest.TestCase):
             smoke.validate_plugin(installed)
             checks.append({"operation": "synthetic_test_runtime_stub", "passed": True})
             return {"runtimeWasStubbedForUnitTest": True}
-        with patch.object(smoke, "verify_cache", side_effect=synthetic_verify):
+        with patch.object(smoke, "verify_cache", side_effect=synthetic_verify), \
+                patch.object(smoke, "verify_host_startup", return_value={"hostWasStubbedForUnitTest": True}):
             result = smoke.smoke(str(self.repository), codex=smoke.executable("codex"), uv=Path(sys.executable))
         self.assertTrue(result["passed"], result)
+        self.assertTrue(result["hostStartup"]["hostWasStubbedForUnitTest"])
         self.assertTrue(result["sameVersionUpdateVerified"])
         self.assertFalse(result["crossVersionUpgradeVerified"])
         self.assertTrue(result["updatePayloadChanged"])

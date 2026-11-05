@@ -1,36 +1,38 @@
-# Codex Trace 安装指南
+# Codex Trace Installation Guide
 
-Codex Trace 0.2.0 的主要分发渠道是本 GitHub 仓库的社区插件市场。它提供已构建的前端、后端、契约和许可证；用户无需 Node.js 或手工构建。插件读取和保存的数据范围见 [PRIVACY.md](PRIVACY.md)，维护者发布说明见 [MARKETPLACE.md](MARKETPLACE.md)。
+[English](INSTALL.md) | [简体中文](INSTALL.zh-CN.md)
 
-## 社区市场前置条件
+Codex Trace 0.2.0 primarily distributes through this GitHub repository's community plugin marketplace. It includes the built frontend, backend, contracts, and licenses; users need neither Node.js nor manual builds. See [PRIVACY.md](PRIVACY.md) for data access and storage, [SUPPORT.md](SUPPORT.md) for help, and [MARKETPLACE.md](MARKETPLACE.md) for maintainer instructions.
 
-- 本机 Codex 桌面应用与原生 CLI；CLI 需为 0.153.0 或更高兼容版本，支持插件市场和本插件使用的只读 history API。
-- Git 与 uv 已安装，并能从启动 Codex 的进程环境中找到。终端中的 `git --version`、`uv --version`、`codex --version` 应正常返回；GUI 启动的 Codex 也须能找到 uv。
-- 注册和更新仓库时可访问 GitHub。仓库目前为私有，安装者必须拥有 Git 读取权限，并为本机 Git 配置有效凭据。首次启动、依赖变化或缓存缺失时，uv 需要联网获取固定 Python 3.14.2 与 `requirements.lock` 中的依赖。
-- Windows 需要原生 Codex 和本地 NTFS，无需 WSL；以普通用户启动 Codex 和终端，不支持“以管理员身份运行”。实际平台结果以对应版本的 [Release 验证记录](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.0) 为准，不能把 macOS 或模拟测试记为 Windows 通过。其他限制见 [WINDOWS.md](WINDOWS.md)。
+## Community marketplace prerequisites
 
-社区方式无需预先手工安装 Python；uv 管理运行时和依赖。不要用 `sudo` 启动插件，也不要手工修改其缓存环境中的依赖。
+- A local Codex desktop application and native CLI. Use CLI 0.153.0 or a later compatible version with plugin marketplace support and the read-only history APIs used by this plugin.
+- Git and uv installed and discoverable from the process that starts Codex. `git --version`, `uv --version`, and `codex --version` should succeed in a terminal; Codex launched from the GUI must also find uv.
+- GitHub access for registration and updates. The repository is currently **PRIVATE**; installers must have Git read access and valid local Git credentials. During initial startup, dependency changes, or cache misses, uv needs network access to obtain Python 3.14.2 and the dependencies in `requirements.lock`.
+- Windows requires native Codex and local NTFS, without WSL. Start Codex and the terminal as an ordinary user; **Run as administrator is unsupported**. Consult the version's [Release validation records](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.0) for actual platform results; macOS and simulated tests do not establish Windows success. See [WINDOWS.md](WINDOWS.md) for other limitations.
 
-## 社区市场安装
+The community workflow does not require manually installing Python first; uv manages it and the dependencies. Do not start the plugin with `sudo` or manually change dependencies in its cached environment.
 
-macOS 终端或 Windows PowerShell：
+## Community marketplace installation
+
+In a macOS terminal or Windows PowerShell:
 
 ```sh
 codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
 codex plugin add codex-trace@codex-trace-community
 ```
 
-市场名为 `codex-trace-community`，插件名为 `codex-trace`。注册后从仓库清单定位 `plugins/codex-trace/`，Codex 管理其安装缓存。首次打开时 uv 可能需要较长时间准备运行环境；缓存由 uv 在插件目录外管理，不承诺重启后必定无需网络。
+The marketplace is `codex-trace-community` and the plugin is `codex-trace`. Registration locates `plugins/codex-trace/` through the repository catalog; Codex manages the installed cache. uv may take time to prepare the environment on first use. It manages caches outside the plugin directory; restarting is not guaranteed to avoid network access.
 
-安装后先按下节完成依赖预热，成功后重启 Codex 或开启新会话，再在聊天的 **New Tab → 执行轨迹** 打开；全局入口会先显示任务选择器。旧面板可能仍使用旧资源，关闭前先核对未确认导出。安装命令和仓库内的清单不代表已经通过 OpenAI 公共目录审核；该社区渠道由用户主动注册。
+After installation, complete the runtime preparation below. Once successful, restart Codex or start a new session and open **New Tab → 执行轨迹 (Execution Trace)**. The global entry point first displays a task picker. Old panels may retain old resources; reconcile unconfirmed exports before closing them. These commands and repository manifests do not imply OpenAI public-directory approval: users explicitly register this community channel.
 
-若已有 `codex-trace@codex-trace`（ZIP 安装器）或 `codex-trace@codex-trace-local`（开发安装），先停用旧插件，避免多个同名入口同时启用。需要保留的数据与未决导出先按原渠道核对。
+If `codex-trace@codex-trace` (ZIP installer) or `codex-trace@codex-trace-local` (development install) is already enabled, disable it first to avoid duplicate entry points. Reconcile retained data and pending exports through the original channel.
 
-## 首次使用与依赖预热
+## First use and runtime preparation
 
-首次使用、依赖变化或 uv 缓存被清理后，建议在打开插件前运行以下对应平台的安装与预热块。冷下载可能超过宿主默认约 30 秒的 MCP 启动等待时间；预热在终端中独立完成 Python 和依赖准备。它可替代上方裸 `plugin add` 命令；已安装时也可重复执行，从 CLI 的 `installedPath` 自动定位本次安装，无需手工寻找缓存目录。
+Before first use, after dependency changes, or after clearing uv caches, run the corresponding installation and preparation block below before opening the plugin. Cold downloads may exceed the host's default MCP startup wait of approximately 30 seconds. Preparation obtains Python and dependencies separately in the terminal. It can replace the bare `plugin add` command above and can be repeated for an installed plugin. The CLI's `installedPath` identifies the current installation without manually finding its cache.
 
-macOS（zsh 或 bash，无需预先安装 Python 或 jq）：
+macOS (zsh or bash; no preinstalled Python or jq required):
 
 ```sh
 (
@@ -41,7 +43,7 @@ macOS（zsh 或 bash，无需预先安装 Python 或 jq）：
 )
 ```
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
 $traceJson = codex plugin add codex-trace@codex-trace-community --json
@@ -54,53 +56,55 @@ try {
 } finally { Pop-Location }
 ```
 
-显示 `Codex Trace runtime ready` 后，重启 Codex 或开启新会话，再打开执行轨迹。预热应使用启动 Codex 的同一用户和 uv 配置；更换用户、缓存位置或依赖后需要重新准备。命令失败时先处理 Git 访问权限、uv 网络或缓存问题，不能把失败的准备步骤当成插件已就绪。当前验证覆盖依赖准备及预热后的 MCP 和导出流程，尚未证明宿主在空缓存下能完成冷启动；Windows 命令也不代表已完成原生 Windows 实机验收。
+After `Codex Trace runtime ready` appears, restart Codex or start a new session before opening the viewer. Use the same user and uv default cache/runtime locations as Codex. The host does not inherit every terminal `UV_*` setting by default; verify the actual host environment before using custom caches rather than assuming terminal preparation covers the host. Prepare again after changing users, cache locations, or dependencies. Resolve Git access, uv networking, or cache errors before considering the plugin ready. Each Release records dependency preparation, MCP/export, and real-host startup results separately. Success after preparation does not establish startup with an empty cache; the Windows commands alone do not establish native-platform or ordinary-user desktop acceptance.
 
-## 社区市场更新
+## Community marketplace update
 
 ```sh
 codex plugin marketplace upgrade codex-trace-community
 codex plugin add codex-trace@codex-trace-community
 ```
 
-更新后按 [首次使用与依赖预热](#首次使用与依赖预热) 执行同一安装与预热块，成功后重启 Codex 或开启新会话。仓库更新与依赖变化可能需要网络；失败时先修复 Git、uv、代理或证书问题，再重复同一流程。`install.py recover` 仅适用于下方的 ZIP 安装器，不用于社区插件缓存恢复。
+Run the same [installation and runtime preparation block](#first-use-and-runtime-preparation) after updating, then restart Codex or start a new session. Repository updates and dependency changes may require network access. Resolve Git, uv, proxy, or certificate failures before repeating the workflow. `install.py recover` applies only to the optional ZIP installer below, not to community plugin cache recovery.
 
-## 社区市场卸载与缓存
+## Community uninstall and caches
 
 ```sh
 codex plugin remove codex-trace@codex-trace-community
 codex plugin marketplace remove codex-trace-community
 ```
 
-插件删除与市场移除分别处理程序安装和市场注册。派生索引、偏好、导出回执与最终 ZIP 保留；uv 下载及运行环境缓存由 uv 管理，插件卸载不会主动清理它们。共享缓存可能被其他程序使用。先完成未决导出核对，停止插件服务并关闭页面，再按 [数据清理说明](PRIVACY.md#卸载与删除数据) 处理本插件数据，勿删除 Codex 的原始会话目录。
+Plugin removal and marketplace removal handle the installed program and marketplace registration separately. Derived indexes, preferences, export receipts, and final ZIPs remain. uv manages download and runtime caches, which the plugin does not actively delete; shared caches may be used by other programs. Reconcile pending exports, stop the plugin service, and close its pages before following the [data cleanup instructions](PRIVACY.md#uninstallation-and-data-deletion). Do not delete Codex's original session directories.
 
-常见启动问题：找不到 uv 时检查 Codex 的 PATH 并重启应用；首次准备失败时检查 uv 的网络、代理、证书和磁盘空间；无法发现 Codex 时可设置 `CODEX_TRACE_CODEX_EXECUTABLE` 为实际原生程序的绝对路径。不要把 CLI 包装器目录或应用目录当作可执行文件，也不要通过忽略 TLS 校验解决下载失败。
+Custom runtime configuration uses `CODEX_HOME`, `CODEX_TRACE_CODEX_EXECUTABLE`, `CODEX_TRACE_STATE_ROOT`, and `CODEX_TRACE_EXPORT_ROOT`. Set these variables in the environment that starts Codex before launching the application, then restart Codex after installation or configuration changes. The bundled legacy overlay explicitly forwards these four variables to the MCP process; it does not forward the whole environment. The uv default-cache requirements and `UV_*` inheritance limits above still apply.
 
-## 可选：发布 ZIP 安装器
+Common startup issues: if uv cannot be found, check Codex's PATH and restart the application. If preparation fails, check uv's network, proxy, certificates, and free disk space. If Codex cannot be discovered, set `CODEX_TRACE_CODEX_EXECUTABLE` to the absolute path of the actual native program. A wrapper directory or application directory is not an executable. Do not disable TLS verification to address download failures.
 
-以下原有流程用于下载并执行 `codex-trace-0.2.0.zip` 安装器，与上方社区市场分开管理。该方式需要本机 Python 3.14+，注册 `codex-trace@codex-trace`；Python 依赖在安装阶段准备。原生离线包的构建与验证另见 [MARKETPLACE.md](MARKETPLACE.md#可选原生离线插件包)。
+## Optional: release ZIP installer
 
-## 支持的平台和前置条件
+The existing workflow below downloads and runs `codex-trace-0.2.0.zip` separately from the community marketplace. It requires local Python 3.14+, registers `codex-trace@codex-trace`, and prepares Python dependencies during installation. See [MARKETPLACE.md](MARKETPLACE.md#optional-native-offline-plugin-package) for native offline package builds and validation.
 
-| 项目 | 要求 |
+## Supported platforms and prerequisites
+
+| Item | Requirements |
 | --- | --- |
-| macOS | 本机可运行 Codex 桌面应用及其配套原生 CLI；Python 3.14+ |
-| Windows | Windows 10/11，原生 Codex 与 Python 3.14+，本地 NTFS 卷；不需要 WSL |
-| Python | `venv`、`pip` 和 `compression.zstd` 可用；安装器会实际检查 |
-| Codex | 支持 `plugin marketplace`、`plugin add/remove` 和本插件使用的只读 app-server API |
-| 网络 | 首次创建环境需要下载锁定的 Python 依赖；插件日常启动不会安装依赖 |
+| macOS | A working local Codex desktop application and its companion native CLI; Python 3.14+ |
+| Windows | Windows 10/11, native Codex and Python 3.14+, and local NTFS volumes; WSL is not required |
+| Python | Working `venv`, `pip`, and `compression.zstd`; the installer checks them directly |
+| Codex | Support for `plugin marketplace`, `plugin add/remove`, and the read-only app-server APIs used by this plugin |
+| Network | Locked Python dependencies must be downloaded when first creating the environment; normal plugin startup does not install dependencies |
 
-不支持 Linux、浏览器端／云端执行、网络卷或 Windows UNC、junction、重解析点上的状态和导出目录。Windows 后端已有原生适配；CI 的安装测试不能替代真实 Windows Codex 桌面入口及导出验收。已完成与待完成的系统验证见仓库中的 [WINDOWS.md](https://github.com/sirius0414/codex-trace/blob/main/WINDOWS.md)。
+Linux, browser/cloud execution, and state or export directories on network volumes, Windows UNC paths, junctions, or reparse points are unsupported. The Windows backend has native support, but CI installation tests do not replace acceptance of the actual Windows Codex desktop entry point and export flow. See the repository's [WINDOWS.md](WINDOWS.md) for completed and outstanding platform validation.
 
-先安装并正常启动 Codex；若终端找不到其 CLI，macOS 安装器会尝试常见桌面安装位置；Windows 请把原生 CLI 加入 PATH，或指定原生可执行文件。Python 可从 [Python 官方下载页](https://www.python.org/downloads/) 安装 3.14 或更高版本。Windows 安装时启用 Python Launcher 或加入 PATH，完成后重新打开终端。无需管理员权限，也不要使用 `sudo` 运行本安装器。
+Install and start Codex first. If its CLI cannot be found in the terminal, the macOS installer tries common desktop installation locations. On Windows, add the native CLI to PATH or specify the native executable. Install Python 3.14 or later from the [official Python download page](https://www.python.org/downloads/). On Windows, enable Python Launcher or add Python to PATH, then reopen the terminal. Administrator privileges are not required; do not run this installer with `sudo`.
 
-## 下载和校验
+## Download and verify
 
-从本项目的 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 下载同一版本的 `codex-trace-版本.zip` 与 `SHA256SUMS`。请使用 Release 附件中的 ZIP，不要使用 GitHub 自动生成的 Source code ZIP；后者没有构建好的界面。尚无已发布 Release 时，普通用户的下载入口尚未开放。
+Download `codex-trace-<version>.zip` and `SHA256SUMS` for the same version from this project's [GitHub Releases](https://github.com/sirius0414/codex-trace/releases). Use the ZIP in the release attachments. GitHub's automatically generated Source code ZIP can contain the compiled UI under `plugins/`, but does not provide the layout expected by the standalone installer. Until a release is published, the end-user download is not available.
 
-以 `0.2.0` 为例，先在下载目录校验，再解压：
+For version `0.2.0`, verify from the download directory before extracting:
 
-macOS 终端：
+macOS terminal:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
@@ -108,43 +112,43 @@ unzip codex-trace-0.2.0.zip
 cd codex-trace-0.2.0
 ```
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
 (Get-FileHash .\codex-trace-0.2.0.zip -Algorithm SHA256).Hash
 Get-Content .\SHA256SUMS
-# 确认输出的 SHA-256 与文件中该 ZIP 对应的值一致后再解压。
+# Confirm that the SHA-256 matches this ZIP's entry in the file before extracting.
 Expand-Archive .\codex-trace-0.2.0.zip -DestinationPath .
 Set-Location .\codex-trace-0.2.0
 ```
 
-校验不一致时重新下载，不要继续安装。校验和用于发现内容变化，不能代替对下载来源的信任。
+If verification fails, download the files again rather than continuing installation. Checksums detect content changes; they do not replace trust in the download source.
 
-## 首次安装
+## First installation
 
-macOS：
+macOS:
 
 ```sh
 sh ./install.sh
 ```
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-PowerShell 命令只为本次进程设置脚本执行策略，不修改系统策略。如果组织策略禁止运行脚本，可直接使用 Python：
+The PowerShell command sets the execution policy for this process only; it does not change the system policy. If organizational policy prevents scripts from running, use Python directly:
 
 ```powershell
 py -3.14 .\install.py install
 ```
 
-安装器检查前置条件，创建独立虚拟环境，按 `requirements.lock` 安装并验证依赖，然后生成本机 MCP 配置、注册 Codex Trace 的本地插件市场并安装插件。本机解释器与 Codex 的绝对路径只写入本机安装目录，不存在于下载包中。源码目录、下载包目录都不是运行时依赖。
+The installer checks prerequisites, creates an isolated virtual environment, installs and verifies dependencies from `requirements.lock`, generates local MCP configuration, registers Codex Trace's local plugin marketplace, and installs the plugin. Absolute paths to the local interpreter and Codex are written only to the local installation directory, not included in the download. Neither the source directory nor the downloaded package directory is a runtime dependency.
 
-安装完成后重新加载插件资源；如果菜单仍显示旧内容，在方便时重启 Codex。安装器不会重启桌面应用或结束会话。
+Reload plugin resources after installation. If menus still show old content, restart Codex when convenient. The installer does not restart the desktop application or end sessions.
 
-自动发现失败时显式指定路径（替换示例路径）：
+If automatic discovery fails, specify paths explicitly, replacing these examples:
 
 ```sh
 python3.14 install.py install --python "/path/to/python3.14" --codex "/path/to/codex"
@@ -154,105 +158,105 @@ python3.14 install.py install --python "/path/to/python3.14" --codex "/path/to/c
 py -3.14 .\install.py install --python "C:\Python314\python.exe" --codex "C:\Program Files\Codex\codex.exe"
 ```
 
-`--codex` 要指向原生程序，标准 npm `codex.cmd` 安装可以自动识别；自定义批处理包装器需要改用实际 `codex.exe`。也可用 `CODEX_TRACE_PYTHON` 为启动脚本指定 Python。
+`--codex` must point to a native program. Standard npm `codex.cmd` installations can be detected automatically; custom batch wrappers must instead use the actual `codex.exe`. You can also use `CODEX_TRACE_PYTHON` to select Python for the launcher scripts.
 
-安装器默认操作 `CODEX_HOME` 指向的 Codex 配置，未设置时使用用户主目录下的 `.codex`。它只管理 `codex-trace@codex-trace` 及同名独立市场，不改写其他市场、插件或会话。原开发流程的 `codex-trace-local` 是另一个市场；若曾安装开发版本，请通过 Codex 插件管理停用旧版本，避免两个同名工具同时启用。
+By default, the installer operates on the Codex configuration selected by `CODEX_HOME`, or `.codex` in the user's home directory if it is unset. It manages only `codex-trace@codex-trace` and its separate marketplace of the same name, without rewriting other marketplaces, plugins, or sessions. The original development workflow's `codex-trace-local` is a different marketplace. If you installed a development version, disable the old version through Codex plugin management to avoid enabling two tools with the same name.
 
-| 数据 | macOS | Windows |
+| Data | macOS | Windows |
 | --- | --- | --- |
-| 安装回执、版本及独立环境 | `~/.local/share/codex-trace/installations/<标识>/` | `%LOCALAPPDATA%\codex-trace\installations\<标识>\` |
-| 索引、偏好及导出回执 | `~/.local/share/codex-trace/index/` | `%LOCALAPPDATA%\codex-trace\index\` |
-| 用户导出的 ZIP | `~/Downloads/Codex Trace/` | `%USERPROFILE%\Downloads\Codex Trace\` |
+| Installation receipts, versions, and isolated environments | `~/.local/share/codex-trace/installations/<id>/` | `%LOCALAPPDATA%\codex-trace\installations\<id>\` |
+| Indexes, preferences, and export receipts | `~/.local/share/codex-trace/index/` | `%LOCALAPPDATA%\codex-trace\index\` |
+| User-exported ZIPs | `~/Downloads/Codex Trace/` | `%USERPROFILE%\Downloads\Codex Trace\` |
 
-安装标识根据目标 `CODEX_HOME` 计算，让不同 Codex 配置使用独立的安装记录。高级用户可通过 `--root` 指定安装管理目录，后续更新、恢复、状态和卸载须继续使用同一参数。不要移动正在使用的安装目录或其中的 Python 环境。
+The installation identifier is derived from the target `CODEX_HOME`, giving different Codex configurations separate installation records. Advanced users can select the installation management directory with `--root`; use the same argument for later updates, recovery, status checks, and uninstallation. Do not move an active installation directory or its Python environment.
 
-## 从 Codex Display 切换
+## Migrating from Codex Display
 
-Codex Trace 使用插件标识 `codex-trace`，社区市场为 `codex-trace-community`，可选 ZIP 安装市场为 `codex-trace`，源码开发市场为 `codex-trace-local`。这是新标识下的首次安装，不会自动替换原来的 `codex-display@codex-display` 或 `codex-display@codex-display-local`。
+Codex Trace uses the plugin identifier `codex-trace`, community marketplace `codex-trace-community`, optional ZIP installer marketplace `codex-trace`, and source development marketplace `codex-trace-local`. This is a first installation under a new identity. It does not automatically replace `codex-display@codex-display` or `codex-display@codex-display-local`.
 
-1. 在旧版本中先核对尚未确认的导出结果，再关闭旧面板，通过 Codex 插件管理停用旧插件。
-2. 按上文首次安装流程安装 Codex Trace；源码开发安装使用 README 中的构建、组包和安装流程。为新版本使用独立的安装管理目录，不向旧版本的安装目录传入 `--root`。
-3. 重新加载插件资源，打开“执行轨迹”。确认新版本可用后，可按旧版本的卸载说明移除旧插件及市场注册。
+1. Check any unconfirmed export results in the old version, close its panels, and disable the old plugin through Codex plugin management.
+2. Follow the first-installation steps above to install Codex Trace. For a source development installation, use the README's build, packaging, and installation workflow. Use a separate installation management directory for the new version; do not pass the old version's installation directory as `--root`.
+3. Reload plugin resources and open “执行轨迹” (“Execution Trace”). After confirming that the new version works, follow the old version's uninstall instructions to remove its plugin and marketplace registration.
 
-新版本使用 `codex-trace` 状态目录和 `Downloads/Codex Trace/` 导出目录。旧的 `codex-display` 状态目录、运行环境和 `Downloads/Codex Display/` 导出文件保留原位；索引、阅读状态、界面偏好及导出回执不自动迁移。不要移动仍被旧面板使用的 Python 环境，或将旧版本未完成的导出回执复制到新目录。
+The new version uses the `codex-trace` state directory and `Downloads/Codex Trace/` export directory. The old `codex-display` state directory, runtime environment, and `Downloads/Codex Display/` export files remain in place. Indexes, reading state, interface preferences, and export receipts are not migrated automatically. Do not move a Python environment still used by an old panel or copy unfinished export receipts from the old version into the new directory.
 
-自定义运行配置同步改用 `CODEX_TRACE_*` 环境变量，Python 入口为 `codex_trace.app`；旧的 `CODEX_DISPLAY_*` 配置和 `codex_display.app` 入口仅适用于旧版本。
+Update custom runtime configuration to use `CODEX_TRACE_*` environment variables and the `codex_trace.app` Python entry point. The old `CODEX_DISPLAY_*` configuration and `codex_display.app` entry point apply only to the old version.
 
-## 更新与重复安装
+## Updates and repeated installation
 
-下载并校验新版本，解压后运行同样的安装命令即可更新，也可以明确使用：
+Download and verify the new version, extract it, and run the same installation command to update. You can also use:
 
 ```sh
 python3.14 install.py update
 ```
 
-Windows 使用 `py -3.14 .\install.py update`。无需先卸载；重复安装也是恢复缺失或损坏安装的入口。不要在已安装的虚拟环境中自行执行 `pip install --upgrade`，这会使依赖与锁文件不一致。
+On Windows, use `py -3.14 .\install.py update`. There is no need to uninstall first. Reinstallation is also the entry point for restoring a missing or damaged installation. Do not run `pip install --upgrade` yourself in the installed virtual environment, because that would make dependencies inconsistent with the lockfile.
 
-若 Codex 或 Python 安装位置改变，重新运行安装器生成本机配置。更新期间保留旧版本运行环境，避免破坏尚未重载资源的面板。用户任务记录和最终导出的 ZIP 不属于更新清理范围。
+If the Codex or Python installation path changes, rerun the installer to regenerate local configuration. Older runtime environments are retained during updates so that panels that have not reloaded their resources keep working. User task records and final exported ZIPs are outside the update cleanup scope.
 
-## 安装失败和恢复
+## Installation failures and recovery
 
-依赖安装、验证和市场切换分阶段执行。安装目录中的 `journal.json` 记录最近一次操作，`current.json` 记录最近一次确认成功的安装，`transactions/` 保存每次尝试及 `pip.log`、`verification.log`。安装失败不等于旧版本已损坏；切换失败时安装器尝试重新安装之前确认的版本，并报告恢复是否成功。
+Dependency installation, verification, and marketplace switching run as separate stages. In the installation directory, `journal.json` records the latest operation, `current.json` records the most recently confirmed installation, and `transactions/` retains each attempt with `pip.log` and `verification.log`. A failed installation does not mean the old version is damaged. If switching fails, the installer attempts to reinstall the previously confirmed version and reports whether recovery succeeded.
 
-先查看状态：
+First check status:
 
 ```sh
 python3.14 install.py status
 ```
 
-修复报错指出的问题后恢复：
+After addressing the reported problem, recover:
 
 ```sh
 python3.14 install.py recover
 ```
 
-Windows 把命令前缀改成 `py -3.14 .\install.py`。已有确认版本时，恢复会尝试重新安装该版本；首次安装若已完成准备，则重试安装已验证的产物。若准备阶段未完成，恢复只结束未完成的事务，并提示重新运行 `install`。之后从已校验的完整发布目录再次运行 `install`。保留安装记录和旧环境直到恢复完成，不要删除整个 Codex 目录、重建其他插件配置或终止运行中的任务。
+On Windows, change the command prefix to `py -3.14 .\install.py`. If a confirmed version exists, recovery tries to reinstall it. If this is a first installation and preparation completed, recovery retries installation of the verified artifact. If preparation was incomplete, recovery only ends the unfinished transaction and asks you to rerun `install`. Then run `install` again from the complete, verified release directory. Keep installation records and old environments until recovery is complete. Do not delete the entire Codex directory, recreate other plugins' configuration, or terminate active tasks.
 
-## 卸载
+## Uninstall
 
-在完整解压的发布目录执行：
+Run from the fully extracted release directory:
 
 ```sh
 python3.14 install.py uninstall
 ```
 
-Windows 使用 `py -3.14 .\install.py uninstall`。卸载移除本插件的安装和市场注册；重复执行可重试未完成的卸载。也可在 Codex 插件管理中卸载，然后运行上述命令清理本插件的市场注册。
+On Windows, use `py -3.14 .\install.py uninstall`. Uninstallation removes this plugin's installation and marketplace registration. Running it again can retry an incomplete uninstall. You can also uninstall through Codex plugin management, then run the command above to remove this plugin's marketplace registration.
 
-卸载保留独立运行环境、安装记录、索引和导出文件，以免破坏仍在使用旧环境的面板或尚待核对的导出。关闭相关面板并确认不再需要恢复后，可以自行删除本插件安装目录；索引与导出目录分别管理。**用户导出的 `Downloads/Codex Trace/` 永远不由安装器删除。** 不要删除 Codex 会话目录或其他插件缓存。
+Uninstallation retains isolated runtime environments, installation records, indexes, and exports so that panels still using older environments and exports awaiting verification are not disrupted. After closing the relevant panels and confirming that recovery is no longer needed, you may delete this plugin's installation directory yourself. Manage index and export directories separately. **The installer never deletes user exports in `Downloads/Codex Trace/`.** Do not delete Codex session directories or other plugins' caches.
 
-## 故障排查
+## Troubleshooting
 
-| 现象 | 处理方式 |
+| Symptom | Action |
 | --- | --- |
-| 找不到 Python，版本过低，或缺少 `compression.zstd` | 安装完整的 Python 3.14+，重新打开终端；用 `--python` 指定实际解释器。极简发行版可能没有 zstd，需要更换完整发行版。 |
-| 找不到 Codex／`plugin` 子命令不可用 | 安装或更新 Codex 桌面配套 CLI；用 `--codex` 指定原生程序，不要把桌面应用目录当作可执行文件。 |
-| `pip` 下载、代理或证书失败 | 根据事务目录 `pip.log` 检查网络和本机 Python 的证书／代理配置；修复后重试。不要取消依赖锁定或忽略 TLS 校验。 |
-| 缺少当前平台依赖包 | 锁文件可能尚无该 Python／架构的可安装构建；优先使用 Python 3.14，保留日志并向项目反馈。不能把其他电脑的虚拟环境直接复制过来。 |
-| 市场同名但来源不属于本安装器 | 安装器会停止，避免接管另一来源。检查 Codex 插件管理中的 `codex-trace` 市场，确认归属后由用户处理冲突。 |
-| 提示另一个安装正在运行 | 等待该操作结束。不要并发安装、更新或卸载同一目标；如果安装进程已异常退出，按错误中的恢复指引处理。 |
-| 新版本菜单或界面未刷新 | 先重载插件资源；在方便时重启 Codex。已打开的面板可能仍使用旧资源。 |
-| 无法生成导出 | 确认用户的 `Downloads` 父目录存在且可写；Windows 使用本地 NTFS，避免目录重定向和占用。未确认的保存用原请求核对，不要连续创建新请求。 |
-| 使用自定义安装目录后状态为空 | 为所有命令传入同样的 `--root`，并确认 `CODEX_HOME` 与安装时一致。 |
+| Python cannot be found, is too old, or lacks `compression.zstd` | Install a complete Python 3.14+ distribution and reopen the terminal. Use `--python` to specify the actual interpreter. Minimal distributions may omit zstd; use a complete distribution instead. |
+| Codex cannot be found or the `plugin` subcommand is unavailable | Install or update the CLI accompanying Codex desktop. Use `--codex` to specify the native program, not the desktop application's directory. |
+| `pip` download, proxy, or certificate failure | Inspect the transaction's `pip.log` and the local Python network, certificate, and proxy configuration, then retry after fixing the cause. Do not remove dependency locking or disable TLS verification. |
+| No dependency package is available for the current platform | The lockfile may not yet have an installable build for that Python version or architecture. Prefer Python 3.14, keep the logs, and report the issue. Do not copy another computer's virtual environment directly. |
+| A marketplace has the same name but belongs to another source | The installer stops rather than taking over another source. Inspect the `codex-trace` marketplace in Codex plugin management, establish ownership, and resolve the conflict yourself. |
+| Another installation is reported as running | Wait for it to finish. Do not install, update, or uninstall the same target concurrently. If the installation process exited abnormally, follow the recovery instructions in the error. |
+| The new version's menu or interface has not refreshed | Reload plugin resources first, then restart Codex when convenient. Open panels may still use old resources. |
+| Export cannot be created | Ensure that the user's `Downloads` parent directory exists and is writable. On Windows, use local NTFS and avoid redirected or locked directories. Check unconfirmed saves using the original request rather than creating repeated requests. |
+| Status is empty after using a custom installation directory | Pass the same `--root` to every command and confirm that `CODEX_HOME` matches the value used at installation. |
 
-反馈问题时提供系统、Python／Codex 版本、失败阶段和去除个人信息的错误摘要。日志和本机回执可能包含本机路径，不要公开上传 Codex 凭据、会话或完整用户配置。
+When reporting a problem, include OS and Python/Codex versions, the failing stage, and an error summary with personal information removed. Logs and local receipts may contain local paths. Do not publicly upload Codex credentials, sessions, or complete user configuration.
 
-## 插件市场与公开上架
+## Plugin marketplaces and public listing
 
-本 GitHub 社区市场通过用户主动注册仓库安装，不等于 OpenAI 公共目录上架。可选 ZIP 安装器则准备本机运行环境并注册另一独立的本地市场。两种方式均保留现有轨迹读取、缓存与导出行为。
+Users register this GitHub community marketplace explicitly; it does not constitute an OpenAI public-directory listing. The optional ZIP installer prepares a local environment and registers a separate local marketplace. Both retain the existing trajectory-reading, caching, and export behavior.
 
-未来如果提交 OpenAI 公共目录，需要另行确认本地 MCP 提交资格、开发者身份、门户兼容性，以及读取本地 Codex 聊天/执行历史与平台准则的兼容性。那些条件只用于公共目录渠道，不能代替或混入社区仓库市场的技术验收。详见 [MARKETPLACE.md](MARKETPLACE.md#未来可选openai-公共目录)。
+Any future OpenAI public-directory submission separately requires confirmation of local MCP submission eligibility, developer identity, portal compatibility, and policy compatibility for reading local Codex chat/execution history. Those conditions apply only to that future channel and do not replace or form part of community repository technical acceptance. See [MARKETPLACE.md](MARKETPLACE.md#future-option-openai-public-directory).
 
-## 维护者：生成发布包
+## Maintainers: build a release package
 
-在源码仓库安装 Node.js/npm、Python 3.14+ 后运行：
+After installing Node.js/npm and Python 3.14+ in a source checkout, run:
 
 ```sh
 npm ci
 npm run release:build
 ```
 
-也可以直接运行 `python3.14 scripts/build_release.py`。默认生成 `build/releases/codex-trace-版本.zip` 和 `build/releases/SHA256SUMS`；包版本取自项目清单。构建使用文件白名单，不打包 `.venv`、`node_modules`、Codex 配置、凭据、会话、索引或导出文件。构建默认使用固定的 `SOURCE_DATE_EPOCH=0`；同一工具链、源码、依赖及该时间值产生相同字节的发布 ZIP。可以显式设置 `SOURCE_DATE_EPOCH`，但两次比较时必须相同。发布包不包含构建机器的运行路径。
+You can also run `python3.14 scripts/build_release.py` directly. The default output is `build/releases/codex-trace-<version>.zip` and `build/releases/SHA256SUMS`; the package version comes from the project manifests. The build uses a file allowlist and excludes `.venv`, `node_modules`, Codex configuration, credentials, sessions, indexes, and exports. It defaults to a fixed `SOURCE_DATE_EPOCH=0`; identical toolchains, source, dependencies, and that time value produce byte-identical release ZIPs. You may explicitly set `SOURCE_DATE_EPOCH`, but use the same value for both builds when comparing them. Release packages do not contain the build machine's runtime paths.
 
-GitHub Release 工作流在版本标签触发时先运行 macOS/Windows 验证，再创建带 ZIP 和校验和的草稿 Release；手动触发仅验证和保存构建产物。检查平台测试结果与限制后，由维护者决定是否公开草稿。配置工作流、在本机构建都不会自动向 GitHub 推送或上架公共插件目录。
+When triggered by a version tag, the GitHub Release workflow runs macOS/Windows validation before creating a draft release with the ZIP and checksums. Manual runs on branches only validate and retain build artifacts; manual runs on `v*` tags also run the draft-release step. Maintainers decide whether to publish the draft after reviewing platform test results and limitations. Configuring the workflow or building locally does not automatically push to GitHub or list the plugin in the public directory.
 
-验证发布包时可运行 `python3.14 scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`。该命令只在临时用户目录执行真实 Codex CLI 与新建虚拟环境的安装、重装、更新、失败恢复、启动及卸载；不会打开真实会话。CI 在 macOS 与 Windows 分别执行它。单元测试中的故障注入另行覆盖缓存损坏与自动回滚。
+To verify a release package, run `python3.14 scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`. This command uses a real Codex CLI and a new virtual environment only in a temporary user directory to check installation, reinstallation, updates, failure recovery, startup, and uninstallation. It does not open real sessions. CI runs it separately on macOS and Windows. Fault-injection unit tests separately cover cache corruption and automatic rollback.

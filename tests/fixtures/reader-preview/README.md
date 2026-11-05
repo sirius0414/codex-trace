@@ -1,30 +1,32 @@
-# Preview 阅读器验收
+# Preview Reader Acceptance Checks
 
-此目录用合成数据挂载正式 `TraceUI` / `Inspector`，不连接真实历史、执行工具或访问工作文件。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## 阅读行为
+This directory mounts the production `TraceUI` / `Inspector` with synthetic data. It does not connect to real history, execute tools, or access working files.
 
-- Summary 保留事件概述；Preview 阅读已加载输入、输出和错误；“原文”保留当前块原始文本；Raw content 展示关联原始记录；Source 展示来源证据。
-- 正文按内容和来源格式自动识别。阅读 / 原文及一个复制入口与分区标题共用一行；格式和代码语言修正收进“更多”。字号、换行、行号、宽度和展开阅读继续使用原有设置。
-- JSON 使用保留源码区间的索引，只插入缩进，不经过对象解析再序列化。数字字面量、重复字段、键的转义和字符串转义均保留；普通对象和数组直接展开。已删除字段树、深度控制、字段目录、字段搜索和节点复制。
-- `json-layout.ts` 集中定义长值阈值：值的原始 JSON 超过 **600 个 UTF-16 单元或 12 行**时自动折叠。对象显示 `{…}`，数组显示 `[…]`，字符串保留前 70 单元。根值从不自动折叠。没有新增用户设置项。
-- 已确认来源为 `mcpToolCall.result`，且字段定义和实际结构均支持的纯文本结果可以直接阅读。未知字段、重复键、非文本块、错误结果和 `structuredContent` 仍完整显示为 JSON，不按字段名猜测包装。
-- 条目级搜索覆盖全部已加载输入/输出/错误原文，包括视觉折叠和显示窗口外文本；最多列出 100 个结果，同时显示真实命中总数。JSON 命中展开对应长值并移动显示窗口，Markdown 等格式或跨 JSON 结构空白的命中使用原文精确定位。
-- 每块仅一个复制入口，复制完整已加载原始正文，与折叠、格式及显示窗口无关。合成测试拦截 Clipboard API 的参数核对保真，不修改用户剪贴板。
-- 普通、完整和未知来源状态不占提示行。可靠的来源截断、仅保存片段、仍未加载内容、未保存输出仍显示。只移除已知固定 explanation 文案，保留实际错误和限制。
+## Reading behavior
 
-## 状态与资源边界
+- Summary retains the event overview; Preview reads loaded input, output, and errors; Source text retains the original text of the current block; Raw content shows the associated raw record; Source shows provenance evidence.
+- Body format is detected automatically from content and source metadata. Reading / Source text and a single copy action share a row with the section title; format and code-language overrides are in More. Font size, wrapping, line numbers, width, and expanded reading continue to use the existing settings.
+- JSON uses an index that preserves source ranges and inserts indentation only, without parsing into objects and serializing again. Numeric lexemes, duplicate fields, escaped keys, and string escapes are preserved; ordinary objects and arrays are expanded directly. The field tree, depth control, field directory, field search, and node-copy actions have been removed.
+- `json-layout.ts` centralizes the long-value threshold: a value is automatically collapsed when its raw JSON exceeds **600 UTF-16 code units or 12 lines**. Objects display `{…}`, arrays display `[…]`, and strings retain their first 70 code units. The root value is never automatically collapsed. No new user setting is introduced.
+- Plain-text results can be read directly when the source is confirmed as `mcpToolCall.result` and both field definitions and actual structure support this interpretation. Unknown fields, duplicate keys, non-text blocks, error results, and `structuredContent` remain fully visible as JSON; wrappers are not inferred from field names.
+- Entry-level search covers all loaded input/output/error source text, including visually collapsed text and text outside the displayed window. It lists at most 100 results while showing the actual total hit count. JSON hits expand the corresponding long value and move the display window; Markdown and other formats, or hits spanning structural JSON whitespace, use source text for precise positioning.
+- Each block has one copy action that copies the complete loaded original body, independently of folding, format, or display window. Synthetic tests intercept Clipboard API arguments to verify fidelity without changing the user's clipboard.
+- Ordinary, complete, and unknown source states do not occupy a notice row. Reliable source truncation, saved fragments, not-yet-loaded content, and unrecorded output remain visible. Only known fixed explanation text is removed; actual errors and limitations are retained.
 
-- 后端每次读取至多 65,536 个 Unicode 字符（原为 16,384）；UTF-8 字节偏移与续读游标保持连续。
+## State and resource boundaries
 
-- 阅读状态只在页面会话中保留，最多 150 条目、600 个标签位置；不持久化正文和查询。JSON 对象以字段名及同名出现次序保持状态，数组以索引保持状态；数组插入或重排没有可靠身份映射。
-- 单个有效正文默认展开；Input/Output 同时存在时 Call 展开 Input、Result 展开 Output；失败条目首次全部展开且 Error 最先。异步正文到达、分页、条目切换和刷新保留手动选择。
-- JSON 解析限制 8,000,000 UTF-16 单元、200,000 节点、128 层；不完整、无效或超限时回退原文，读取入口由外层保留。
-- JSON 每次至多 400 排版行，以约 200,000 字符预算在行边界停止；一个长值窗口至多 100,000 字符。前后窗口有显式导航。搜索直接定位到目标窗口，不挂载之前全部数据。
-- 普通原文以 100,000 字符为窗口；搜索可直接跳到末尾。复制包含全部已加载正文。
-- Markdown、代码、表格、列表继续使用各自的有界显示与阅读状态。
+- Each backend read returns at most 65,536 Unicode characters (previously 16,384); UTF-8 byte offsets and continuation cursors remain contiguous.
 
-## 验证
+- Reading state is retained only within the page session, for at most 150 entries and 600 tab positions; bodies and queries are not persisted. JSON objects retain state by field name and occurrence order for duplicate names, while arrays use indices. Array insertion or reordering has no reliable identity mapping.
+- A single effective body is expanded by default. When both Input and Output exist, Call expands Input and Result expands Output. Failed entries initially expand every body, with Error first. Asynchronous body arrival, pagination, entry changes, and refreshes preserve manual choices.
+- JSON parsing is limited to 8,000,000 UTF-16 code units, 200,000 nodes, and 128 levels. Incomplete, invalid, or oversized input falls back to source text, while the enclosing view retains the reading entry point.
+- JSON displays at most 400 layout lines per window, stopping at a line boundary within a budget of approximately 200,000 characters. A single long-value window contains at most 100,000 characters. Explicit navigation connects previous and next windows. Search goes directly to the target window without mounting all preceding data.
+- Plain source text uses 100,000-character windows; search can jump directly to the end. Copy includes the complete loaded body.
+- Markdown, code, tables, and lists continue to use their own bounded displays and reading state.
+
+## Validation
 
 ```sh
 npm run build
@@ -34,7 +36,7 @@ node tests/fixtures/reader-preview/build.mjs
 python3 -m http.server 4175 --bind 127.0.0.1 --directory build/reader-preview
 ```
 
-在 ego-browser 同一个任务空间打开 `http://127.0.0.1:4175` 后运行：
+Open `http://127.0.0.1:4175` in the same ego-browser task workspace, then run:
 
 ```js
 const { runAcceptance, runNarrowAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/acceptance.mjs');
@@ -42,11 +44,11 @@ console.log(await runAcceptance(page, '/ABSOLUTE_REPO/build/preview-unified-acce
 console.log(await runNarrowAcceptance(page, '/ABSOLUTE_REPO/build/preview-unified-acceptance'));
 ```
 
-默认折叠、分页和实时刷新回归：
+Regressions for default folding, pagination, and live refresh:
 
 ```js
 const { runCollapseAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/collapse.mjs');
 console.log(await runCollapseAcceptance(page, '/ABSOLUTE_REPO/build/preview-collapse-acceptance'));
 ```
 
-窄屏流程会校准浏览器现有缩放，按 390 个 CSS 像素检查中英文、classic / soft / terminal 三种风格以及明暗主题。截图和检查结果保存到指定 build 目录。
+The narrow-screen flow calibrates the browser's existing zoom and checks English and Chinese, the classic / soft / terminal styles, and light and dark themes at 390 CSS pixels. Screenshots and check results are saved to the specified build directory.

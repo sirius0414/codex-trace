@@ -20,7 +20,13 @@
       "env": {
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONUTF8": "1"
-      }
+      },
+      "env_vars": [
+        "CODEX_HOME",
+        "CODEX_TRACE_CODEX_EXECUTABLE",
+        "CODEX_TRACE_STATE_ROOT",
+        "CODEX_TRACE_EXPORT_ROOT"
+      ]
     }
   }
 }

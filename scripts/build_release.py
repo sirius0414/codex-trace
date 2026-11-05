@@ -26,8 +26,11 @@ from third_party_licenses import check_snapshot
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ("platform_runtime.py", "package_plugin.py", "prepare_marketplace.py",
            "update_plugin.py", "third_party_licenses.py")
-RELEASE_DOCUMENTS = ("README.md", "INSTALL.md", "WINDOWS.md", "MARKETPLACE.md",
-                     "PRIVACY.md", "SUPPORT.md", "TERMS.md")
+# 所有分发共用显式文档白名单，语言切换不能指向未随包提供的译本。
+PUBLIC_DOCUMENTS = tuple(f"{name}{locale}.md" for name in (
+    "README", "INSTALL", "WINDOWS", "MARKETPLACE", "CONTRIBUTING", "SECURITY",
+    "PRIVACY", "SUPPORT", "TERMS", "contracts/README", "third_party/README")
+    for locale in ("", ".zh-CN")) + ("LICENSE.zh-CN.md", "NOTICE.zh-CN.md")
 VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?")
 
 
@@ -101,7 +104,7 @@ def collect_payload(root: Path, assets: Path) -> tuple[str, dict[str, bytes]]:
 
     # Explicit top-level allowlist: reviewed user documentation only; no source fixtures,
     # generated configs, probe output, .git, .env or arbitrary JSON data.
-    for name in ("install.py", "install.sh", "install.ps1", *RELEASE_DOCUMENTS, "LICENSE", "NOTICE", "requirements.lock", "package-lock.json"):
+    for name in ("install.py", "install.sh", "install.ps1", *PUBLIC_DOCUMENTS, "LICENSE", "NOTICE", "requirements.lock", "package-lock.json"):
         add(name)
     for name in SCRIPTS:
         add("scripts/" + name)

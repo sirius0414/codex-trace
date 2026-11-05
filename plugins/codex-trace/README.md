@@ -1,106 +1,108 @@
 # Codex Trace
 
-在 Codex 中查看本地任务的执行轨迹，浏览模型与工具的输入输出、追踪子 Agent，并导出可校验的原始记录。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-Codex Trace 通过本地 Python MCP 服务和随包提供的 React 界面运行。安装后，在聊天的 **New Tab → 执行轨迹** 打开面板；无法确认当前任务时，会显示任务选择器。全局入口也会先让你选择任务。
+View the execution traces of local Codex tasks, inspect model and tool inputs and outputs, follow child agents, and export verifiable raw records.
 
-[社区安装](INSTALL.md#社区市场安装) · [可选发行附件](https://github.com/sirius0414/codex-trace/releases) · [安装指南](INSTALL.md) · [Windows 说明](WINDOWS.md) · [贡献指南](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md)
+Codex Trace runs through a local Python MCP service and a bundled React interface. After installation, open the panel from **New Tab → 执行轨迹 (Execution Trace)** in a chat. If the current task cannot be identified, a task picker appears. The global entry point also asks you to select a task first.
 
-## 功能
+[Community installation](INSTALL.md#community-marketplace-installation) · [Optional release assets](https://github.com/sirius0414/codex-trace/releases) · [Installation guide](INSTALL.md) · [Windows guide](WINDOWS.md) · [Contributing](CONTRIBUTING.md)
 
-- **查看执行过程**：按轮次浏览消息、工具调用和输入输出，查看概述及原始记录。
-- **定位感兴趣的内容**：搜索、筛选、展开详情，使用执行概览缩放、平移和定位条目。搜索与筛选作用于已加载记录，较早历史可继续加载。
-- **跟踪 Agent**：主 Agent 和已确认的子 Agent 各有独立页面，可沿创建和通信记录跳转。
-- **观察任务进展**：持续读取新记录，支持暂停跟踪和恢复阅读位置；暂停查看不会暂停 Agent 的执行。
-- **查看用量与导出**：展示有明确来源的 token 用量，将当前任务及已确认子任务的原始记录导出为带来源清单和 SHA-256 的 ZIP。
+## Features
 
-界面只确认记录能够支持的时间、用量、关系和状态。缺失信息会明确标注，不推测未知阶段或任务完成状态。执行概览按轮次排列，图中距离不代表实际经过时间。
+- **Inspect execution:** browse messages, tool calls, inputs, and outputs by turn, with summaries and raw records.
+- **Find relevant content:** search, filter, expand details, and zoom, pan, or locate entries in the execution overview. Search and filters apply to loaded records; earlier history can be loaded separately.
+- **Follow agents:** the main agent and confirmed child agents have separate pages, with navigation through creation and communication records.
+- **Observe progress:** continuously read new records, pause observation, and restore your reading position. Pausing the viewer does not pause the agent.
+- **Review usage and export:** display token usage with explicit source evidence, and export raw records for the current task and confirmed child tasks as a ZIP with a source manifest and SHA-256 hashes.
 
-## 支持的平台
+The interface reports only the timing, usage, relationships, and states supported by the records. Missing information is marked explicitly; unknown stages or task completion states are not inferred. The execution overview is arranged by turn, and visual distance does not represent actual elapsed time.
 
-| 项目 | 要求与边界 |
+## Supported platforms
+
+| Item | Requirements and boundaries |
 | --- | --- |
-| macOS | 本机 Codex 桌面应用及可用的配套 CLI |
-| Windows | Windows 10/11、原生 Codex、本地 NTFS 卷，无需 WSL |
-| Python | 社区市场由 uv 管理固定的 3.14.2；可选安装器／源码方式需本机 3.14+ |
-| Codex CLI | 0.153.0 或更高兼容版本，支持 `plugin marketplace`、`plugin add/remove` 和所需的只读 app-server API |
-| Git / uv | 社区市场注册需要 Git；插件启动需要可从 Codex 进程 PATH 找到 uv |
-| 网络 | 社区市场首次准备、依赖变化或缓存缺失时由 uv 获取 Python 与锁定依赖；注册和更新市场需要访问 GitHub |
+| macOS | A local Codex desktop application and a working companion CLI |
+| Windows | Windows 10/11, native Codex, and local NTFS volumes; no WSL required |
+| Python | The community marketplace uses uv-managed Python 3.14.2; optional installer/source workflows need local Python 3.14+ |
+| Codex CLI | 0.153.0 or a later compatible version, supporting `plugin marketplace`, `plugin add/remove`, and the required read-only app-server APIs |
+| Git / uv | Git is required to register the community marketplace; uv must be discoverable through the Codex process's PATH |
+| Network | GitHub access for registration and updates; uv obtains Python and locked dependencies during initial preparation, dependency changes, or cache misses |
 
-社区市场用户无需 Node.js、手工克隆源码或构建前端；Git 与 uv 为前置条件。可选安装器的前置条件另见安装指南。Linux、WSL、云端执行，以及 Windows 网络卷、UNC 和重解析点上的数据目录不在当前支持范围内。
+Community users do not need Node.js, a manual source checkout, or a frontend build; Git and uv are prerequisites. The optional installer's prerequisites are described separately. Linux, WSL, cloud execution, and data directories on Windows network volumes, UNC paths, or reparse points are outside the current support scope.
 
-Windows 已有原生实现和 CI 验证流程；是否通过特定版本的原生测试，应以该版本的 CI 报告和桌面验收结果为准，不能用 macOS 测试代替。详细边界见 [Windows 适配与验收](WINDOWS.md)。
+Windows has a native implementation and a CI validation workflow. Whether a particular version has passed native testing must be determined from that version's CI reports and desktop acceptance results; macOS tests are not a substitute. See [Windows support and acceptance](WINDOWS.md) for detailed boundaries.
 
-## 安装、更新与卸载
+## Install, update, and uninstall
 
-社区分发通过本 GitHub 仓库的插件市场 `codex-trace-community` 安装 `codex-trace`。仓库目前为私有，安装者须具备 Git 读取权限并配置有效凭据。需要 **Git、uv 和支持插件市场的 Codex CLI 0.153.0 或更高兼容版本**；无需 Node.js、手工克隆源码或构建前端。安装步骤与网络、缓存说明见 [INSTALL.md](INSTALL.md)，维护发布流程见 [MARKETPLACE.md](MARKETPLACE.md)。
+Community distribution installs `codex-trace` from this GitHub repository's `codex-trace-community` marketplace. The repository is currently **PRIVATE**; installers need Git read access and valid credentials. Install **Git, uv, and Codex CLI 0.153.0 or a later compatible version**. Node.js, a manual source checkout, and a frontend build are unnecessary. See [INSTALL.md](INSTALL.md) for installation, network, and cache details, and [MARKETPLACE.md](MARKETPLACE.md) for the maintainer workflow.
 
-### 社区市场首次安装
+### First community installation
 
 ```sh
 codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
 codex plugin add codex-trace@codex-trace-community
 ```
 
-插件目录已包含前端、后端、契约和授权文本。首次启动时，uv 准备固定的 Python 3.14.2 及 `requirements.lock` 依赖；首次准备、依赖变化或缓存缺失时需要网络。Python、环境及下载缓存由 uv 在插件目录外管理。
+The plugin directory already contains the frontend, backend, contracts, and license texts. uv prepares pinned Python 3.14.2 and the `requirements.lock` dependencies. Initial preparation, dependency changes, or missing caches require network access. uv manages Python, environments, and download caches outside the plugin directory.
 
-首次使用或依赖变化时，先按 [安装与依赖预热](INSTALL.md#首次使用与依赖预热) 准备运行环境；冷下载可能超过宿主默认的启动等待时间。预热成功后重启 Codex 或开启新会话，再通过 **New Tab → 执行轨迹** 打开。保留未确认导出的原请求，确认结果后再关闭旧面板。仓库市场由用户主动注册，与 OpenAI 公共目录审核和上架是不同渠道。
+Before first use or after dependency changes, follow [installation and runtime preparation](INSTALL.md#first-use-and-runtime-preparation); cold downloads may exceed the host's default startup timeout. After preparation succeeds, restart Codex or start a new session, then open **New Tab → 执行轨迹 (Execution Trace)**. Retain original requests for unconfirmed exports and reconcile them before closing old panels. This user-added repository marketplace is a separate channel from OpenAI public-directory review and listing.
 
-### 社区市场更新与卸载
+### Community update and uninstall
 
 ```sh
 codex plugin marketplace upgrade codex-trace-community
 codex plugin add codex-trace@codex-trace-community
 ```
 
-更新后完成 [依赖预热](INSTALL.md#首次使用与依赖预热)，再重启 Codex 或开启新会话。卸载插件并移除该市场注册：
+Complete [runtime preparation](INSTALL.md#first-use-and-runtime-preparation) after updating, then restart Codex or start a new session. To uninstall the plugin and remove the marketplace registration:
 
 ```sh
 codex plugin remove codex-trace@codex-trace-community
 codex plugin marketplace remove codex-trace-community
 ```
 
-移除插件不自动删除派生索引、阅读偏好、导出回执或最终 ZIP，也不负责清理 uv 的共享缓存。清理前先核对未决导出、停止插件服务并关闭相关页面，详见 [隐私与数据清理说明](PRIVACY.md)。
+Removal does not automatically delete derived indexes, reading preferences, export receipts, final ZIPs, or uv's shared caches. Reconcile pending exports, stop the plugin service, and close its pages before cleaning data. See the [privacy and cleanup notice](PRIVACY.md).
 
-### 可选安装方式
+### Optional installation formats
 
-需要独立安装器的用户可按 [发布 ZIP 安装器流程](INSTALL.md#可选发布-zip-安装器) 使用 `codex-trace-0.2.0.zip` 和校验和；该方式要求本机 Python，注册的是 `codex-trace` 市场。维护者也可构建按系统和架构分发的[内置运行时离线候选包](MARKETPLACE.md#可选原生离线插件包)。不要同时启用社区、安装器和开发市场中的同名插件。下载及实际发布状态以 [GitHub Releases](https://github.com/sirius0414/codex-trace/releases) 为准。
+For a separate installer, follow the [release ZIP installer workflow](INSTALL.md#optional-release-zip-installer) using `codex-trace-0.2.0.zip` and its checksums. It requires local Python and registers the `codex-trace` marketplace. Maintainers can also build [platform-specific offline candidates with bundled runtimes](MARKETPLACE.md#optional-native-offline-plugin-package). Do not enable the community, installer, and development copies of the same plugin simultaneously. Download availability and actual publication status are shown in [GitHub Releases](https://github.com/sirius0414/codex-trace/releases).
 
-### 从 Codex Display 切换
+### Migrating from Codex Display
 
-Codex Trace 是新标识下的安装，不会自动替换旧的 Codex Display。新旧插件、状态目录和导出目录相互独立，索引、阅读状态和导出回执不会自动迁移。
+Codex Trace is an installation under a new identity; it does not automatically replace Codex Display. The old and new plugins, state directories, and export directories are independent. Indexes, reading state, and export receipts are not migrated automatically.
 
-请停用旧插件，安装并确认新版本可用后，再按旧版本的卸载流程处理旧安装；保留原有导出文件。自定义环境变量改用 `CODEX_TRACE_*`，Python 入口改为 `codex_trace.app`。具体步骤见[迁移说明](INSTALL.md#从-codex-display-切换)。
+Disable the old plugin, install and verify the new version, then follow the old version's uninstall instructions to remove the old installation. Keep existing export files. Change custom environment variables to `CODEX_TRACE_*` and the Python entry point to `codex_trace.app`. See the [migration instructions](INSTALL.md#migrating-from-codex-display).
 
-## 数据与导出
+## Data and exports
 
-Codex Trace 只读观察 Codex 已保存的任务记录，不通过 app-server 创建、续写或中断任务。索引、阅读偏好和导出回执保存在插件自己的目录，最终导出保存在 Downloads 中。
+Codex Trace observes saved Codex task records in read-only mode. It does not create, continue, or interrupt tasks through app-server. Indexes, reading preferences, and export receipts are stored in the plugin's own directory; final exports are saved under Downloads.
 
-| 数据 | macOS 默认位置 | Windows 默认位置 |
+| Data | Default macOS location | Default Windows location |
 | --- | --- | --- |
-| Codex 来源 | `~/.codex` | `%USERPROFILE%\.codex` |
-| 可选安装器的记录与独立环境 | `~/.local/share/codex-trace/installations/<标识>/` | `%LOCALAPPDATA%\codex-trace\installations\<标识>\` |
-| 索引、偏好与回执 | `~/.local/share/codex-trace/index/` | `%LOCALAPPDATA%\codex-trace\index\` |
-| 最终导出 | `~/Downloads/Codex Trace/` | `%USERPROFILE%\Downloads\Codex Trace\` |
+| Codex source | `~/.codex` | `%USERPROFILE%\.codex` |
+| Optional installer records and isolated environments | `~/.local/share/codex-trace/installations/<id>/` | `%LOCALAPPDATA%\codex-trace\installations\<id>\` |
+| Indexes, preferences, and receipts | `~/.local/share/codex-trace/index/` | `%LOCALAPPDATA%\codex-trace\index\` |
+| Final exports | `~/Downloads/Codex Trace/` | `%USERPROFILE%\Downloads\Codex Trace\` |
 
-`CODEX_HOME` 可指定 Codex 来源；可选安装器的目录标识由其路径计算。社区插件程序由 Codex 缓存，Python 和依赖由 uv 在外部管理。不要移动正在使用的运行环境。
+`CODEX_HOME` can select the Codex source; the optional installer derives its directory identifier from that path. Codex caches the community plugin program, while uv manages Python and dependencies externally. Do not move a runtime environment that is in use.
 
-导出独立枚举当前任务的已知来源和已确认子任务，当前页面的搜索、筛选、折叠及分页不会缩小导出范围。ZIP 的 manifest 记录来源、采集范围、哈希及缺失部分；未知类型和不完整原始行按来源保留。运行中任务的多个文件可能在不同时间采集，因此成功保存不等于来源完整。
+Exports independently enumerate known sources for the current task and its confirmed child tasks. Search, filters, collapsed sections, and pagination on the current page do not reduce the export scope. The ZIP manifest records sources, collection ranges, hashes, and missing portions. Unknown types and incomplete raw lines are retained by source. Multiple files belonging to an active task may be collected at different times, so a successful save does not imply complete source data.
 
-只有界面显示“本地导出已校验”和实际路径，才确认保存成功。等待超时或“结果未确认”时，应核对原请求，避免重复创建导出。导出可能含有任务中的私密内容，分享前请检查。
+A save is confirmed only when the interface displays “Local export verified” and an actual path. If a wait times out or the result is unconfirmed, check the original request rather than creating duplicate exports. Exports may contain private task content; review them before sharing.
 
-## 构建与验证
+## Build and verification
 
-以下流程面向贡献者和维护者。准备 Python 3.14+、Node.js/npm 和 Codex CLI；CI 使用 Node.js 24 与 Python 3.14。开发环境与普通用户的安装环境分别管理。
+These steps are for contributors and maintainers. Install Python 3.14+, Node.js/npm, and the Codex CLI. CI uses Node.js 24 and Python 3.14. The development environment and the end-user installation environment are managed separately.
 
-### 准备开发环境
+### Prepare the development environment
 
 ```sh
 git clone https://github.com/sirius0414/codex-trace.git
 cd codex-trace
 ```
 
-**macOS：**
+**macOS:**
 
 ```sh
 python3.14 -m venv .venv
@@ -112,7 +114,7 @@ PYTHONPATH=backend:tests .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python contracts/generate_types.py --check
 ```
 
-**Windows PowerShell：**
+**Windows PowerShell:**
 
 ```powershell
 py -3.14 -m venv .venv
@@ -126,9 +128,9 @@ $env:PYTHONPATH = "backend;tests"
 & .\.venv\Scripts\python.exe contracts/generate_types.py --check
 ```
 
-Python 依赖由 `requirements.lock` 锁定，包含仅在 Windows 安装的 `pywin32`；前端依赖由 `package-lock.json` 锁定。npm 中的 Python 入口优先使用 `CODEX_TRACE_PYTHON` 指定的解释器或仓库 `.venv`。
+Python dependencies are locked by `requirements.lock`, including `pywin32`, which is installed only on Windows. Frontend dependencies are locked by `package-lock.json`. Python entry points invoked through npm prefer the interpreter specified by `CODEX_TRACE_PYTHON` or the repository's `.venv`.
 
-### 浏览器调试
+### Browser debugging
 
 ```sh
 npm run dev:browser:start
@@ -136,43 +138,43 @@ npm run dev:browser:status
 npm run dev:browser:stop
 ```
 
-启动后打开命令输出的 `file://` 本地入口文件；`status` 可再次显示入口。该文件仅当前 OS 用户可读，通过不发送到 HTTP 的 URL fragment 将启动凭据交给页面。直接访问 `http://localhost:8765/` 不会取得凭据；重启服务后须重新打开入口文件。同一标签页刷新会保留凭据，请勿分享入口文件。该入口使用正式前后端，任务来源遵循 `CODEX_HOME`，默认读取本机 Codex 记录；仅监听 `127.0.0.1`。调试索引、日志及导出位于 `build/dev-browser/`。
+After startup, open the local `file://` entry file printed by the command. `status` can show the entry again. The file is readable only by the current OS user and passes startup credentials to the page through a URL fragment, which is not sent over HTTP. Visiting `http://localhost:8765/` directly does not provide credentials. Reopen the entry file after restarting the service. Refreshing the same tab retains credentials; do not share the entry file. This entry uses the production frontend and backend, follows `CODEX_HOME` for its task source, reads local Codex records by default, and listens only on `127.0.0.1`. Debug indexes, logs, and exports are stored under `build/dev-browser/`.
 
-修改前端后执行 `npm run build` 并刷新页面；修改后端后执行 `npm run dev:browser:restart`。也可用 `npm run dev:browser` 在前台运行。需要指定环境时：
+After frontend changes, run `npm run build` and refresh the page. After backend changes, run `npm run dev:browser:restart`. You can also use `npm run dev:browser` to run in the foreground. To specify the environment:
 
 ```sh
 npm run dev:browser:start -- --port 8766 --python /path/to/python --codex /path/to/codex
 ```
 
-### 从源码更新开发插件
+### Updating the development plugin from source
 
-已有锁定依赖环境时，可以先准备并检查本机开发包：
+With the locked dependency environment already prepared, first prepare and inspect a local development package:
 
 ```sh
 npm run plugin:update -- --prepare-only
 ```
 
-确认输出目录中的验证结果后，用实际目录替换下面的示例：
+Review the verification results in the output directory, then replace the example directory below with the actual directory:
 
 ```sh
-npm run plugin:update -- --install-prepared build/update-实际目录
+npm run plugin:update -- --install-prepared build/update-ACTUAL_DIRECTORY
 ```
 
-此流程使用 `codex-trace@codex-trace-local`，生成的包绑定本机运行路径。面向其他用户的分发请使用下一节的发布构建。详细的原生 Windows 开发流程见 [WINDOWS.md](WINDOWS.md)。
+This workflow uses `codex-trace@codex-trace-local`; its generated package is bound to local runtime paths. Use the release build in the next section for distribution to other users. See [WINDOWS.md](WINDOWS.md) for the native Windows development workflow.
 
-## 发布流程
+## Release workflow
 
-社区 GitHub 仓库市场的目录生成、验证与发布见 [MARKETPLACE.md](MARKETPLACE.md)。以下是仍保留的可选发布 ZIP 安装器流程，不表示相应版本已经公开发布。
+See [MARKETPLACE.md](MARKETPLACE.md) for community repository generation, verification, and release. The following optional release ZIP installer workflow is retained; its presence does not mean that a corresponding version has been published.
 
-### 生成安装包
+### Build an installer
 
-完成开发环境准备后执行：
+After preparing the development environment, run:
 
 ```sh
 npm run release:build
 ```
 
-也可以直接使用 Python 运行 `scripts/build_release.py`。默认产物为：
+You can also run `scripts/build_release.py` directly with Python. The default output is:
 
 ```text
 build/releases/
@@ -180,19 +182,19 @@ build/releases/
 └── SHA256SUMS
 ```
 
-构建会编译前端、校验版本和授权清单，按白名单收录安装器、已构建界面、后端、契约、依赖锁文件和许可证，并生成包内逐文件校验清单。开发环境、Codex 配置、凭据、会话、索引和导出文件不进入发布包。
+The build compiles the frontend, checks version consistency and the license inventory, includes allowlisted installer files, the built interface, backend, contracts, dependency lockfiles, and licenses, and generates a per-file checksum manifest inside the package. Development environments, Codex configuration, credentials, sessions, indexes, and exports are excluded.
 
-版本必须在 `package.json`、`package-lock.json`、插件清单及后端 `__version__` 中保持一致。发布构建默认使用 `SOURCE_DATE_EPOCH=0` 和固定 ZIP 元数据；相同源码、依赖、工具链与时间值可生成相同字节的产物。同版本已有产物内容不同时会拒绝覆盖，正式发版应更新版本号。更新依赖后需刷新[第三方授权快照](https://github.com/sirius0414/codex-trace/blob/main/third_party/README.md)。
+Versions must match across `package.json`, `package-lock.json`, the plugin manifest, and the backend's `__version__`. Release builds default to `SOURCE_DATE_EPOCH=0` and fixed ZIP metadata. Identical source, dependencies, toolchains, and time values produce byte-identical artifacts. The build refuses to overwrite an existing artifact of the same version with different content; update the version for a new release. After dependency updates, refresh the [third-party license snapshot](third_party/README.md).
 
-### 验证安装包
+### Verify the installer
 
-先在另一目录重复构建，比较两份同版本 ZIP 的 SHA-256：
+First build again in a separate directory and compare the SHA-256 hashes of the two ZIPs for the same version:
 
 ```sh
 npm run release:build -- --output build/reproduce
 ```
 
-然后执行安装验证。该脚本在临时用户目录中使用真实 Codex CLI、新建 Python 环境和锁定依赖，检查首次安装、重复安装、更新、失败恢复、MCP/导出及卸载。macOS 示例：
+Then run installation verification. The script uses a real Codex CLI, a new Python environment, and locked dependencies in a temporary user directory. It checks first installation, repeated installation, updates, failure recovery, MCP/export behavior, and uninstallation. On macOS:
 
 ```sh
 .venv/bin/python scripts/smoke_release.py \
@@ -200,36 +202,39 @@ npm run release:build -- --output build/reproduce
   --report build/release-smoke.json
 ```
 
-Windows 使用 `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`。需要指定 CLI 时加 `--codex`；离线测试可用 `--wheelhouse DIR` 提供预先下载的依赖。验证不会读取真实会话或修改真实插件配置，但 CLI/MCP 测试不能代替桌面入口的人工验收。
+On Windows, use `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`. Add `--codex` to specify a CLI. For offline testing, provide previously downloaded dependencies with `--wheelhouse DIR`. Verification does not read real sessions or modify real plugin configuration, but CLI/MCP tests do not replace manual acceptance of the desktop entry point.
 
 ### GitHub Release
 
-[Release 工作流](https://github.com/sirius0414/codex-trace/blob/main/.github/workflows/release.yml) 在 macOS 和 Windows 分别安装依赖、运行测试、检查契约、执行两次构建并比较产物，再验证解压包的安装生命周期。
+The [Release workflow](https://github.com/sirius0414/codex-trace/blob/main/.github/workflows/release.yml) installs dependencies, runs tests, checks contracts, builds twice and compares artifacts, then verifies the extracted package's installation lifecycle separately on macOS and Windows.
 
-| 触发方式 | 结果 |
+| Trigger | Result |
 | --- | --- |
-| 涉及工作流匹配路径的 Pull Request | 验证并保存构建产物与安装报告 |
-| 在分支上手动运行 `workflow_dispatch` | 验证并保存产物，不创建 Release |
-| 推送与清单版本一致的 `v*` 标签 | 验证通过后创建或更新草稿 Release，附安装 ZIP 和校验和 |
+| Any pull request or a push to `main` | Validate and retain build artifacts and installation reports |
+| Manual `workflow_dispatch` on a branch | Validate and retain artifacts without creating a release |
+| A `v*` tag matching the manifest version | After validation, create or update a draft release with the installer ZIP and checksums |
 
-如果在 `v*` 标签上手动运行工作流，也会执行草稿 Release 步骤。维护者核对平台报告、桌面验收结果及已知限制后，再公开草稿。工作流不会覆盖已经公开的 Release，也不会上架 OpenAI 公共插件目录。仓库中提供了发布流程，并不表示某个版本已经公开发布。
+Manually running the workflow on a `v*` tag also runs the draft-release step. Maintainers review platform reports, desktop acceptance results, and known limitations before publishing the draft. The workflow neither overwrites a published release nor lists the plugin in OpenAI's public plugin directory. Having a release workflow in the repository does not mean a particular version has been published.
 
-## 文档与贡献
+## Documentation and contributing
 
-| 文档 | 内容 |
+Conventional filenames contain English documentation; `*.zh-CN.md` files contain Simplified Chinese versions. When editing documentation, update both languages' steps, commands, support boundaries, and links in the same change.
+
+| Document | Contents |
 | --- | --- |
-| [INSTALL.md](INSTALL.md) | 社区市场安装与更新、可选安装器、迁移及故障排查 |
-| [MARKETPLACE.md](MARKETPLACE.md) | GitHub 社区市场发布、原生离线候选包与验证边界 |
-| [PRIVACY.md](PRIVACY.md)、[SUPPORT.md](SUPPORT.md)、[TERMS.md](TERMS.md) | 数据保存与清理、支持渠道和许可边界 |
-| [WINDOWS.md](WINDOWS.md) | 原生 Windows 实现、文件系统边界与验收方法 |
-| [CONTRIBUTING.md](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md) | 开发约束、代码规范和评审入口 |
-| [contracts/README.md](https://github.com/sirius0414/codex-trace/blob/main/contracts/README.md) | MCP 数据契约与导出语义 |
-| [third_party/README.md](https://github.com/sirius0414/codex-trace/blob/main/third_party/README.md) | 跨平台依赖授权快照维护 |
+| [INSTALL.md](INSTALL.md) | Community installation and updates, optional installer, migration, and troubleshooting |
+| [MARKETPLACE.md](MARKETPLACE.md) | Community repository release, optional native offline packages, and validation boundaries |
+| [PRIVACY.md](PRIVACY.md), [TERMS.md](TERMS.md), [SUPPORT.md](SUPPORT.md) | Data access and storage, license boundaries, and support channels |
+| [WINDOWS.md](WINDOWS.md) | Native Windows implementation, filesystem boundaries, and acceptance procedures |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development constraints, coding conventions, and review entry points |
+| [SECURITY.md](SECURITY.md) | Security support scope and private vulnerability reporting |
+| [contracts/README.md](contracts/README.md) | MCP data contracts and export semantics |
+| [third_party/README.md](third_party/README.md) | Maintaining cross-platform dependency license snapshots |
 
-问题反馈与改进建议请提交到 [GitHub Issues](https://github.com/sirius0414/codex-trace/issues)，附系统版本、Python/Codex 版本、复现步骤和去除个人信息的错误摘要。
+Report ordinary issues and improvement suggestions through [GitHub Issues](https://github.com/sirius0414/codex-trace/issues), including OS and Python/Codex versions, reproduction steps, and an error summary with personal information removed. Report security or privacy vulnerabilities privately according to the [security policy](SECURITY.md).
 
-## 来源与许可
+## References and licensing
 
-本项目由作者独立维护。接入可行性研究参考了 [Codex Trajectory](https://github.com/icesixgod/codex-trajectory) 的本地轨迹读取及原生插件入口；早期界面设计参考了 [DeepSeek Harness 的 Trajectory 组件](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory)。
+This project is independently maintained by its author. Feasibility research referenced [Codex Trajectory](https://github.com/icesixgod/codex-trajectory) for local trajectory access and native plugin entry points. Early interface design referenced [DeepSeek Harness's Trajectory component](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/client/ui-trajectory).
 
-Codex Trace 与上述项目、DeepSeek、OpenAI 无隶属或背书关系。项目自身代码采用 [MIT 许可证](LICENSE)，参考来源见 [NOTICE](NOTICE)。第三方组件保留各自的许可条款，完整文本随发布包提供，见[第三方授权清单](https://github.com/sirius0414/codex-trace/blob/main/third_party/THIRD_PARTY_NOTICES.txt)和 [LICENSES](https://github.com/sirius0414/codex-trace/tree/main/third_party/LICENSES/)。
+Codex Trace is not affiliated with or endorsed by those projects, DeepSeek, or OpenAI. The project's own code uses the [MIT License](LICENSE); see [NOTICE](NOTICE) for reference acknowledgments. A [Chinese license translation](LICENSE.zh-CN.md) and [Chinese NOTICE translation](NOTICE.zh-CN.md) are available for reference; the English license text governs. Third-party components retain their respective license terms, and their full texts are included in release packages. See the [third-party notices](https://github.com/sirius0414/codex-trace/blob/main/third_party/THIRD_PARTY_NOTICES.txt) and [LICENSES](https://github.com/sirius0414/codex-trace/tree/main/third_party/LICENSES/).

@@ -1,78 +1,80 @@
-# Codex Trace GitHub 社区 Marketplace
+# Codex Trace GitHub Community Marketplace
 
-本项目的主要分发渠道是 GitHub 仓库市场 `codex-trace-community`，插件为 `codex-trace`，当前版本标识为 0.2.0。仓库目前为私有，安装者须拥有 Git 读取权限并配置有效凭据。仓库安装由用户主动注册，不表示获得 OpenAI 公共目录认证。推送、Release 是否公开以及原生平台验证状态，以对应版本的实际记录为准。
+[English](MARKETPLACE.md) | [简体中文](MARKETPLACE.zh-CN.md)
 
-## 社区安装与更新
+The primary distribution channel is the GitHub repository marketplace `codex-trace-community`, with plugin `codex-trace` and current version identifier 0.2.0. The repository is **PRIVATE**; installers need Git read access and valid credentials. Users explicitly register the repository; this does not establish OpenAI public-directory approval. Actual remote records determine whether commits or Releases are accessible and which platforms have been validated.
 
-前置条件为 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本。无需 Node.js、手工克隆或前端构建：
+## Community installation and updates
+
+Install Git, uv, and Codex CLI 0.153.0 or a later compatible version. No Node.js, manual checkout, or frontend build is required:
 
 ```sh
 codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
 codex plugin add codex-trace@codex-trace-community
 ```
 
-更新：
+Update:
 
 ```sh
 codex plugin marketplace upgrade codex-trace-community
 codex plugin add codex-trace@codex-trace-community
 ```
 
-首次使用、依赖变化或缓存缺失时，先按 [安装与依赖预热](INSTALL.md#首次使用与依赖预热) 准备运行环境；冷下载可能超过宿主默认的启动等待时间。成功后重启 Codex 或开启新会话，再打开执行轨迹。uv 需要联网准备 Python 3.14.2 和锁定依赖；uv 管理的运行时、环境及下载缓存位于插件目录外。完整卸载和缓存说明见 [INSTALL.md](INSTALL.md#社区市场卸载与缓存)。
+Before first use, after dependency changes, or when caches are missing, follow [installation and runtime preparation](INSTALL.md#first-use-and-runtime-preparation). Cold downloads may exceed the host's default startup wait. After preparation succeeds, restart Codex or start a new session before opening the viewer. uv needs network access to prepare Python 3.14.2 and locked dependencies, and manages runtimes, environments, and download caches outside the plugin directory. See [INSTALL.md](INSTALL.md#community-uninstall-and-caches) for uninstall and cache details.
 
-English quickstart: Install Git, uv, and a compatible Codex CLI (0.153.0 or later), then run the installation commands above. The repository is currently private; installers need Git read access and valid Git credentials. No Node.js or manual frontend build is required. uv prepares Python 3.14.2 and the locked dependencies on first launch; initial setup, dependency changes, or missing caches may require network access. Follow the [runtime preparation steps](INSTALL.md#首次使用与依赖预热) before opening the plugin, since cold downloads may exceed the host startup timeout. Restart Codex or start a new session after preparation succeeds. This is a user-added GitHub community marketplace, not an OpenAI public-directory listing. Platform validation results are recorded in the corresponding GitHub Release; local macOS checks do not establish native Windows support.
+## Community repository contents and validation
 
-## 社区仓库发布内容与验证
+The root `.agents/plugins/marketplace.json` catalog points to `plugins/codex-trace/`. This generated directory contains manifests, uv launch configuration, backend, built frontend, contracts, dependency lockfile, and licenses. It is distinct from the unbuilt `plugin/` source directory. Maintainers generate and verify it, then commit it alongside the corresponding source so installation requires no user build.
 
-仓库根的 `.agents/plugins/marketplace.json` 发现清单指向 `plugins/codex-trace/`。该生成目录包含插件清单、uv 启动配置、后端、构建好的前端、契约、依赖锁文件和许可证；它不是未经构建的 `plugin/` 源码目录。发布者生成并核对这些文件后，将它们与对应源码一同提交，用户安装时无需构建。
+Modern `mcp.json` uses `${PLUGIN_ROOT}/requirements.lock` and `${PLUGIN_ROOT}/launch.py` as its resource arguments. The host expands them to installed paths; `cwd` also points to the plugin root. Legacy `.mcp.json` retains relative arguments and `cwd="."`, without relying on older hosts to expand placeholders in arguments. Neither configuration may contain developer-machine paths.
 
-维护者按 [贡献指南](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md) 准备开发依赖后生成并核对社区目录：
+Prepare development dependencies according to the [contribution guide](CONTRIBUTING.md), then generate and check the community directory:
 
 ```sh
 .venv/bin/python scripts/build_community_marketplace.py
 .venv/bin/python scripts/build_community_marketplace.py --check
 ```
 
-Windows 使用 `.venv\Scripts\python.exe`。默认入口重新构建前端并固定构建时间，输出到 `plugins/codex-trace/`；`--check` 比较应生成内容与已提交目录，发现缺失、多余或变更文件即失败。`--assets dist/ui` 仅用于明确复用已验证的前端产物；可用 `--output DIR` 选择独立候选目录。生成目录与 `.agents/plugins/marketplace.json` 均须包含在发布提交中。
+On Windows, use `.venv\Scripts\python.exe`. By default, the command rebuilds the frontend with a fixed build time and writes `plugins/codex-trace/`. `--check` compares the expected output with the committed directory and fails for missing, extra, or changed files. Use `--assets dist/ui` only to reuse explicitly verified frontend artifacts; `--output DIR` selects a separate candidate directory. Include the generated directory and `.agents/plugins/marketplace.json` in the release commit.
 
-发布前应从准备提交的 Git 树验证目录内容与源码一致，在隔离用户目录中通过真实 Codex CLI 注册市场、安装插件、检查 uv 启动配置并运行合成任务的读取与导出检查。测试报告记录实际平台、版本和未执行项。macOS 成功不能代替原生 Windows 检查；各平台实际结果见对应版本的 GitHub Release 验证记录。已公开的 Release、校验和与生成目录应对应同一提交和版本。
+Before release, verify that the proposed Git tree's generated content matches its source. In an isolated user directory, use the real Codex CLI to register the marketplace, install the plugin, check uv configuration, and run synthetic reading/export checks. Reports must identify actual platforms, versions, and unexecuted checks. macOS success does not replace native Windows checks; consult the corresponding GitHub Release validation records. Published Releases, checksums, and generated directories must correspond to the same commit and version.
 
-当前 smoke 证据覆盖冷依赖准备（cold dependency preparation）及预热后的 MCP/导出流程（warm MCP），不等于宿主空缓存冷启动通过。现有 modern MCP 清单不接受 `startup_timeout_sec`，不得通过添加该字段声称已延长启动时间；发布说明应继续提供终端预热步骤。
+Record cold dependency preparation, direct MCP/export checks, and the real Codex app-server's startup and discovery of the installed plugin separately. `plugin add`, `mcp list`, or directly launching the service alone does not prove that the host started MCP. Each Release supplies actual evidence. Success after preparation is not an empty-cache host startup pass. The current modern MCP manifest does not accept `startup_timeout_sec`; adding that field does not establish a longer startup wait. Continue documenting terminal preparation.
 
-真实桌面入口仍需验收：重启或新会话后打开面板、选择任务、读取详情、查看确认的子 Agent、增量观察和导出校验。GitHub 发布身份、推送权限、远端 URL 可访问性与 Release 发布状态须实际验证，不从本地构建结果推断。
+Desktop entry points still need acceptance: reopen after restart or a new session, select tasks, read details, navigate confirmed child agents, observe updates, and verify exports. Check GitHub publication identity, push access, URL accessibility, and Release state directly rather than inferring them from local builds.
 
-## 三种分发方式
+## Three distribution formats
 
-| 项目 | GitHub 社区市场 | 可选 ZIP 安装器 | 可选原生离线包 |
+| Item | GitHub community marketplace | Optional ZIP installer | Optional native offline package |
 | --- | --- | --- | --- |
-| 入口 | 仓库根市场清单、`plugins/codex-trace/` | `scripts/build_release.py` | `scripts/build_marketplace.py` |
-| Python 与依赖 | uv 管理固定 Python 3.14.2 和锁定依赖 | 本机 Python，安装器创建环境 | 随系统／架构包内置 |
-| 网络 | 注册／更新，以及首次准备、依赖变化或缺失缓存时需要 | 安装依赖时需要 | 完整运行包启动不安装依赖 |
-| Codex CLI | 本机提供 | 本机提供 | 本机提供 |
-| 市场选择器 | `codex-trace@codex-trace-community` | `codex-trace@codex-trace` | 由实际分发和安装方式决定 |
+| Entry point | Root marketplace catalog and `plugins/codex-trace/` | `scripts/build_release.py` | `scripts/build_marketplace.py` |
+| Python and dependencies | uv-managed Python 3.14.2 and locked dependencies | Local Python; installer creates an environment | Bundled for each OS/architecture |
+| Network | Registration/updates and initial preparation, dependency changes, or cache misses | Required when installing dependencies | A complete runtime package starts without dependency installation |
+| Codex CLI | Provided locally | Provided locally | Provided locally |
+| Marketplace selector | `codex-trace@codex-trace-community` | `codex-trace@codex-trace` | Depends on the actual distribution and installation channel |
 
-## 可选：原生离线插件包
+## Optional: native offline plugin package
 
-以下保留带内置 Python 的候选包构建方法，供维护者需要按平台提供离线运行包时使用。它不是社区 uv 安装的前置步骤。每个原生系统／架构分别准备、构建和验证；包名如 `codex-trace-0.2.0-darwin-arm64.zip`。
+The following bundled-Python candidate workflow is retained for maintainers who need per-platform offline runtime packages. It is not a prerequisite for community uv installation. Prepare, build, and validate each native OS/architecture separately; an example filename is `codex-trace-0.2.0-darwin-arm64.zip`.
 
-## 准备独立运行时
+## Prepare a standalone runtime
 
-构建机需要本项目开发依赖、Node.js/npm、Python 3.14+ 和兼容 Codex CLI。使用以下入口获取当前原生平台的独立运行时，无需手工寻找归档或拼凑许可证：
+The build machine needs this project's development dependencies, Node.js/npm, Python 3.14+, and a compatible Codex CLI. Use the following entry point to fetch a standalone runtime for the current native platform, without manually locating archives or assembling license files:
 
 ```sh
 .venv/bin/python scripts/fetch_marketplace_runtime.py \
   --output build/marketplace-runtime
 ```
 
-Windows 使用 `& .\.venv\Scripts\python.exe scripts/fetch_marketplace_runtime.py --output build/marketplace-runtime`。工具只选择当前主机对应的 `darwin-arm64`、`darwin-x64` 或 `win32-x64`，不提供跨平台验证声明。`--output` 必须是尚不存在的新目录；已存在的运行时不会被覆盖。
+On Windows, use `& .\.venv\Scripts\python.exe scripts/fetch_marketplace_runtime.py --output build/marketplace-runtime`. The tool selects only the current host's `darwin-arm64`, `darwin-x64`, or `win32-x64` target and makes no cross-platform validation claim. `--output` must name a new directory that does not already exist; an existing runtime is never overwritten.
 
-[marketplace-runtime.lock.json](https://github.com/sirius0414/codex-trace/blob/main/marketplace-runtime.lock.json) 固定 Python Standalone Builds 的 `20260114` 发行构建与 CPython `3.14.2`，记录三个原生目标的完整归档 URL、大小和 SHA-256。下载默认缓存在 `build/marketplace-runtime-cache/`，可通过 `--cache-dir DIR` 改变。缓存及新下载文件都先核对锁定哈希，再进行提取；下载或校验失败不会生成可用运行时。
+[marketplace-runtime.lock.json](https://github.com/sirius0414/codex-trace/blob/main/marketplace-runtime.lock.json) pins the Python Standalone Builds `20260114` release and CPython `3.14.2`, recording the full archive URL, size, and SHA-256 for each of the three native targets. Downloads are cached in `build/marketplace-runtime-cache/` by default; use `--cache-dir DIR` to change this location. Cached and newly downloaded files are checked against the pinned hashes before extraction. A failed download or verification does not produce a usable runtime.
 
-归档仅提取 `python/install/`、`python/licenses/` 和 `python/PYTHON.json`，使用 `tarfile` 的 `data` 过滤器并额外拒绝目录逃逸、外部链接、重复成员及特殊文件，解压数据总量限制为 512 MiB。工具核对 `PYTHON.json` 中的 Python 版本、目标平台和所有递归的 `license_path` / `license_paths` 引用，再把全部发行许可证与元数据交给准备器。
+Only `python/install/`, `python/licenses/`, and `python/PYTHON.json` are extracted. Extraction uses `tarfile`'s `data` filter and additionally rejects directory escapes, external links, duplicate members, and special files; total extracted data is capped at 512 MiB. The tool checks the Python version, target platform, and every recursive `license_path` / `license_paths` reference in `PYTHON.json`, then passes all distribution license files and metadata to the preparer.
 
-该发行版的部分归档没有附上元数据引用的 zstd / zlib-ng 许可。锁文件因此还固定对应的 zstd `1.5.7` 和 zlib-ng `2.2.4` 官方来源 URL、大小及 SHA-256，工具仅在对应引用缺失时从校验缓存或锁定地址补齐。补充来源单独记录在最终 `runtime-provenance.json` 的 `source.supplementalLicenses`；其版本依据为该 PBS 发行标签的构建依赖声明。无法补齐的引用会使准备失败，不能用单个 CPython LICENSE 代替整套运行时的授权材料。
+Some archives in this release omit the zstd / zlib-ng license texts referenced by their metadata. The lockfile therefore also pins official source URLs, sizes, and SHA-256 hashes for zstd `1.5.7` and zlib-ng `2.2.4`. The tool fills a missing referenced file only from a verified cache or the pinned URL. Supplemental sources are recorded separately under `source.supplementalLicenses` in the final `runtime-provenance.json`; their versions come from the build dependency declarations for that PBS release tag. Unresolved references cause preparation to fail. A single CPython LICENSE cannot replace the runtime's complete license collection.
 
-已有归档时可复用而不重新下载：
+An existing archive can be reused without downloading it again:
 
 ```sh
 .venv/bin/python scripts/fetch_marketplace_runtime.py \
@@ -81,15 +83,15 @@ Windows 使用 `& .\.venv\Scripts\python.exe scripts/fetch_marketplace_runtime.p
   --output build/marketplace-runtime
 ```
 
-`--archive` 仍必须匹配当前目标的锁定大小和 SHA-256。要在无网络环境执行此命令，还需提前把锁文件对应的 `LICENSE.zstd.txt`、`LICENSE.zlib-ng.txt` 放入 `--cache-dir` 目录；工具会核对其哈希。缺少补充许可缓存时仍会尝试从锁定地址下载，不能把单独提供归档视为已经准备好全部离线输入。
+`--archive` must still match the pinned size and SHA-256 for the current target. To run this command without network access, also place the lockfile's matching `LICENSE.zstd.txt` and `LICENSE.zlib-ng.txt` in `--cache-dir` in advance; their hashes will be checked. Missing supplemental license files still trigger an attempted download from the pinned URLs. Supplying the archive alone does not mean that every offline input is ready.
 
-下载助手不执行上游安装脚本。它调用 `prepare_marketplace_runtime.py` 展开包内相对链接、排除字节码，对可安全重定位的 sysconfig 前缀作规范化，并在改名后的目录实测解释器、原生模块和 `compression.zstd`。`runtime-provenance.json` 记录来源 URL、归档及输入树哈希、补充许可出处、规范化动作、许可证和文件哈希。哈希记录用于追溯输入，不替代平台批准或许可证范围的维护审查。
+The download helper does not execute upstream installation scripts. It calls `prepare_marketplace_runtime.py` to expand package-internal relative links, exclude bytecode, normalize safely relocatable sysconfig prefixes, and test the interpreter, native modules, and `compression.zstd` after renaming the directory. `runtime-provenance.json` records the source URL, archive and input-tree hashes, supplemental license sources, normalization actions, license files, and file hashes. Hash records support input traceability; they do not replace platform approval or maintainer review of license coverage.
 
-维护者处理新的运行时发行版时，可直接使用底层准备器的 `--source`、`--output`、`--source-url`、`--source-archive` 和可重复的 `--license-file` 参数；许可输入必须包含同发行版的 `PYTHON.json` 及其全部引用文本。随后应更新并评审锁文件和原生测试证据。不要用 `.venv` 代替独立 CPython，也不要混用其他版本的许可。
+When handling a new runtime release, maintainers can use the underlying preparer's `--source`, `--output`, `--source-url`, `--source-archive`, and repeatable `--license-file` arguments directly. License inputs must include `PYTHON.json` from the same distribution and all texts it references. Update and review the lockfile and native test evidence afterward. Do not substitute a `.venv` for standalone CPython or mix license files from different versions.
 
-## 准备锁定依赖并构建
+## Prepare locked dependencies and build
 
-在对应原生系统上，用将要打包的 Python 下载该平台的 wheel。macOS 准备目录示例：
+On the corresponding native OS, use the Python interpreter that will be bundled to download wheels for that platform. Example preparation on macOS:
 
 ```sh
 build/marketplace-runtime/bin/python3 -I -B -m pip download \
@@ -98,7 +100,7 @@ build/marketplace-runtime/bin/python3 -I -B -m pip download \
   --dest build/marketplace-wheelhouse
 ```
 
-Windows 将解释器改为 `build\marketplace-runtime\python.exe`，并使用 PowerShell 的路径和换行语法。不要混用另一系统、架构或 Python ABI 的 wheelhouse。下载阶段需要网络，随后组包只从指定 wheelhouse 离线安装依赖；缺少 wheel 时应补齐对应文件，不让插件启动时下载。
+On Windows, use `build\marketplace-runtime\python.exe` and PowerShell path and line-continuation syntax. Do not use a wheelhouse for a different OS, architecture, or Python ABI. Downloading requires network access; packaging afterward installs dependencies offline from the specified wheelhouse only. If a wheel is missing, supply the corresponding file instead of allowing the plugin to download it at startup.
 
 ```sh
 .venv/bin/python scripts/build_marketplace.py \
@@ -107,19 +109,19 @@ Windows 将解释器改为 `build\marketplace-runtime\python.exe`，并使用 Po
   --output build/marketplace
 ```
 
-默认构建前端；`--assets dist/ui` 可显式使用已有前端产物，使用者需确认产物对应当前源码。输出包含平台 ZIP、`SHA256SUMS` 与同名 `.verification.json`。插件包根使用 portable `plugin.json` 和 `mcp.json`，同时保留旧宿主所需的 `.codex-plugin/plugin.json` 与 `.mcp.json`。配置中的 `command` 为 `./runtime/bin/python3`（macOS）或 `./runtime/python.exe`（Windows），由宿主按插件根目录解析；`args` 中的 `launch.py` 路径及 `cwd` 使用 `${PLUGIN_ROOT}`。配置不包含构建者的 Python/Codex 绝对路径。
+The frontend is built by default. `--assets dist/ui` explicitly uses existing frontend artifacts; the caller must ensure that they match the current source. Outputs include the platform ZIP, `SHA256SUMS`, and a matching `.verification.json`. The plugin root uses portable `plugin.json` and `mcp.json` while retaining `.codex-plugin/plugin.json` and `.mcp.json` for older hosts. The configured `command` is `./runtime/bin/python3` on macOS or `./runtime/python.exe` on Windows, resolved by the host relative to the plugin root. The `launch.py` path in `args` and the `cwd` use `${PLUGIN_ROOT}`. The configuration contains no absolute Python/Codex paths from the build machine.
 
-包内 `runtime/` 保存独立 Python，`runtime-deps/` 保存锁定依赖，`package-manifest.json` 记录文件哈希；运行时来源记录在 `runtime/runtime-provenance.json`。包同时收录已构建界面、后端、契约、图标、隐私/支持/条款文档和第三方授权文本。不会收录真实 Codex 配置、凭据、会话、派生数据库或用户导出。
+Inside the package, `runtime/` holds standalone Python, `runtime-deps/` holds the locked dependencies, and `package-manifest.json` records file hashes. Runtime provenance is stored in `runtime/runtime-provenance.json`. The package also includes the built UI, backend, contracts, icons, privacy/support/terms documents, and third-party license texts. It excludes real Codex configuration, credentials, sessions, derived databases, and user exports.
 
-组包仅移除 CPython 自测数据和静态链接归档，保留运行所需模块、动态库及完整许可集合。被移除文件的哈希和准备阶段 provenance 哈希写入运行时来源记录，裁剪后的实际包仍须完成依赖导入、迁移和 MCP 检查。构建器还检查 ZIP 大小、解压总量、成员数与路径限制，超限时拒绝输出候选包。
+Packaging removes only CPython's self-test data and static-link archives, retaining the modules, dynamic libraries, and complete license collection needed at runtime. Hashes of removed files and the preparation-stage provenance hash are recorded in the runtime provenance file. The actual trimmed package must still pass dependency-import, relocation, and MCP checks. The builder also checks ZIP size, total extracted size, member count, and path limits, and refuses to produce a candidate package if a limit is exceeded.
 
-`launch.py` 以隔离模式进入原有 MCP 服务；启动器在本机发现 Codex CLI，可通过 `CODEX_TRACE_CODEX_EXECUTABLE` 显式指定原生可执行文件的绝对路径。Windows 的配置最终须解析到 `codex.exe`。启动器不执行安装器、不下载依赖、不注册市场，也不修改轨迹读取范围或导出语义。
+`launch.py` enters the existing MCP service in isolated mode. The launcher discovers the Codex CLI locally; `CODEX_TRACE_CODEX_EXECUTABLE` can explicitly specify the absolute path to the native executable. On Windows, the configuration must ultimately resolve to `codex.exe`. The launcher does not run an installer, download dependencies, register a marketplace, or change trajectory-reading scope or export semantics.
 
-## 验证候选包
+## Validate the candidate package
 
-先完成 [贡献指南](https://github.com/sirius0414/codex-trace/blob/main/CONTRIBUTING.md#验证) 中的构建、前后端测试和契约检查，再使用同一输入在第二个输出目录重建，比较两份 ZIP 的 SHA-256。重复构建时使用相同前端构建时间设置；默认采用固定 `SOURCE_DATE_EPOCH=0`。保留源码提交、工具链、运行时来源、wheelhouse 和验证报告，以便追溯候选包。
+First complete the build, backend/frontend tests, and contract checks in the [contribution guide](CONTRIBUTING.md#verification). Then rebuild from the same inputs into a second output directory and compare the ZIPs' SHA-256 hashes. Use the same frontend build-time settings for both builds; the default is the fixed `SOURCE_DATE_EPOCH=0`. Retain the source commit, toolchain, runtime provenance, wheelhouse, and validation reports so the candidate can be traced to its inputs.
 
-macOS arm64 的命令示例：
+Example for macOS arm64:
 
 ```sh
 .venv/bin/python scripts/smoke_marketplace.py \
@@ -127,18 +129,18 @@ macOS arm64 的命令示例：
   --report build/marketplace-smoke.json
 ```
 
-该检查使用临时用户目录、合成会话和隔离的 Codex 配置。默认通过真实 Codex CLI 验证；需要指定程序时加 `--codex /path/to/codex`。`--skip-cli` 仅用于受限环境下的包级诊断，其结果不能记为真实 CLI 安装验收。macOS 可加 `--deny-network` 验证受限网络环境下的启动与主流程；该选项不适用于 Windows，也不表示其他系统已完成同等网络验证。
+This check uses a temporary user directory, synthetic sessions, and isolated Codex configuration. It validates through the real Codex CLI by default; add `--codex /path/to/codex` to select an executable. `--skip-cli` is only for package-level diagnostics in restricted environments and cannot be counted as installation validation with the real CLI. On macOS, `--deny-network` can verify startup and primary flows under restricted network access. That option does not apply to Windows or establish equivalent network validation on other systems.
 
-CLI/包级验证仍不能代替桌面验收。每个要公开支持的平台和架构应在干净桌面环境中记录安装、重开、任务选择、详情阅读、已确认子 Agent 跳转、增量观察和 ZIP 导出校验的结果，并核对用户可见的平台限制。缺失平台证据时，应缩小候选包支持范围或补测，不将其他平台的结果记为通过。
+CLI/package-level validation does not replace desktop validation. For every platform and architecture to be publicly supported, record results in a clean desktop environment for installation, reopening, task selection, detail reading, navigation to confirmed child Agents, incremental observation, and ZIP export verification. Check the platform limitations shown to users as well. If platform evidence is missing, narrow the candidate's supported scope or perform the missing checks; do not record another platform's results as a pass.
 
-## 未来可选：OpenAI 公共目录
+## Future option: OpenAI public directory
 
-以下仅适用于未来向 OpenAI 公共目录提交的渠道，不是 GitHub 社区市场的验收门槛。社区包继续保留本地聊天/执行历史读取；不能将技术验收通过等同于未来公共目录的政策许可。
+The following requirements apply only to a future OpenAI public-directory submission. They are not acceptance gates for the GitHub community marketplace. The community plugin retains local chat/execution-history access; technical success does not establish policy approval for a future public listing.
 
-1. 按 [OpenAI 桌面插件提交要求](https://developers.openai.com/plugins/deploy/desktop-only) 确认提交组织已获准提交本地 MCP 插件，并完成实际要求的开发者或企业身份验证。清单中的名称及 `requires_local_executor` 不证明已获资格。
-2. **本地聊天历史读取与公共目录准则的兼容性仍是未来公共目录提交的未解除阻塞。** 当前实现继续读取本地 Codex 的既有聊天/执行历史；需根据 [插件准则](https://developers.openai.com/plugins/plugin-guidelines) 获得平台对这一用途、范围和呈现方式的明确确认。新增内置运行时、隔离安装或通过自动测试均未改变这一产品行为，不能消除此政策阻塞，也不得据此宣称已经符合公共目录要求。
-3. 在提交门户验证目标平台包的接受情况、内置运行时、MCP Apps 入口与宿主兼容性，并提交与候选包一致的测试证据。仓库自动检查无法证明门户已接受该包。
-4. 将 [PRIVACY.md](PRIVACY.md)、[TERMS.md](TERMS.md)、[SUPPORT.md](SUPPORT.md) 及对应代码推送到公开声明的分支，逐个检查清单中的主页、支持、隐私和条款 URL 可公开访问。本地文件和预设 URL 不表示公开页面已经生效。
-5. 核对版本、许可证集合、原生平台报告与桌面验收结果后，再按 [官方提交流程](https://developers.openai.com/plugins/deploy/submission) 完成审核与发布。不要把 GitHub 草稿 Release 或本地市场注册写成已在 OpenAI 公共目录上架。
+1. Follow the [OpenAI desktop plugin submission requirements](https://developers.openai.com/plugins/deploy/desktop-only) to confirm that the submitting organization is permitted to submit local MCP plugins and has completed the required developer or business identity verification. A manifest name or `requires_local_executor` does not establish eligibility.
+2. **Compatibility between local chat-history reading and the public directory guidelines remains an unresolved blocker for a future public-directory submission.** The implementation continues to read existing local Codex chat/execution history. Obtain explicit platform confirmation of this use, scope, and presentation under the [plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines). Bundling a runtime, isolating installation, and passing automated tests have not changed this product behavior. They neither remove this policy blocker nor justify a claim of compliance with public directory requirements.
+3. Verify in the submission portal that the target platform package, bundled runtime, MCP Apps entry point, and host compatibility are accepted, and submit test evidence matching the candidate. Repository checks cannot prove portal acceptance.
+4. Push [PRIVACY.md](PRIVACY.md), [TERMS.md](TERMS.md), [SUPPORT.md](SUPPORT.md), and the corresponding code to the publicly declared branch. Check each homepage, support, privacy, and terms URL in the manifest for public accessibility. Local files and preconfigured URLs do not establish that public pages are live.
+5. After checking the version, license collection, native platform reports, and desktop validation results, complete review and publication through the [official submission process](https://developers.openai.com/plugins/deploy/submission). Do not describe a GitHub draft Release or local marketplace registration as publication in the OpenAI public directory.
 
-已有 GitHub Release 工作流与本地检查只证明各自实际执行过的步骤。社区发布以对应 Git 提交、安装验证和 GitHub Release 状态为准；公共目录另需门户审核及其发布状态。
+The existing GitHub Release workflow and local checks establish only the steps they actually performed. Community publication is established by the corresponding Git commit, installation evidence, and GitHub Release status. Public-directory publication separately requires portal review and its publication state.

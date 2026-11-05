@@ -2,34 +2,9 @@ name: Release
 
 on:
   pull_request:
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'plugin/**'
-      - 'plugins/**'
-      - '.agents/**'
-      - 'scripts/**'
-      - 'tests/**'
-      - 'contracts/**'
-      - 'third_party/**'
-      - 'install.*'
-      - 'INSTALL.md'
-      - 'README.md'
-      - 'WINDOWS.md'
-      - 'MARKETPLACE.md'
-      - 'PRIVACY.md'
-      - 'SUPPORT.md'
-      - 'TERMS.md'
-      - 'LICENSE'
-      - 'NOTICE'
-      - '.gitattributes'
-      - '*lock*'
-      - 'package.json'
-      - 'vite.config.ts'
-      - 'tsconfig.json'
-      - '.github/workflows/release.yml'
   workflow_dispatch:
   push:
+    branches: ['main']
     tags: ['v*']
 
 permissions:
