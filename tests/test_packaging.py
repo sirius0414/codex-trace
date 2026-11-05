@@ -252,16 +252,29 @@ class PackagingTests(unittest.TestCase):
     def test_production_cache_smoke_is_fully_synthetic_and_isolated(self):
         output = self.root / "package"
         packaging.build(output, Path(sys.executable), Path(sys.executable), self.assets)
-        cache = self.root / "cache"
+        cache = self.root / "cache 中文 空格"
         shutil.copytree(output, cache)
         shutil.rmtree(output)
         shutil.rmtree(self.assets)
         checks = []
         forbidden = self.root / "must-not-be-created"
+        original_run = subprocess.run
+        encoded_path_probes = []
+        def windows_ansi_path_probe(command, *args, **kwargs):
+            command = list(command)
+            if "-c" in command:
+                index = command.index("-c") + 1
+                if "codex_trace.app.__file__" in command[index]:
+                    # 模拟隔离 Windows Python 的管道编码，不能依赖 CI 主机恰好启用 UTF-8。
+                    command[index] = "import sys;sys.stdout.reconfigure(encoding='cp1252',errors='strict');" + command[index]
+                    encoded_path_probes.append(True)
+            return original_run(command, *args, **kwargs)
         with mock.patch.dict(os.environ, {"CODEX_HOME": str(forbidden / "home"),
                 "CODEX_TRACE_STATE_ROOT": str(forbidden / "index"), "CODEX_TRACE_EXPORT_ROOT": str(forbidden / "exports"),
-                "CODEX_TRACE_UI_PATH": str(forbidden / "ui.html"), "PYTHONPATH": str(forbidden / "modules")}):
+                "CODEX_TRACE_UI_PATH": str(forbidden / "ui.html"), "PYTHONPATH": str(forbidden / "modules")}), \
+                mock.patch.object(verification.subprocess, "run", side_effect=windows_ansi_path_probe):
             report = verification.verify_cache(cache, self.root, checks)
+        self.assertEqual(encoded_path_probes, [True])
         self.assertTrue(all(c["passed"] for c in checks), checks)
         self.assertGreater(len(checks), 25)
         self.assertEqual(report["pluginVersion"], json.loads((ROOT / "package.json").read_text())["version"])

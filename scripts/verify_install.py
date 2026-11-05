@@ -288,9 +288,11 @@ def verify_cache(installed: Path, root: Path, checks: list[dict], *, portable: b
             return [*prefix, interpreter, "-I", "-B", "-c", bootstrap + code, *arguments]
         return [*prefix, launch["command"], "-c", code, *arguments]
 
-    module = subprocess.run(python_probe("import codex_trace.app;print(codex_trace.app.__file__)"),
+    # -I 忽略 PYTHONUTF8；Windows 管道可能仍使用 ANSI 编码。路径用 ASCII JSON
+    # 往返，不要求子进程的默认 stdout 编码能表示缓存目录中的中文。
+    module = subprocess.run(python_probe("import json,codex_trace.app;print(json.dumps(codex_trace.app.__file__, ensure_ascii=True))"),
                             cwd=cwd, env=runtime_env, capture_output=True, text=True, timeout=15, check=True, encoding="utf-8")
-    check("imports_backend_from_installed_cache", Path(module.stdout.strip()).resolve() == installed / "backend/codex_trace/app.py")
+    check("imports_backend_from_installed_cache", Path(json.loads(module.stdout)).resolve() == installed / "backend/codex_trace/app.py")
     contract = json.loads((installed / "contracts/trajectory.schema.json").read_text(encoding="utf-8"))
     tool_contracts = json.loads((installed / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
     command = [*prefix, launch["command"], *launch["args"]]
