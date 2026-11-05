@@ -1,0 +1,43 @@
+name: Temporary Windows marketplace path probe
+on:
+  pull_request:
+    paths: ['.github/workflows/windows-path-probe.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install -g @openai/codex@0.153.0
+      - name: Inspect only an isolated synthetic marketplace
+        shell: python
+        run: |
+          import json, os, pathlib, shutil, subprocess, tempfile, tomllib
+          with tempfile.TemporaryDirectory(prefix='market-path-probe-') as temp:
+              root = pathlib.Path(temp).resolve()
+              home = root / 'user home 测试'
+              home.mkdir()
+              codex_home = home / '.codex'
+              codex_home.mkdir()
+              source = home / 'installation/transactions/one/marketplace'
+              shutil.copytree('.agents', source / '.agents')
+              shutil.copytree('plugins', source / 'plugins')
+              env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), CODEX_HOME=str(codex_home),
+                  APPDATA=str(home / 'AppData/Roaming'), LOCALAPPDATA=str(home / 'AppData/Local'))
+              for key in list(env):
+                  if any(word in key.upper() for word in ['API_KEY', 'ACCESS_TOKEN', 'AUTH_TOKEN']):
+                      env.pop(key)
+              def cli(*args):
+                  result = subprocess.run(['codex.cmd', *args], cwd=root, env=env, capture_output=True, text=True, encoding='utf-8')
+                  assert result.returncode == 0, result.stderr
+                  return result.stdout
+              cli('plugin', 'marketplace', 'add', str(source))
+              entries = json.loads(cli('plugin', 'marketplace', 'list', '--json'))['marketplaces']
+              entry = next(e for e in entries if e['name'] == 'codex-trace-community')
+              config = tomllib.loads((codex_home / 'config.toml').read_text(encoding='utf-8'))
+              location = pathlib.Path(entry['root']).resolve()
+              print(json.dumps({'entry': entry, 'configuredSource': config['marketplaces']['codex-trace-community'],
+                  'rootResolved': str(location), 'sourceResolved': str(source.resolve()),
+                  'rootSameFile': location.samefile(source),
+                  'rootUnderTransactions': location.is_relative_to((home / 'installation/transactions').resolve())}, ensure_ascii=True))
