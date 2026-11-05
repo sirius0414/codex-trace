@@ -107,6 +107,17 @@ class MarketplaceLauncherTests(unittest.TestCase):
         native = self.executable(self.root / "node_modules/@openai/codex/vendor/aarch64-pc-windows-msvc/codex/codex.exe")
         self.assertEqual(self.discover({"PATH": str(shim.parent)}, platform_name="win32", machine="arm64"), native)
 
+    def test_windows_nested_official_optional_package_in_global_and_project_installs(self):
+        for layout in ('global', 'project'):
+            for machine, architecture, target in (('AMD64', 'x64', 'x86_64'), ('ARM64', 'arm64', 'aarch64')):
+                with self.subTest(layout=layout, machine=machine):
+                    base = self.root / f'{layout}-{architecture}'
+                    modules = base / 'node_modules'
+                    shim = self.executable(base / 'codex.cmd' if layout == 'global' else modules / '.bin/codex.cmd')
+                    native = self.executable(modules / f'@openai/codex/node_modules/@openai/codex-win32-{architecture}/vendor/{target}-pc-windows-msvc/bin/codex.exe')
+                    self.assertEqual(self.discover({'PATH': str(shim.parent)}, platform_name='win32', machine=machine), native)
+                    self.assertEqual(shim.read_text(encoding='utf-8'), 'synthetic discovery only; never execute\n')
+
     def test_windows_unknown_shim_and_non_native_program_fail(self):
         for name in ("custom.cmd", "codex.cmd", "codex.py"):
             path = self.executable(self.root / name)

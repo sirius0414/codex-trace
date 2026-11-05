@@ -41,7 +41,10 @@ def _native_codex(shim: Path, machine: str) -> Path:
         raise LauncherError("无法判断 Codex 的原生架构；请指定 codex.exe 的绝对路径。")
     architecture, target = architectures[machine.lower()]
     for modules in (shim.parent / "node_modules", shim.parent.parent):
-        for package in (modules / "@openai" / f"codex-win32-{architecture}", modules / "@openai/codex"):
+        main_package = modules / "@openai/codex"
+        # 官方 npm 可选平台包既可能提升到顶层，也可能嵌套在主包内；不扫描其他任意包。
+        for package in (modules / "@openai" / f"codex-win32-{architecture}",
+                        main_package / "node_modules/@openai" / f"codex-win32-{architecture}", main_package):
             for directory in ("bin", "codex"):
                 candidate = package / "vendor" / f"{target}-pc-windows-msvc" / directory / "codex.exe"
                 if candidate.is_file() and os.access(candidate, os.X_OK):

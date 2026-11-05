@@ -360,11 +360,15 @@ def main() -> int:
     parser.add_argument("--codex", default="codex")
     parser.add_argument("--uv", default="uv")
     args = parser.parse_args()
+    stage = "resolve_codex_executable"
     try:
-        result = smoke(args.repository, ref=args.ref, codex=executable(args.codex), uv=executable(args.uv),
+        codex = executable(args.codex)
+        stage = "resolve_uv_executable"
+        uv = executable(args.uv)
+        result = smoke(args.repository, ref=args.ref, codex=codex, uv=uv,
                        uv_cache_dir=args.uv_cache_dir)
     except (OSError, ValueError) as error:
-        result = {"passed": False, "failureStage": "resolve_executables", "errorType": type(error).__name__}
+        result = {"passed": False, "failureStage": stage, "errorType": type(error).__name__}
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False))

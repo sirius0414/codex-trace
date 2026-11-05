@@ -41,7 +41,10 @@ def codex_native(shim: Path) -> Path:
     # 当前 optional platform package；非标准安装可通过 --codex 指定真实 exe。
     module_roots = [shim.parent / "node_modules", shim.parent.parent]
     for modules in module_roots:
-        for package in (modules / "@openai" / f"codex-win32-{architecture}", modules / "@openai/codex"):
+        main_package = modules / "@openai/codex"
+        # npm 全局安装可把可选平台包保留在主包自己的 node_modules，仍只识别固定官方名称。
+        for package in (modules / "@openai" / f"codex-win32-{architecture}",
+                        main_package / "node_modules/@openai" / f"codex-win32-{architecture}", main_package):
             for relative in (f"vendor/{triple}/bin/codex.exe", f"vendor/{triple}/codex/codex.exe"):
                 candidate = package / relative
                 if candidate.is_file():
