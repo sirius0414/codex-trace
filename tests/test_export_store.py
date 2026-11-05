@@ -9,12 +9,11 @@ from pathlib import Path
 import stat
 import sys
 import tempfile
-import time
 import tracemalloc
 import unittest
 from unittest import mock
 from uuid import UUID
-from platform_fixtures import assert_private_mode, symlink
+from platform_fixtures import assert_private_mode, symlink, wait_for_windows_change_tick
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from codex_trace.platform import filesystem as os
@@ -96,10 +95,7 @@ class ExportStoreTests(unittest.TestCase):
             if os.fstat(fd).st_ino == original.st_ino:
                 current_total += len(chunk)
                 if not removed:
-                    # 合成用例要制造可观察的 ChangeTime 变化，跨过 Windows 时钟粒度；
-                    # 此等待仅属于测试夹具，不是生产同步机制。
-                    if sys.platform == "win32":
-                        time.sleep(0.05)
+                    wait_for_windows_change_tick()
                     temporary.unlink()
                     removed = True
                 if not chunk:
@@ -128,6 +124,7 @@ class ExportStoreTests(unittest.TestCase):
             chunk = real_read(fd, size)
             if not chunk and not changed and os.fstat(fd).st_ino == original.st_ino:
                 changed = True
+                wait_for_windows_change_tick()
                 temporary.unlink()
                 saved.write_bytes(b"x" * len(PAYLOAD))
                 os.utime(saved, ns=(original.st_atime_ns, original.st_mtime_ns))
@@ -150,9 +147,7 @@ class ExportStoreTests(unittest.TestCase):
             chunk = real_read(fd, size)
             if not chunk and not changed and os.fstat(fd).st_ino == original.st_ino:
                 changed = True
-                # 保证合成的同字节重写跨过 Windows 时钟粒度，仍严格要求拒绝 ctime 变化。
-                if sys.platform == "win32":
-                    time.sleep(0.05)
+                wait_for_windows_change_tick()
                 saved.write_bytes(PAYLOAD)
                 os.utime(saved, ns=(original.st_atime_ns, original.st_mtime_ns))
             return chunk
@@ -176,6 +171,7 @@ class ExportStoreTests(unittest.TestCase):
             if not chunk and os.fstat(fd).st_ino == original.st_ino:
                 passes += 1
                 if passes == 1:
+                    wait_for_windows_change_tick()
                     temporary.unlink()
                 else:
                     saved.write_bytes(PAYLOAD)
@@ -574,6 +570,7 @@ class ExportStoreTests(unittest.TestCase):
                         elif mutation == "truncate":
                             path.write_bytes(b"a")
                         else:
+                            wait_for_windows_change_tick()
                             path.write_bytes(b"z" * len(payload))
                             os.utime(path, ns=(original.st_atime_ns, original.st_mtime_ns))
                     return data

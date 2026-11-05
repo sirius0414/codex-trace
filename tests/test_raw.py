@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from codex_trace.adapters.raw import RawAdapter, RawError
-from platform_fixtures import symlink
+from platform_fixtures import symlink, wait_for_windows_change_tick
 
 A = '11111111-1111-4111-8111-111111111111'
 B = '22222222-2222-4222-8222-222222222222'
@@ -188,6 +188,7 @@ class RawTests(unittest.TestCase):
         self.assertEqual(original.generation, append.generation)
         self.assertNotEqual(original.fingerprint, append.fingerprint)
         current = path.read_bytes()
+        wait_for_windows_change_tick()
         path.write_bytes(current.replace(b'"role": "user"', b'"role": "tool"'))
         rewrite = self.read(path)
         self.assertGreater(rewrite.generation, append.generation)
@@ -339,6 +340,7 @@ class RawTests(unittest.TestCase):
             value = original(descriptor, count, offset)
             if not changed:
                 changed = True
+                wait_for_windows_change_tick()
                 path.write_bytes(path.read_bytes().replace(b'"role": "user"', b'"role": "tool"'))
             return value
         with mock.patch('codex_trace.adapters.raw.os.pread', rewrite):
@@ -403,6 +405,7 @@ class RawTests(unittest.TestCase):
         first = self.read(path)
         # 平台适配返回 NTFS ChangeTime；Windows pathlib 的 st_ctime_ns 是创建时间。
         info = os.stat(path)
+        wait_for_windows_change_tick()
         path.write_bytes(path.read_bytes().replace(b'"role": "user"', b'"role": "tool"'))
         os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
         self.assertNotEqual(os.stat(path).st_ctime_ns, info.st_ctime_ns)
@@ -442,6 +445,7 @@ class RawTests(unittest.TestCase):
         self.read(child, B)
         data = parent.read_bytes()
         last = data.rfind(b'"role": "user"')
+        wait_for_windows_change_tick()
         parent.write_bytes(data[:last] + data[last:].replace(b'"role": "user"', b'"role": "tool"'))
         self.read(child, B)
         changed = self.read(parent)

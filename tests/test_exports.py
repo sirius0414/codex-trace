@@ -13,6 +13,7 @@ import time
 import unittest
 from unittest import mock
 from uuid import uuid4
+from platform_fixtures import wait_for_windows_change_tick
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
 from codex_trace.platform import filesystem as os
@@ -315,6 +316,7 @@ class ExportManagerTests(unittest.TestCase):
     def test_private_snapshot_mutation_fails_and_never_writes_source_back(self):
         created = self.create()
         path = self.manager.root / (created['exportId'] + '.zip')
+        wait_for_windows_change_tick()
         path.write_bytes(b'x' * created['totalBytes'])
         with self.assertRaises(ExportError): self.manager.read(self.binding, created['exportId'], None)
         result = self.commit(created)
@@ -324,9 +326,11 @@ class ExportManagerTests(unittest.TestCase):
     def test_chunk_rejects_same_size_rewrite_with_restored_mtime(self):
         created = self.create()
         path = self.manager.root / (created['exportId'] + '.zip')
-        before = path.stat()
+        before = os.stat(path)
+        wait_for_windows_change_tick()
         path.write_bytes(b'x' * before.st_size)
         os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        self.assertNotEqual(os.stat(path).st_ctime_ns, before.st_ctime_ns)
         with self.assertRaises(ExportError):
             self.manager.read(self.binding, created['exportId'], None)
     def test_snapshot_quota_is_explicit(self):
