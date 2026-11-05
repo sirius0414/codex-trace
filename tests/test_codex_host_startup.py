@@ -126,8 +126,9 @@ class HostStartupTests(unittest.TestCase):
                 self.assertTrue(Path(environment[key]).is_relative_to(self.root))
         preparation = next(command for command, _, _ in self.processes if "-c" in command)
         self.assertEqual(preparation[-2:], ["-c", "import compression.zstd, mcp"])
-        self.assertIn(str(self.installed / "requirements.lock"), preparation)
-        self.assertNotIn(str(self.installed / "launch.py"), preparation)
+        requirements = preparation[preparation.index("--with-requirements") + 1]
+        self.assertEqual(Path(requirements), self.installed / "requirements.lock")
+        self.assertFalse(any(Path(argument) == self.installed / "launch.py" for argument in preparation))
         self.assertEqual(self.processes[-1][0], [str(self.codex), "app-server"])
         self.assertEqual(result["installedFileChanges"], {"added": [], "removed": [], "changed": []})
 

@@ -91,8 +91,14 @@ class ExportManager:
     def _lock(self, name, *, blocking=True):
         """用持久锁文件协调多进程；回收锁文件会破坏仍持锁进程的互斥关系。"""
         self._check_directory()
-        fd = os.open(name + '.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
-                     0o600, dir_fd=self.directory)
+        flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK
+        try:
+            fd = os.open(name + '.lock', flags | os.O_CREAT, 0o600, dir_fd=self.directory)
+        except FileNotFoundError:
+            # macOS 并发创建同名文件时，输掉创建竞争的 O_CREAT 可能返回 ENOENT。
+            # 只在目录身份复核后打开胜出者已创建的原名；不重建、不换名，后续安全检查不变。
+            self._check_directory()
+            fd = os.open(name + '.lock', flags, dir_fd=self.directory)
         acquired = False
         try:
             info = os.fstat(fd)
