@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """诊断 Windows CI 的默认 owner 与私有 DACL，所有文件探针使用临时合成数据。
 
-默认只读取本进程 token 并创建一次性样本。显式 --normalize-test-owner 将
-primary token 复制后只调整副本的 TokenOwner，再用副本启动专用验收子进程。
-从不修改原 token、系统策略、既有文件所有权或生产检查；这不是降低权限，
-因此通过也不能声称已经验证了真正的普通用户桌面环境。脚本不属于发布包。
+默认只读取本进程 token 并创建一次性样本。显式 --normalize-test-owner 通过
+普通 subprocess 创建专用子进程，核验其 TokenId 与父进程不同且用户相同，
+再只调整该独立子进程的 TokenOwner；结束时恢复，父 token 前后必须完全一致。
+不修改系统策略、既有文件所有权或生产检查；这不是降低权限，因此通过也不能
+声称已验证真正的普通用户桌面环境。脚本不属于发布包。
 """
 from __future__ import annotations
 
 import argparse
-import codecs
-import ctypes
-from ctypes import wintypes
 import json
 import os
 from pathlib import Path
@@ -40,6 +38,11 @@ def token_snapshot(token=None) -> dict:
                 "elevated": bool(security.GetTokenInformation(token, security.TokenElevation)),
                 "elevationType": security.GetTokenInformation(token, security.TokenElevationType),
                 "tokenId": str(statistics["TokenId"]),
+                "groups": sorted((security.ConvertSidToStringSid(sid), attributes)
+                    for sid, attributes in security.GetTokenInformation(token, security.TokenGroups)),
+                # USED_FOR_ACCESS 仅记录是否使用过权限，不表示权限本身变化；比较实际授权位。
+                "privileges": sorted((security.LookupPrivilegeName(None, luid), attributes & ~0x80000000)
+                    for luid, attributes in security.GetTokenInformation(token, security.TokenPrivileges)),
                 "defaultDacl": acl_entries(security.GetTokenInformation(token, security.TokenDefaultDacl))}
     finally:
         if owned:
@@ -129,116 +132,100 @@ def diagnostic() -> dict:
     return result
 
 
-def create_process_with_token(token, command: list[str], cwd: Path):
-    """pywin32 未暴露此 API；仅进程创建做薄封装，token/ACL 操作仍使用 pywin32。
+UNCHANGED_TOKEN_FIELDS = ("userSid", "tokenId", "defaultDacl", "elevated", "elevationType", "groups", "privileges")
 
-    参数中显式给出可执行文件，避免空格路径歧义。子进程自行打开日志文件，
-    不依赖 CreateProcessWithTokenW 的标准句柄继承；环境来自当前 CI 进程。
-    """
-    class StartupInfo(ctypes.Structure):
-        _fields_ = [("cb", wintypes.DWORD), ("reserved", wintypes.LPWSTR),
-                    ("desktop", wintypes.LPWSTR), ("title", wintypes.LPWSTR),
-                    ("x", wintypes.DWORD), ("y", wintypes.DWORD), ("xsize", wintypes.DWORD),
-                    ("ysize", wintypes.DWORD), ("xchars", wintypes.DWORD), ("ychars", wintypes.DWORD),
-                    ("fill", wintypes.DWORD), ("flags", wintypes.DWORD), ("show", wintypes.WORD),
-                    ("reservedSize", wintypes.WORD), ("reservedBytes", wintypes.LPVOID),
-                    ("stdin", wintypes.HANDLE), ("stdout", wintypes.HANDLE), ("stderr", wintypes.HANDLE)]
-    class ProcessInfo(ctypes.Structure):
-        _fields_ = [("process", wintypes.HANDLE), ("thread", wintypes.HANDLE),
-                    ("processId", wintypes.DWORD), ("threadId", wintypes.DWORD)]
-    function = ctypes.WinDLL("advapi32", use_last_error=True).CreateProcessWithTokenW
-    function.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPWSTR,
-                         wintypes.DWORD, wintypes.LPVOID, wintypes.LPCWSTR,
-                         ctypes.POINTER(StartupInfo), ctypes.POINTER(ProcessInfo)]
-    function.restype = wintypes.BOOL
-    startup, process = StartupInfo(), ProcessInfo()
-    startup.cb = ctypes.sizeof(startup)
-    line = ctypes.create_unicode_buffer(subprocess.list2cmdline(command))
-    environment = ctypes.create_unicode_buffer("\0".join(
-        name + "=" + value for name, value in sorted(os.environ.items(), key=lambda pair: pair[0].upper())) + "\0\0")
-    if not function(int(token), 0, command[0], line, 0x08000400, environment, str(cwd),
-                    ctypes.byref(startup), ctypes.byref(process)):
-        raise ctypes.WinError(ctypes.get_last_error())
-    return process.process, process.thread
+
+def require_independent_child_token(parent: dict, child: dict) -> None:
+    """TokenId 标识 token 对象实例；必须先证实对象独立，不能只比较进程号。"""
+    if child["tokenId"] == parent["tokenId"]:
+        raise RuntimeError("independent-child-token-required")
+    if child["userSid"] != parent["userSid"]:
+        raise RuntimeError("same-token-user-required")
 
 
 def normalized_child(request_path: Path) -> int:
-    """只接受副本 token 的默认 owner；正常 subprocess 后代也必须保留该设置。"""
+    """仅修改经核验的独立子进程 token，finally 恢复；测试后代继承规范化 owner。"""
+    import win32api
+    import win32security as security
     request = json.loads(request_path.read_text(encoding="utf-8"))
-    report = {}
+    report = {"normalizationMode": "verifiedIndependentChildTokenOwnerOnly", "ordinaryUserValidation": False}
+    token = None
+    changed = False
+    original_owner = None
+    stage = "open_child_token"
     code = 1
-    with Path(request["log"]).open("w", encoding="utf-8", buffering=1) as log:
+    try:
+        token = security.OpenProcessToken(win32api.GetCurrentProcess(), security.TOKEN_QUERY | security.TOKEN_ADJUST_DEFAULT)
+        before = token_snapshot(token)
+        report["beforeChildToken"] = before
+        stage = "verify_independent_child_token"
+        require_independent_child_token(request["parentToken"], before)
+        report["independentChildTokenVerified"] = True
+        original_owner = security.GetTokenInformation(token, security.TokenOwner)
+        stage = "normalize_child_owner"
+        security.SetTokenInformation(token, security.TokenOwner, security.GetTokenInformation(token, security.TokenUser)[0])
+        changed = True
+        normalized = token_snapshot(token)
+        report["normalizedChildToken"] = normalized
+        report["onlyDefaultOwnerChanged"] = all(before[key] == normalized[key] for key in UNCHANGED_TOKEN_FIELDS)
+        if not normalized["ownerEqualsUser"] or not report["onlyDefaultOwnerChanged"]:
+            raise RuntimeError("unexpected-token-change")
+        stage = "verify_native_files_and_grandchild"
+        report["diagnostic"] = diagnostic()
+        if not report["diagnostic"]["ordinaryChildToken"]["ownerEqualsUser"]:
+            raise RuntimeError("normalized-owner-not-inherited")
+        print(json.dumps(report, ensure_ascii=False), flush=True)
+        stage = "run_command"
+        code = subprocess.run(request["command"]).returncode if request["command"] else 0
+        report["commandExitCode"] = code
+    except Exception as error:
+        report["error"] = {"stage": stage, "errorType": type(error).__name__, "winerror": getattr(error, "winerror", None)}
+    finally:
         try:
-            report = diagnostic()
-            report["normalizationMode"] = "duplicatedPrimaryTokenOwnerOnly"
-            log.write(json.dumps(report, ensure_ascii=False) + "\n")
-            if not report["token"]["ownerEqualsUser"] or not report["ordinaryChildToken"]["ownerEqualsUser"]:
-                raise RuntimeError("normalized-owner-not-inherited")
-            log.flush()
-            code = subprocess.run(request["command"], stdout=log, stderr=subprocess.STDOUT).returncode if request["command"] else 0
-            report["commandExitCode"] = code
+            if changed:
+                security.SetTokenInformation(token, security.TokenOwner, original_owner)
+                report["restoredChildToken"] = token_snapshot(token)
+                report["childTokenRestored"] = report["restoredChildToken"] == report["beforeChildToken"]
+                if not report["childTokenRestored"]:
+                    code = 1
         except Exception as error:
-            report["error"] = {"errorType": type(error).__name__, "winerror": getattr(error, "winerror", None)}
-            log.write(json.dumps(report["error"]) + "\n")
+            report["restoreError"] = {"errorType": type(error).__name__, "winerror": getattr(error, "winerror", None)}
+            code = 1
         finally:
-            Path(request["report"]).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            if token is not None:
+                token.Close()
+        Path(request["report"]).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False), flush=True)
     return code
 
 
 def normalized_run(command: list[str]) -> tuple[int, dict]:
-    """只修改复制的 token；原进程与 runner 的 owner、DACL、权限均不调整。"""
-    import win32api
-    import win32event
-    import win32process
-    import win32security as security
-    original = security.OpenProcessToken(win32api.GetCurrentProcess(), security.TOKEN_QUERY | security.TOKEN_DUPLICATE)
-    duplicate = None
+    """父进程只查询 token；普通子进程证明 token 独立后才自行调整默认 owner。"""
     report = {"before": diagnostic(), "ordinaryUserValidation": False}
+    stage = "prepare_child_request"
+    code = 1
     try:
-        access = security.TOKEN_QUERY | security.TOKEN_DUPLICATE | security.TOKEN_ASSIGN_PRIMARY | security.TOKEN_ADJUST_DEFAULT
-        duplicate = security.DuplicateTokenEx(original, security.SecurityImpersonation, access, security.TokenPrimary)
-        before_duplicate = token_snapshot(duplicate)
-        if before_duplicate["tokenId"] == report["before"]["token"]["tokenId"]:
-            raise RuntimeError("independent-token-copy-required")
-        security.SetTokenInformation(duplicate, security.TokenOwner, security.GetTokenInformation(original, security.TokenUser)[0])
-        report["duplicate"] = token_snapshot(duplicate)
-        report["onlyDefaultOwnerChanged"] = all(before_duplicate[key] == report["duplicate"][key]
-            for key in ("userSid", "tokenId", "defaultDacl", "elevated", "elevationType"))
-        if not report["onlyDefaultOwnerChanged"]:
-            raise RuntimeError("unexpected-token-change")
         with tempfile.TemporaryDirectory(prefix="codex-owner-child-") as temporary:
             root = Path(temporary).resolve()
-            request = {"command": command, "report": str(root / "report.json"), "log": str(root / "output.log")}
+            request = {"command": command, "report": str(root / "report.json"), "parentToken": report["before"]["token"]}
             request_path = root / "request.json"
             request_path.write_text(json.dumps(request), encoding="utf-8")
-            Path(request["log"]).touch()
             child_command = [sys.executable, "-B", str(Path(__file__).resolve()), "--child-request", str(request_path)]
-            process, thread = create_process_with_token(duplicate, child_command, Path.cwd())
-            try:
-                decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-                with Path(request["log"]).open("rb") as log:
-                    while True:
-                        finished = win32event.WaitForSingleObject(process, 200) == win32event.WAIT_OBJECT_0
-                        text = decoder.decode(log.read(), final=finished)
-                        if text:
-                            print(text, end="", flush=True)
-                        if finished:
-                            break
-                code = win32process.GetExitCodeProcess(process)
-                report["child"] = json.loads(Path(request["report"]).read_text(encoding="utf-8"))
-                return code, report
-            finally:
-                win32api.CloseHandle(thread)
-                win32api.CloseHandle(process)
+            stage = "start_independent_child"
+            code = subprocess.run(child_command).returncode
+            stage = "read_child_report"
+            report["child"] = json.loads(Path(request["report"]).read_text(encoding="utf-8"))
+            if not report["child"].get("independentChildTokenVerified") or not report["child"].get("childTokenRestored"):
+                code = 1
     except Exception as error:
-        report["normalizationError"] = {"errorType": type(error).__name__, "winerror": getattr(error, "winerror", None)}
-        return 1, report
+        report["normalizationError"] = {"stage": stage, "errorType": type(error).__name__, "winerror": getattr(error, "winerror", None)}
+        code = 1
     finally:
-        report["afterOriginalToken"] = token_snapshot(original)
+        report["afterOriginalToken"] = token_snapshot()
         report["originalTokenUnchanged"] = report["afterOriginalToken"] == report["before"]["token"]
-        if duplicate is not None:
-            duplicate.Close()
-        original.Close()
+        if not report["originalTokenUnchanged"]:
+            code = 1
+    return code, report
 
 
 def main() -> int:
@@ -267,7 +254,7 @@ def main() -> int:
             code = subprocess.run(command).returncode if command else 0
     except Exception as error:
         report = {"errorType": type(error).__name__, "winerror": getattr(error, "winerror", None),
-                  "ordinaryUserValidation": False, "normalizationUsesIndependentTokenOnly": True}
+                  "ordinaryUserValidation": False, "normalizationRequiresIndependentChildToken": True}
         code = 1
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
