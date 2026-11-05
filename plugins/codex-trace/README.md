@@ -66,7 +66,7 @@ Removal does not automatically delete derived indexes, reading preferences, expo
 
 ### Optional installation formats
 
-For a separate installer, follow the [release ZIP installer workflow](INSTALL.md#optional-release-zip-installer) using `codex-trace-0.2.0.zip` and its checksums. It requires local Python and registers the `codex-trace` marketplace. Maintainers can also build [platform-specific offline candidates with bundled runtimes](MARKETPLACE.md#optional-native-offline-plugin-package). Do not enable the community, installer, and development copies of the same plugin simultaneously. Download availability and actual publication status are shown in [GitHub Releases](https://github.com/sirius0414/codex-trace/releases).
+For a separate installer, follow the [release ZIP installer workflow](INSTALL.md#optional-release-zip-installer) using `codex-trace-0.2.1.zip` and its checksums. It requires local Python and registers the `codex-trace` marketplace. Maintainers can also build [platform-specific offline candidates with bundled runtimes](MARKETPLACE.md#optional-native-offline-plugin-package). Do not enable the community, installer, and development copies of the same plugin simultaneously. Download availability and actual publication status are shown in [GitHub Releases](https://github.com/sirius0414/codex-trace/releases).
 
 ### Migrating from Codex Display
 
@@ -178,7 +178,7 @@ You can also run `scripts/build_release.py` directly with Python. The default ou
 
 ```text
 build/releases/
-├── codex-trace-0.2.0.zip
+├── codex-trace-0.2.1.zip
 └── SHA256SUMS
 ```
 
@@ -198,11 +198,11 @@ Then run installation verification. The script uses a real Codex CLI, a new Pyth
 
 ```sh
 .venv/bin/python scripts/smoke_release.py \
-  --archive build/releases/codex-trace-0.2.0.zip \
+  --archive build/releases/codex-trace-0.2.1.zip \
   --report build/release-smoke.json
 ```
 
-On Windows, use `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.0.zip --report build/release-smoke.json`. Add `--codex` to specify a CLI. For offline testing, provide previously downloaded dependencies with `--wheelhouse DIR`. Verification does not read real sessions or modify real plugin configuration, but CLI/MCP tests do not replace manual acceptance of the desktop entry point.
+On Windows, use `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.1.zip --report build/release-smoke.json`. Add `--codex` to specify a CLI. For offline testing, provide previously downloaded dependencies with `--wheelhouse DIR`. Verification does not read real sessions or modify real plugin configuration, but CLI/MCP tests do not replace manual acceptance of the desktop entry point.
 
 ### GitHub Release
 

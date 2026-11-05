@@ -2,7 +2,7 @@
 
 [English](PRIVACY.md) | [简体中文](PRIVACY.zh-CN.md)
 
-Updated: 2026-11-04. Applies to Codex Trace 0.2.0 maintained in this repository. The project is maintained under the name Codex Trace contributors; see [SUPPORT.md](SUPPORT.md) for the project homepage and contact options.
+Updated: 2026-11-04. Applies to Codex Trace 0.2.1 maintained in this repository. The project is maintained under the name Codex Trace contributors; see [SUPPORT.md](SUPPORT.md) for the project homepage and contact options.
 
 Codex Trace reads, displays, and exports task records that Codex has saved locally. The plugin stores derived local data and exported files. “Read-only” means it does not modify the Codex task sources being observed; it does not mean that no data is stored.
 

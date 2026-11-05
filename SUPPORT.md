@@ -2,7 +2,7 @@
 
 [English](SUPPORT.md) | [简体中文](SUPPORT.zh-CN.md)
 
-Codex Trace is independently maintained by Codex Trace contributors. Version 0.2.0 primarily installs through the GitHub repository marketplace `codex-trace-community`; see the [community installation guide](INSTALL.md#community-marketplace-installation).
+Codex Trace is independently maintained by Codex Trace contributors. Version 0.2.1 primarily installs through the GitHub repository marketplace `codex-trace-community`; see the [community installation guide](INSTALL.md#community-marketplace-installation).
 
 - Project homepage: [sirius0414/codex-trace](https://github.com/sirius0414/codex-trace)
 - Installation and recovery: [INSTALL.md](INSTALL.md)

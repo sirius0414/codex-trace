@@ -30,5 +30,5 @@
   "name": "codex-trace",
   "repository": "https://github.com/sirius0414/codex-trace",
   "requires_local_executor": true,
-  "version": "0.2.0"
+  "version": "0.2.1"
 }

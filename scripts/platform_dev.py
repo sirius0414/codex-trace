@@ -19,6 +19,9 @@ import sys
 from uuid import UUID
 
 IS_WINDOWS = sys.platform == "win32"
+# PowerShell/CIM 冷启动在受载主机上可能超过 5 秒；身份查询仍只尝试一次，
+# 上限独立于管理器的 HTTP 就绪/退出等待，超时不能当成进程退出或身份通过。
+WINDOWS_PROCESS_QUERY_TIMEOUT = 30
 
 
 def browser_launch_path(directory: Path, instance_id: str) -> Path:
@@ -142,7 +145,8 @@ def windows_process_info(pid: int) -> dict | None:
               "command=$p.CommandLine}|ConvertTo-Json -Compress}")
     try:
         result = subprocess.run([powershell, "-NoProfile", "-NonInteractive", "-Command", script],
-                                capture_output=True, text=True, encoding="utf-8", timeout=5, check=True)
+                                capture_output=True, text=True, encoding="utf-8",
+                                timeout=WINDOWS_PROCESS_QUERY_TIMEOUT, check=True)
         value = json.loads(result.stdout.lstrip("\ufeff")) if result.stdout.strip() else None
         if not isinstance(value, dict) or any(not isinstance(value.get(key), str) or not value[key]
                                              for key in ("started", "command")):

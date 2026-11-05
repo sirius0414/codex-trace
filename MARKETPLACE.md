@@ -2,7 +2,7 @@
 
 [English](MARKETPLACE.md) | [简体中文](MARKETPLACE.zh-CN.md)
 
-The primary distribution channel is the GitHub repository marketplace `codex-trace-community`, with plugin `codex-trace` and current version identifier 0.2.0. The repository is **PRIVATE**; installers need Git read access and valid credentials. Users explicitly register the repository; this does not establish OpenAI public-directory approval. Actual remote records determine whether commits or Releases are accessible and which platforms have been validated.
+The primary distribution channel is the GitHub repository marketplace `codex-trace-community`, with plugin `codex-trace` and current version identifier 0.2.1. The repository is **PRIVATE**; installers need Git read access and valid credentials. Users explicitly register the repository; this does not establish OpenAI public-directory approval. Actual remote records determine whether commits or Releases are accessible and which platforms have been validated.
 
 ## Community installation and updates
 
@@ -55,7 +55,7 @@ Desktop entry points still need acceptance: reopen after restart or a new sessio
 
 ## Optional: native offline plugin package
 
-The following bundled-Python candidate workflow is retained for maintainers who need per-platform offline runtime packages. It is not a prerequisite for community uv installation. Prepare, build, and validate each native OS/architecture separately; an example filename is `codex-trace-0.2.0-darwin-arm64.zip`.
+The following bundled-Python candidate workflow is retained for maintainers who need per-platform offline runtime packages. It is not a prerequisite for community uv installation. Prepare, build, and validate each native OS/architecture separately; an example filename is `codex-trace-0.2.1-darwin-arm64.zip`.
 
 ## Prepare a standalone runtime
 
@@ -125,7 +125,7 @@ Example for macOS arm64:
 
 ```sh
 .venv/bin/python scripts/smoke_marketplace.py \
-  --archive build/marketplace/codex-trace-0.2.0-darwin-arm64.zip \
+  --archive build/marketplace/codex-trace-0.2.1-darwin-arm64.zip \
   --report build/marketplace-smoke.json
 ```
 
