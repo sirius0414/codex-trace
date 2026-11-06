@@ -66,10 +66,13 @@ def release_version(root: Path) -> str:
     module = ast.parse(checked_bytes(root / "backend/codex_trace/__init__.py", root))
     backend = next((ast.literal_eval(node.value) for node in module.body
                     if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__version__" for t in node.targets)), None)
+    setup_module = ast.parse(checked_bytes(root / "install_community.py", root))
+    setup_version = next((ast.literal_eval(node.value) for node in setup_module.body
+                          if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "VERSION" for t in node.targets)), None)
     version = package["version"]
     if not VERSION_RE.fullmatch(version):
         raise ValueError("Release version must be a safe semantic version")
-    if {version, lock["version"], lock["packages"][""]["version"], manifest["version"], backend} != {version}:
+    if {version, lock["version"], lock["packages"][""]["version"], manifest["version"], backend, setup_version} != {version}:
         raise ValueError("Version mismatch between package, lockfile, plugin and backend")
     return version
 
@@ -107,7 +110,7 @@ def collect_payload(root: Path, assets: Path) -> tuple[str, dict[str, bytes]]:
 
     # Explicit top-level allowlist: reviewed user documentation only; no source fixtures,
     # generated configs, probe output, .git, .env or arbitrary JSON data.
-    for name in ("install.py", "install.sh", "install.ps1", *PUBLIC_DOCUMENTS, *PUBLIC_DOCUMENT_ASSETS,
+    for name in ("install.py", "install_community.py", "install.sh", "install.ps1", *PUBLIC_DOCUMENTS, *PUBLIC_DOCUMENT_ASSETS,
                  "LICENSE", "NOTICE", "requirements.lock", "package-lock.json"):
         add(name)
     for name in SCRIPTS:

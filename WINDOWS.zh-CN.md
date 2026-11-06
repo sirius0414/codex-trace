@@ -4,7 +4,7 @@
 
 目标环境为 Windows 10/11、本地 NTFS 卷及原生 Codex，无需 WSL。请以普通用户启动 Codex 和终端，不支持“以管理员身份运行”：提权令牌可能把新建文件的所有者设为 Administrators 组，插件会拒绝这类状态文件，而不会接管所有权或放宽保护。社区市场需要 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本，由 uv 管理 Python 3.14.2；首次准备、依赖变化或缓存缺失时需要网络。可选 ZIP 安装器和下方源码开发流程则要求本机 Python 3.14+（含 `compression.zstd`）。普通用户按 [社区市场安装指南](INSTALL.zh-CN.md#社区市场安装) 操作，并遵循其中的网络访问与运行时预热要求，无需 Node.js/npm；下面的源码开发流程才需要 Node.js/npm。
 
-社区渠道的原生测试结果见对应版本的 [GitHub Release 验证记录](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.1)。以下实现说明、macOS 测试与模拟测试不能作为 Windows 通过的证据。
+社区渠道的原生测试结果见对应版本的 [GitHub Release 验证记录](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.2)。以下实现说明、macOS 测试与模拟测试不能作为 Windows 通过的证据。
 
 GitHub Windows runner 使用管理员令牌。CI 诊断包装器新建专用测试子进程，先确认其 TokenId 与父进程不同、TokenUser 相同，再仅将子进程令牌的新文件默认 TokenOwner 规范为当前用户；在 finally 中恢复，并检查父进程令牌未变。它不改已有文件所有者、不放宽产品的 SID/DACL 检查。这是在仍保留管理员权限的环境中验证原生 Windows API，不等同于普通用户桌面验收；提权启动不在支持范围内。存在该包装器本身不表示任何一次 CI 已通过。
 

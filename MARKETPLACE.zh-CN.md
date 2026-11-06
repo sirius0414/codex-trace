@@ -2,25 +2,17 @@
 
 [English](MARKETPLACE.md) | [简体中文](MARKETPLACE.zh-CN.md)
 
-本项目的主要分发渠道是公开 GitHub 仓库市场 `codex-trace-community`，插件为 `codex-trace`，当前版本标识为 0.2.1。安装时无需 GitHub 凭据。仓库安装由用户主动注册，不表示获得 OpenAI 公共目录认证。推送、Release 是否公开以及原生平台验证状态，以对应版本的实际记录为准。
+本项目的主要分发渠道是公开 GitHub 仓库市场 `codex-trace-community`，插件为 `codex-trace`，当前版本标识为 0.2.2。安装时无需 GitHub 凭据。仓库安装由用户主动注册，不表示获得 OpenAI 公共目录认证。推送、Release 是否公开以及原生平台验证状态，以对应版本的实际记录为准。
 
 ## 社区安装与更新
 
-前置条件为 Git、uv 和 Codex CLI 0.153.0 或更高兼容版本。无需 Node.js、手工克隆或前端构建：
+准备 Git、uv 和兼容的 Codex CLI 后，运行完整安装命令：
 
 ```sh
-codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
-codex plugin add codex-trace@codex-trace-community
+uv run --no-project --no-config --python 3.14.2 https://raw.githubusercontent.com/sirius0414/codex-trace/v0.2.2/install_community.py
 ```
 
-更新：
-
-```sh
-codex plugin marketplace upgrade codex-trace-community
-codex plugin add codex-trace@codex-trace-community
-```
-
-首次使用、依赖变化或缓存缺失时，先按 [安装与依赖预热](INSTALL.zh-CN.md#首次使用与依赖预热) 准备运行环境；冷下载可能超过宿主默认的启动等待时间。成功后重启 Codex 或开启新会话，再打开执行轨迹。uv 需要联网准备 Python 3.14.2 和锁定依赖；uv 管理的运行时、环境及下载缓存位于插件目录外。完整卸载和缓存说明见 [INSTALL.md](INSTALL.zh-CN.md#社区市场卸载与缓存)。
+该入口固定对应 Release 标签，整合注册、包校验、依赖准备、安装和离线启动检查。无需单独预热。更新时运行新版本文档中的命令；固定标签不会通过 `marketplace upgrade` 自动跳到下一版本。安装完成后开启新会话或重启已运行的 Codex。详细说明见 [INSTALL.md](INSTALL.zh-CN.md)。
 
 ## 社区仓库发布内容与验证
 
@@ -39,7 +31,7 @@ Windows 使用 `.venv\Scripts\python.exe`。默认入口重新构建前端并固
 
 发布前应从准备提交的 Git 树验证目录内容与源码一致，在隔离用户目录中通过真实 Codex CLI 注册市场、安装插件、检查 uv 启动配置并运行合成任务的读取与导出检查。测试报告记录实际平台、版本和未执行项。macOS 成功不能代替原生 Windows 检查；各平台实际结果见对应版本的 GitHub Release 验证记录。已公开的 Release、校验和与生成目录应对应同一提交和版本。
 
-验收须分别记录冷依赖准备、直接 MCP／导出流程，以及真实 Codex app-server 对已安装插件的启动与工具发现。仅 `plugin add`、`mcp list` 或直接启动服务不足以证明宿主确实启动 MCP；各项实际结果见对应 Release。预热后的成功不等于宿主空缓存冷启动通过。现有 modern MCP 清单不接受 `startup_timeout_sec`，不得通过添加该字段声称已延长启动时间；发布说明应继续提供终端预热步骤。
+验收须分别记录冷依赖准备、直接 MCP／导出流程，以及真实 Codex app-server 对已安装插件的启动与工具发现。仅 `plugin add`、`mcp list` 或直接启动服务不足以证明宿主确实启动 MCP；各项实际结果见对应 Release。预热后的成功不等于宿主空缓存冷启动通过。现有 modern MCP 清单不接受 `startup_timeout_sec`，不得通过添加该字段声称已延长启动时间；CI 通过 `--integrated-install` 执行用户安装器，再检查宿主启动，验收中不额外预热。
 
 真实桌面入口仍需验收：重启或新会话后打开面板、选择任务、读取详情、查看确认的子 Agent、增量观察和导出校验。GitHub 发布身份、推送权限、远端 URL 可访问性与 Release 发布状态须实际验证，不从本地构建结果推断。
 
@@ -55,7 +47,7 @@ Windows 使用 `.venv\Scripts\python.exe`。默认入口重新构建前端并固
 
 ## 可选：原生离线插件包
 
-以下保留带内置 Python 的候选包构建方法，供维护者需要按平台提供离线运行包时使用。它不是社区 uv 安装的前置步骤。每个原生系统／架构分别准备、构建和验证；包名如 `codex-trace-0.2.1-darwin-arm64.zip`。
+以下保留带内置 Python 的候选包构建方法，供维护者需要按平台提供离线运行包时使用。它不是社区 uv 安装的前置步骤。每个原生系统／架构分别准备、构建和验证；包名如 `codex-trace-0.2.2-darwin-arm64.zip`。
 
 ## 准备独立运行时
 
@@ -125,7 +117,7 @@ macOS arm64 的命令示例：
 
 ```sh
 .venv/bin/python scripts/smoke_marketplace.py \
-  --archive build/marketplace/codex-trace-0.2.1-darwin-arm64.zip \
+  --archive build/marketplace/codex-trace-0.2.2-darwin-arm64.zip \
   --report build/marketplace-smoke.json
 ```
 

@@ -84,6 +84,9 @@ def smoke(archive, codex, wheelhouse=None):
         release = json.loads(release_path.read_text(encoding='utf-8'))
         release['version'] = manifest['version']
         release['files']['plugin/.codex-plugin/plugin.json'] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        backend_identity = bundle / 'plugin/backend/codex_trace/__init__.py'
+        backend_identity.write_text('__version__ = "999.0.0"\n', encoding='utf-8')
+        release['files']['plugin/backend/codex_trace/__init__.py'] = hashlib.sha256(backend_identity.read_bytes()).hexdigest()
         release_path.write_text(json.dumps(release), encoding='utf-8')
         run('update')
         current = json.loads((destination / 'current.json').read_text(encoding='utf-8'))

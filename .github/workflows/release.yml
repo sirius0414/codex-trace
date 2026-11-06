@@ -93,7 +93,7 @@ jobs:
         run: |
           import subprocess, sys
           command = [sys.executable, 'scripts/smoke_community_marketplace.py', '--repository', '.',
-                     '--report', 'build/community-smoke.json']
+                     '--integrated-install', '--report', 'build/community-smoke.json']
           if sys.platform == 'win32':
               command = [sys.executable, 'scripts/diagnose_windows_permissions.py', '--normalize-test-owner',
                          '--report', 'build/windows-owner-community.json', '--', *command]

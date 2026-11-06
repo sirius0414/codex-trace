@@ -13,6 +13,8 @@ import subprocess
 import sys
 import uuid
 
+from install_community import verify_mcp
+
 sys.path.insert(0, str(Path(__file__).absolute().parent / 'scripts'))
 from platform_runtime import executable, state_root, venv_python, IS_WINDOWS
 from package_plugin import locked_versions, verify_runtime
@@ -169,13 +171,18 @@ def prepare(bundle, transaction, python, codex, record):
         'requirementsSha256': hashlib.sha256((package / 'requirements.lock').read_bytes()).hexdigest(),
         'thirdPartyManifestSha256': hashlib.sha256((package / 'third-party-manifest.json').read_bytes()).hexdigest()})
     verify_backend(target, package)
+    server = launch['mcpServers']['codex-trace']
+    tools = set(read_json(package / 'contracts/tools.json')['tools']) | {'open_codex_trace_panel'}
+    startup = verify_mcp([server['command'], *server['args']], package / 'backend',
+                         {**os.environ, **server['env']}, record['version'], tools)
     marketplace = transaction / 'marketplace'
     subprocess.run([str(python), '-X', 'utf8', '-B', str(bundle / 'scripts/prepare_marketplace.py'), '--package', str(package), '--output', str(marketplace)], check=True, capture_output=True, timeout=60)
     catalog_path = marketplace / '.agents/plugins/marketplace.json'
     catalog = read_json(catalog_path)
     catalog['name'], catalog['interface']['displayName'] = MARKET, 'Codex Trace'
     write_json(catalog_path, catalog)
-    write_json(transaction / 'verification.json', {'passed': True, 'backendImport': True, 'runtime': runtime})
+    write_json(transaction / 'verification.json', {'passed': True, 'backendImport': True, 'runtime': runtime,
+                                                  'startupCheck': startup})
     write_json(transaction / 'update-plan.json', {'schemaVersion': 1, 'platform': sys.platform, 'codexHome': str(update.codex_home()),
         'python': str(target), 'codex': str(codex), 'files': update.fingerprints(package),
         'catalogSha256': hashlib.sha256(catalog_path.read_bytes()).hexdigest()})
@@ -238,7 +245,8 @@ def install(bundle: Path, root: Path, python: Path, codex: Path) -> dict:
             write_json(root / 'current.json', {**result, 'transaction': str(transaction)})
             journal['phase'] = 'complete'
             write_json(root / 'journal.json', journal)
-            return result
+            return {**result, 'ready': True, 'dependencyPreparation': 'completedDuringInstallation',
+                    'nextStep': 'Open New Tab > Codex Trace. If Codex was already running, start a new chat or restart it.'}
         except (Exception, KeyboardInterrupt) as error:
             phase = journal['phase']
             journal['phase'] = 'failed' if phase == 'preparing' else 'recovery-required'

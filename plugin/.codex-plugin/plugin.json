@@ -1,6 +1,6 @@
 {
   "name": "codex-trace",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Local, read-only Codex execution trajectory viewer with verified local ZIP export.",
   "author": {
     "name": "Codex Trace contributors"
@@ -13,7 +13,7 @@
   "interface": {
     "displayName": "Codex Trace",
     "shortDescription": "Read-only Codex trace viewer",
-    "longDescription": "View saved task execution traces in the local Codex desktop app. Browse messages and model/tool inputs and outputs by turn, search loaded records, follow confirmed child-agent links, and export raw records as local ZIP files with source manifests and SHA-256 checksums. Codex Trace reads source records without modifying them. Derived indexes, reading preferences, export receipts, and temporary snapshots are stored locally. A compatible local Codex CLI is required. The community GitHub marketplace package requires Git and uv; uv prepares Python 3.14.2 and locked dependencies, with network access when they are not cached. The optional ZIP installer requires Python 3.14+; optional offline platform packages bundle a runtime. This community project has not been reviewed or endorsed by the OpenAI public plugin directory. Cloud tasks and browser execution are unsupported. Missing records and unknown states are shown explicitly; verified exports do not establish source completeness.",
+    "longDescription": "View saved task execution traces in the local Codex desktop app. Browse messages and model/tool inputs and outputs by turn, search loaded records, follow confirmed child-agent links, and export raw records as local ZIP files with source manifests and SHA-256 checksums. Codex Trace reads source records without modifying them. Derived indexes, reading preferences, export receipts, and temporary snapshots are stored locally. A compatible local Codex CLI is required. The community GitHub marketplace package requires Git and uv; the complete installer prepares Python 3.14.2 and locked dependencies, then checks MCP startup and UI resources before reporting readiness. Network access is needed for uncached dependencies. The optional ZIP installer requires Python 3.14+; optional offline platform packages bundle a runtime. This community project has not been reviewed or endorsed by the OpenAI public plugin directory. Cloud tasks and browser execution are unsupported. Missing records and unknown states are shown explicitly; verified exports do not establish source completeness.",
     "developerName": "Codex Trace contributors",
     "category": "Developer Tools",
     "capabilities": [

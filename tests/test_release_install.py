@@ -142,6 +142,7 @@ class ReleaseInstallTests(unittest.TestCase):
         self.stack.enter_context(mock.patch.object(self.install.update, "verify_runtime", return_value={}))
         self.stack.enter_context(mock.patch.object(self.install, "check_python"))
         self.stack.enter_context(mock.patch.object(self.install, "verify_backend"))
+        self.stack.enter_context(mock.patch.object(self.install, "verify_mcp", return_value={"passed": True}))
         self.runtime_calls = []
         self.stack.enter_context(mock.patch.object(self.install, "create_runtime", side_effect=self.create_runtime))
 
@@ -165,7 +166,7 @@ class ReleaseInstallTests(unittest.TestCase):
             "ui/trajectory-v1.html": f"<html>release {version}</html>\n",
             "backend/codex_trace/__init__.py": "",
             "backend/codex_trace/app.py": "# isolated synthetic backend\n",
-            "contracts/tools.json": "{}\n",
+            "contracts/tools.json": "{\"tools\": {}}\n",
             "third-party-manifest.json": "{}\n",
         }
         for relative, contents in files.items():
@@ -251,6 +252,12 @@ class ReleaseInstallTests(unittest.TestCase):
         self.perform_install(target)
         self.assertIn("release 0.2.0", (self.installed_cache() / "ui/trajectory-v1.html").read_text(encoding="utf-8"))
         self.assert_preserved()
+
+    def test_startup_failure_stops_before_plugin_registration(self):
+        with mock.patch.object(self.install, "verify_mcp", side_effect=TimeoutError("startup failed")):
+            with self.assertRaises(RuntimeError):
+                self.perform_install(self.bundle())
+        self.assertFalse(any(command[:2] == ['plugin', 'add'] for command in self.fake.commands))
 
     def test_partial_cli_failure_reinstalls_previous_cache_and_retry_succeeds(self):
         self.perform_install(self.bundle())

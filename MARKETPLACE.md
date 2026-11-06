@@ -2,25 +2,17 @@
 
 [English](MARKETPLACE.md) | [简体中文](MARKETPLACE.zh-CN.md)
 
-The primary distribution channel is the public GitHub repository marketplace `codex-trace-community`, with plugin `codex-trace` and current version identifier 0.2.1. Installation does not require GitHub credentials. Users explicitly register the repository; this does not establish OpenAI public-directory approval. Actual remote records determine whether commits or Releases are accessible and which platforms have been validated.
+The primary distribution channel is the public GitHub repository marketplace `codex-trace-community`, with plugin `codex-trace` and current version identifier 0.2.2. Installation does not require GitHub credentials. Users explicitly register the repository; this does not establish OpenAI public-directory approval. Actual remote records determine whether commits or Releases are accessible and which platforms have been validated.
 
 ## Community installation and updates
 
-Install Git, uv, and Codex CLI 0.153.0 or a later compatible version. No Node.js, manual checkout, or frontend build is required:
+With Git, uv, and a compatible Codex CLI available, run the complete installer:
 
 ```sh
-codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
-codex plugin add codex-trace@codex-trace-community
+uv run --no-project --no-config --python 3.14.2 https://raw.githubusercontent.com/sirius0414/codex-trace/v0.2.2/install_community.py
 ```
 
-Update:
-
-```sh
-codex plugin marketplace upgrade codex-trace-community
-codex plugin add codex-trace@codex-trace-community
-```
-
-Before first use, after dependency changes, or when caches are missing, follow [installation and runtime preparation](INSTALL.md#first-use-and-runtime-preparation). Cold downloads may exceed the host's default startup wait. After preparation succeeds, restart Codex or start a new session before opening the viewer. uv needs network access to prepare Python 3.14.2 and locked dependencies, and manages runtimes, environments, and download caches outside the plugin directory. See [INSTALL.md](INSTALL.md#community-uninstall-and-caches) for uninstall and cache details.
+This entry point pins the matching Release tag and combines registration, package verification, dependency preparation, installation, and offline startup checks. No separate warmup is required. Update using the command in the new version's guide; `marketplace upgrade` does not advance a pinned tag. Start a new chat or restart an already-running Codex afterward. See [INSTALL.md](INSTALL.md).
 
 ## Community repository contents and validation
 
@@ -39,7 +31,7 @@ On Windows, use `.venv\Scripts\python.exe`. By default, the command rebuilds the
 
 Before release, verify that the proposed Git tree's generated content matches its source. In an isolated user directory, use the real Codex CLI to register the marketplace, install the plugin, check uv configuration, and run synthetic reading/export checks. Reports must identify actual platforms, versions, and unexecuted checks. macOS success does not replace native Windows checks; consult the corresponding GitHub Release validation records. Published Releases, checksums, and generated directories must correspond to the same commit and version.
 
-Record cold dependency preparation, direct MCP/export checks, and the real Codex app-server's startup and discovery of the installed plugin separately. `plugin add`, `mcp list`, or directly launching the service alone does not prove that the host started MCP. Each Release supplies actual evidence. Success after preparation is not an empty-cache host startup pass. The current modern MCP manifest does not accept `startup_timeout_sec`; adding that field does not establish a longer startup wait. Continue documenting terminal preparation.
+Record cold dependency preparation, direct MCP/export checks, and the real Codex app-server's startup and discovery of the installed plugin separately. `plugin add`, `mcp list`, or directly launching the service alone does not prove that the host started MCP. Each Release supplies actual evidence. Success after preparation is not an empty-cache host startup pass. The current modern MCP manifest does not accept `startup_timeout_sec`; adding that field does not establish a longer startup wait. CI uses `--integrated-install` to execute the user installer, then checks host startup without an additional warmup.
 
 Desktop entry points still need acceptance: reopen after restart or a new session, select tasks, read details, navigate confirmed child agents, observe updates, and verify exports. Check GitHub publication identity, push access, URL accessibility, and Release state directly rather than inferring them from local builds.
 
@@ -55,7 +47,7 @@ Desktop entry points still need acceptance: reopen after restart or a new sessio
 
 ## Optional: native offline plugin package
 
-The following bundled-Python candidate workflow is retained for maintainers who need per-platform offline runtime packages. It is not a prerequisite for community uv installation. Prepare, build, and validate each native OS/architecture separately; an example filename is `codex-trace-0.2.1-darwin-arm64.zip`.
+The following bundled-Python candidate workflow is retained for maintainers who need per-platform offline runtime packages. It is not a prerequisite for community uv installation. Prepare, build, and validate each native OS/architecture separately; an example filename is `codex-trace-0.2.2-darwin-arm64.zip`.
 
 ## Prepare a standalone runtime
 
@@ -125,7 +117,7 @@ Example for macOS arm64:
 
 ```sh
 .venv/bin/python scripts/smoke_marketplace.py \
-  --archive build/marketplace/codex-trace-0.2.1-darwin-arm64.zip \
+  --archive build/marketplace/codex-trace-0.2.2-darwin-arm64.zip \
   --report build/marketplace-smoke.json
 ```
 

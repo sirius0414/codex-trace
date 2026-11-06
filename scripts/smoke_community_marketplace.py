@@ -240,7 +240,8 @@ def configure_github_auth(env: dict[str, str], root: Path, git: Path) -> None:
 
 
 def smoke(repository: str, *, ref: str | None = None, codex: Path, uv: Path,
-          uv_cache_dir: Path | None = None, community_environment: dict[str, str] | None = None) -> dict:
+          uv_cache_dir: Path | None = None, community_environment: dict[str, str] | None = None,
+          integrated_install: bool = False) -> dict:
     """验证 Git 安装/更新及缓存迁移；桌面点击和跨版本升级不在此验收中。"""
     checks: list[dict] = []
     report = {"platform": sys.platform, "marketplace": MARKETPLACE,
@@ -282,6 +283,14 @@ def smoke(repository: str, *, ref: str | None = None, codex: Path, uv: Path,
             source_manifest = validate_plugin(source_plugin)
             report.update(sourceCommit=commit, version=source_manifest["version"])
             check("committed_repository_inventory_verified", True)
+            if integrated_install:
+                stage = "integrated_community_installer"
+                # Execute the same standalone entry point users download, not a test-only warmup.
+                installed_result = json.loads(run([sys.executable, "-I", "-B", str(cloned / "install_community.py"),
+                    "--repository", registered, "--ref", registered_ref or commit,
+                    "--codex", str(codex), "--uv", str(uv)], cwd=root, env=env, timeout=1200).stdout)
+                report["integratedInstaller"] = installed_result
+                check("integrated_installer_prepared_and_verified_runtime", installed_result.get("ready") is True)
             stage = "real_git_marketplace_add"
             args = ["plugin", "marketplace", "add", registered, "--json"]
             if registered_ref:
@@ -306,7 +315,8 @@ def smoke(repository: str, *, ref: str | None = None, codex: Path, uv: Path,
                   and Path(transport.get("cwd", "")).is_absolute()
                   and Path(transport["cwd"]).resolve() == installed)
             stage = "real_codex_host_startup"
-            report["hostStartup"] = verify_host_startup(installed, root, codex, uv, env, checks)
+            report["hostStartup"] = verify_host_startup(installed, root, codex, uv, env, checks,
+                                                       **({"prepare_runtime": False} if integrated_install else {}))
             stage = "marketplace_upgrade"
             before_update = fingerprints(installed)
             # 私有缓存污染探针证明 plugin add 真正替换目录；同一远端 commit 也可验收。
@@ -359,6 +369,7 @@ def main() -> int:
     parser.add_argument("--uv-cache-dir", type=Path)
     parser.add_argument("--codex", default="codex")
     parser.add_argument("--uv", default="uv")
+    parser.add_argument("--integrated-install", action="store_true")
     args = parser.parse_args()
     stage = "resolve_codex_executable"
     try:
@@ -366,7 +377,7 @@ def main() -> int:
         stage = "resolve_uv_executable"
         uv = executable(args.uv)
         result = smoke(args.repository, ref=args.ref, codex=codex, uv=uv,
-                       uv_cache_dir=args.uv_cache_dir)
+                       uv_cache_dir=args.uv_cache_dir, integrated_install=args.integrated_install)
     except (OSError, ValueError) as error:
         result = {"passed": False, "failureStage": stage, "errorType": type(error).__name__}
     args.report.parent.mkdir(parents=True, exist_ok=True)

@@ -2,7 +2,7 @@
 
 [English](PRIVACY.md) | [简体中文](PRIVACY.zh-CN.md)
 
-更新日期：2026-11-04。适用于本仓库维护的 Codex Trace 0.2.1。本项目的维护者名称为 Codex Trace contributors；项目主页与联系入口见 [SUPPORT.md](SUPPORT.zh-CN.md)。
+更新日期：2026-11-04。适用于本仓库维护的 Codex Trace 0.2.2。本项目的维护者名称为 Codex Trace contributors；项目主页与联系入口见 [SUPPORT.md](SUPPORT.zh-CN.md)。
 
 Codex Trace 在本机读取、显示和导出 Codex 已保存的任务记录。插件会保存本地派生数据及导出文件；“只读”指不修改被观察的 Codex 任务来源，不代表不保存数据。
 

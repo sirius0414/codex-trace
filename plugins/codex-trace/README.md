@@ -13,11 +13,10 @@ Codex Trace runs through a local Python MCP service and a bundled React interfac
 Install Git, uv, and Codex CLI 0.153.0 or a later compatible version. This public repository can be installed without GitHub credentials.
 
 ```sh
-codex plugin marketplace add sirius0414/codex-trace
-codex plugin add codex-trace@codex-trace-community
+uv run --no-project --no-config --python 3.14.2 https://raw.githubusercontent.com/sirius0414/codex-trace/v0.2.2/install_community.py
 ```
 
-Complete [first-use runtime preparation](INSTALL.md#first-use-and-runtime-preparation), restart Codex or start a new session, then open **New Tab → Codex Trace**.
+The command prepares dependencies and checks startup automatically. After `"ready": true`, open **New Tab → Codex Trace**. If Codex was already running, start a new chat or restart it to load the plugin. No separate warmup is needed.
 
 ## Preview
 
@@ -67,20 +66,13 @@ Community distribution installs `codex-trace` from this public GitHub repository
 
 ### First community installation
 
-Run the two commands in [Quick start](#quick-start) to register the repository marketplace and install the plugin.
+Run the complete command in [Quick start](#quick-start). The installer pins the matching Release tag, prepares Python and locked dependencies, and checks the actual MCP service and UI resources offline before reporting readiness. No Node.js, manual build, or separate warmup is needed. Initial downloads require network access; uv manages runtime and caches outside the plugin directory.
 
-The plugin directory already contains the frontend, backend, contracts, and license texts. uv prepares pinned Python 3.14.2 and the `requirements.lock` dependencies. Initial preparation, dependency changes, or missing caches require network access. uv manages Python, environments, and download caches outside the plugin directory.
-
-Before first use or after dependency changes, follow [installation and runtime preparation](INSTALL.md#first-use-and-runtime-preparation); cold downloads may exceed the host's default startup timeout. After preparation succeeds, restart Codex or start a new session, then open **New Tab → Codex Trace**. Retain original requests for unconfirmed exports and reconcile them before closing old panels. This user-added repository marketplace is a separate channel from OpenAI public-directory review and listing.
+Start a new chat or restart an already-running Codex, then open **New Tab → Codex Trace**. Retain original requests for pending exports. This user-installed GitHub marketplace is separate from OpenAI public-directory review.
 
 ### Community update and uninstall
 
-```sh
-codex plugin marketplace upgrade codex-trace-community
-codex plugin add codex-trace@codex-trace-community
-```
-
-Complete [runtime preparation](INSTALL.md#first-use-and-runtime-preparation) after updating, then restart Codex or start a new session. To uninstall the plugin and remove the marketplace registration:
+Run the complete command from the latest [installation guide](INSTALL.md#community-marketplace-update) to switch to its Release tag and prepare dependencies automatically. Uninstall the plugin and remove the marketplace with:
 
 ```sh
 codex plugin remove codex-trace@codex-trace-community
@@ -91,7 +83,7 @@ Removal does not automatically delete derived indexes, reading preferences, expo
 
 ### Optional installation formats
 
-For a separate installer, follow the [release ZIP installer workflow](INSTALL.md#optional-release-zip-installer) using `codex-trace-0.2.1.zip` and its checksums. It requires local Python and registers the `codex-trace` marketplace. Maintainers can also build [platform-specific offline candidates with bundled runtimes](MARKETPLACE.md#optional-native-offline-plugin-package). Do not enable the community, installer, and development copies of the same plugin simultaneously. Download availability and actual publication status are shown in [GitHub Releases](https://github.com/sirius0414/codex-trace/releases).
+For a separate installer, follow the [release ZIP installer workflow](INSTALL.md#optional-release-zip-installer) using `codex-trace-0.2.2.zip` and its checksums. It requires local Python and registers the `codex-trace` marketplace. Maintainers can also build [platform-specific offline candidates with bundled runtimes](MARKETPLACE.md#optional-native-offline-plugin-package). Do not enable the community, installer, and development copies of the same plugin simultaneously. Download availability and actual publication status are shown in [GitHub Releases](https://github.com/sirius0414/codex-trace/releases).
 
 ## Data and exports
 
@@ -197,7 +189,7 @@ You can also run `scripts/build_release.py` directly with Python. The default ou
 
 ```text
 build/releases/
-├── codex-trace-0.2.1.zip
+├── codex-trace-0.2.2.zip
 └── SHA256SUMS
 ```
 
@@ -217,11 +209,11 @@ Then run installation verification. The script uses a real Codex CLI, a new Pyth
 
 ```sh
 .venv/bin/python scripts/smoke_release.py \
-  --archive build/releases/codex-trace-0.2.1.zip \
+  --archive build/releases/codex-trace-0.2.2.zip \
   --report build/release-smoke.json
 ```
 
-On Windows, use `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.1.zip --report build/release-smoke.json`. Add `--codex` to specify a CLI. For offline testing, provide previously downloaded dependencies with `--wheelhouse DIR`. Verification does not read real sessions or modify real plugin configuration, but CLI/MCP tests do not replace manual acceptance of the desktop entry point.
+On Windows, use `& .\.venv\Scripts\python.exe scripts/smoke_release.py --archive build/releases/codex-trace-0.2.2.zip --report build/release-smoke.json`. Add `--codex` to specify a CLI. For offline testing, provide previously downloaded dependencies with `--wheelhouse DIR`. Verification does not read real sessions or modify real plugin configuration, but CLI/MCP tests do not replace manual acceptance of the desktop entry point.
 
 ### GitHub Release
 

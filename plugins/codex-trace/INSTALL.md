@@ -2,70 +2,48 @@
 
 [English](INSTALL.md) | [简体中文](INSTALL.zh-CN.md)
 
-Codex Trace 0.2.1 primarily distributes through this GitHub repository's community plugin marketplace. It includes the built frontend, backend, contracts, and licenses; users need neither Node.js nor manual builds. See [PRIVACY.md](PRIVACY.md) for data access and storage, [SUPPORT.md](SUPPORT.md) for help, and [MARKETPLACE.md](MARKETPLACE.md) for maintainer instructions.
+Codex Trace 0.2.2 primarily distributes through this GitHub repository's community plugin marketplace. It includes the built frontend, backend, contracts, and licenses; users need neither Node.js nor manual builds. See [PRIVACY.md](PRIVACY.md) for data access and storage, [SUPPORT.md](SUPPORT.md) for help, and [MARKETPLACE.md](MARKETPLACE.md) for maintainer instructions.
 
 ## Community marketplace prerequisites
 
 - A local Codex desktop application and native CLI. Use CLI 0.153.0 or a later compatible version with plugin marketplace support and the read-only history APIs used by this plugin.
 - Git and uv installed and discoverable from the process that starts Codex. `git --version`, `uv --version`, and `codex --version` should succeed in a terminal; Codex launched from the GUI must also find uv.
 - GitHub access for registration and updates. This public repository does not require GitHub credentials for installation. During initial startup, dependency changes, or cache misses, uv needs network access to obtain Python 3.14.2 and the dependencies in `requirements.lock`.
-- Windows requires native Codex and local NTFS, without WSL. Start Codex and the terminal as an ordinary user; **Run as administrator is unsupported**. Consult the version's [Release validation records](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.1) for actual platform results; macOS and simulated tests do not establish Windows success. See [WINDOWS.md](WINDOWS.md) for other limitations.
+- Windows requires native Codex and local NTFS, without WSL. Start Codex and the terminal as an ordinary user; **Run as administrator is unsupported**. Consult the version's [Release validation records](https://github.com/sirius0414/codex-trace/releases/tag/v0.2.2) for actual platform results; macOS and simulated tests do not establish Windows success. See [WINDOWS.md](WINDOWS.md) for other limitations.
 
 The community workflow does not require manually installing Python first; uv manages it and the dependencies. Do not start the plugin with `sudo` or manually change dependencies in its cached environment.
 
 ## Community marketplace installation
 
-In a macOS terminal or Windows PowerShell:
+Run the same complete installation command in a macOS terminal or Windows PowerShell:
 
 ```sh
-codex plugin marketplace add https://github.com/sirius0414/codex-trace.git
-codex plugin add codex-trace@codex-trace-community
+uv run --no-project --no-config --python 3.14.2 https://raw.githubusercontent.com/sirius0414/codex-trace/v0.2.2/install_community.py
 ```
 
-The marketplace is `codex-trace-community` and the plugin is `codex-trace`. Registration locates `plugins/codex-trace/` through the repository catalog; Codex manages the installed cache. uv may take time to prepare the environment on first use. It manages caches outside the plugin directory; restarting is not guaranteed to avoid network access.
+The installer pins the `v0.2.2` tag, matching that release ZIP's code, frontend, and dependencies. It registers the marketplace, verifies the package, prepares Python 3.14.2 and locked dependencies, installs the plugin, then checks actual MCP startup, tools, and both UI resources offline. It reports `"ready": true` only after all steps pass. No separate warmup command is needed. It does not read chats or call business tools.
 
-After installation, complete the runtime preparation below. Once successful, restart Codex or start a new session and open **New Tab → Codex Trace**. The global entry point first displays a task picker. Old panels may retain old resources; reconcile unconfirmed exports before closing them. These commands and repository manifests do not imply OpenAI public-directory approval: users explicitly register this community channel.
+Open **New Tab → Codex Trace** when complete. If Codex was already running, start a new chat or restart the app to load the plugin. The global entry point shows a task picker. Reconcile pending exports before closing old panels.
 
-If `codex-trace@codex-trace` (ZIP installer) or `codex-trace@codex-trace-local` (development install) is already enabled, disable it first to avoid duplicate entry points. Reconcile retained data and pending exports through the original channel.
+Disable any existing `codex-trace@codex-trace` ZIP installation or `codex-trace@codex-trace-local` development copy first to avoid duplicate entries. This community installation does not establish OpenAI public-directory approval.
 
 ## First use and runtime preparation
 
-Before first use, after dependency changes, or after clearing uv caches, run the corresponding installation and preparation block below before opening the plugin. Cold downloads may exceed the host's default MCP startup wait of approximately 30 seconds. Preparation obtains Python and dependencies separately in the terminal. It can replace the bare `plugin add` command above and can be repeated for an installed plugin. The CLI's `installedPath` identifies the current installation without manually finding its cache.
+**Dependency installation and warmup are included in the installation workflow above.** Initial downloads may take several minutes; the installer waits outside the host's approximately 30-second MCP startup window. It uses the current user's default uv cache and Python directories, ignoring terminal `UV_*`, `XDG_*`, Python-path, and virtual-environment overrides so preparation does not target a location unavailable to the host. Git, uv, and Codex remain prerequisites; the desktop app must also find uv on its PATH.
 
-macOS (zsh or bash; no preinstalled Python or jq required):
-
-```sh
-(
-  set -o pipefail
-  trace_root="$(codex plugin add codex-trace@codex-trace-community --json | uv run --no-project --no-config --python 3.14.2 -- python -I -B -c 'import json,sys; print(json.load(sys.stdin)["installedPath"])')" &&
-  cd "$trace_root" &&
-  uv run --no-project --no-config --python 3.14.2 --with-requirements ./requirements.lock -- python -I -B -c 'import compression.zstd, mcp; print("Codex Trace runtime ready")'
-)
-```
-
-Windows PowerShell:
-
-```powershell
-$traceJson = codex plugin add codex-trace@codex-trace-community --json
-if ($LASTEXITCODE -ne 0) { throw "Plugin installation failed" }
-$traceInstall = $traceJson | ConvertFrom-Json
-Push-Location -LiteralPath $traceInstall.installedPath -ErrorAction Stop
-try {
-  uv run --no-project --no-config --python 3.14.2 --with-requirements ./requirements.lock -- python -I -B -c "import compression.zstd, mcp; print('Codex Trace runtime ready')"
-  if ($LASTEXITCODE -ne 0) { throw "Runtime preparation failed" }
-} finally { Pop-Location }
-```
-
-After `Codex Trace runtime ready` appears, restart Codex or start a new session before opening the viewer. Use the same user and uv default cache/runtime locations as Codex. The host does not inherit every terminal `UV_*` setting by default; verify the actual host environment before using custom caches rather than assuming terminal preparation covers the host. Prepare again after changing users, cache locations, or dependencies. Resolve Git access, uv networking, or cache errors before considering the plugin ready. Each Release records dependency preparation, MCP/export, and real-host startup results separately. Success after preparation does not establish startup with an empty cache; the Windows commands alone do not establish native-platform or ordinary-user desktop acceptance.
+Failures return a nonzero exit code without reporting readiness. Dependency preparation failures do not enable this installation. If checks fail after installation, correct network, permissions, or PATH issues and rerun the same command. Rerun it after clearing uv caches or changing users or runtime locations. Bare `codex plugin add` does not run this installer and does not establish that dependencies are ready.
 
 ## Community marketplace update
 
+Run the complete command in the latest installation guide. Each installer pins its matching Release tag, registers that tag, installs, and checks the runtime. Do not rely on `marketplace upgrade` alone to advance a pinned tag.
+
+Reinstall or repair this version using:
+
 ```sh
-codex plugin marketplace upgrade codex-trace-community
-codex plugin add codex-trace@codex-trace-community
+uv run --no-project --no-config --python 3.14.2 https://raw.githubusercontent.com/sirius0414/codex-trace/v0.2.2/install_community.py
 ```
 
-Run the same [installation and runtime preparation block](#first-use-and-runtime-preparation) after updating, then restart Codex or start a new session. Repository updates and dependency changes may require network access. Resolve Git, uv, proxy, or certificate failures before repeating the workflow. `install.py recover` applies only to the optional ZIP installer below, not to community plugin cache recovery.
+Start a new chat or restart Codex after updating. `install.py recover` applies only to the ZIP installer below. Both channels use the same version's code but manage installation sources and runtimes separately; do not enable both copies.
 
 ## Community uninstall and caches
 
@@ -82,7 +60,7 @@ Common startup issues: if uv cannot be found, check Codex's PATH and restart the
 
 ## Optional: release ZIP installer
 
-The existing workflow below downloads and runs `codex-trace-0.2.1.zip` separately from the community marketplace. It requires local Python 3.14+, registers `codex-trace@codex-trace`, and prepares Python dependencies during installation. See [MARKETPLACE.md](MARKETPLACE.md#optional-native-offline-plugin-package) for native offline package builds and validation.
+The existing workflow below downloads and runs `codex-trace-0.2.2.zip` separately from the community marketplace. It requires local Python 3.14+, registers `codex-trace@codex-trace`, and prepares Python dependencies during installation. It checks actual MCP startup and both UI resources before reporting `"ready": true`; no separate warmup is needed. See [MARKETPLACE.md](MARKETPLACE.md#optional-native-offline-plugin-package) for native offline package builds and validation.
 
 ## Supported platforms and prerequisites
 
@@ -102,24 +80,24 @@ Install and start Codex first. If its CLI cannot be found in the terminal, the m
 
 Download `codex-trace-<version>.zip` and `SHA256SUMS` for the same version from this project's [GitHub Releases](https://github.com/sirius0414/codex-trace/releases). Use the ZIP in the release attachments. GitHub's automatically generated Source code ZIP can contain the compiled UI under `plugins/`, but does not provide the layout expected by the standalone installer. Until a release is published, the end-user download is not available.
 
-For version `0.2.1`, verify from the download directory before extracting:
+For version `0.2.2`, verify from the download directory before extracting:
 
 macOS terminal:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
-unzip codex-trace-0.2.1.zip
-cd codex-trace-0.2.1
+unzip codex-trace-0.2.2.zip
+cd codex-trace-0.2.2
 ```
 
 Windows PowerShell:
 
 ```powershell
-(Get-FileHash .\codex-trace-0.2.1.zip -Algorithm SHA256).Hash
+(Get-FileHash .\codex-trace-0.2.2.zip -Algorithm SHA256).Hash
 Get-Content .\SHA256SUMS
 # Confirm that the SHA-256 matches this ZIP's entry in the file before extracting.
-Expand-Archive .\codex-trace-0.2.1.zip -DestinationPath .
-Set-Location .\codex-trace-0.2.1
+Expand-Archive .\codex-trace-0.2.2.zip -DestinationPath .
+Set-Location .\codex-trace-0.2.2
 ```
 
 If verification fails, download the files again rather than continuing installation. Checksums detect content changes; they do not replace trust in the download source.
@@ -259,4 +237,4 @@ You can also run `python3.14 scripts/build_release.py` directly. The default out
 
 When triggered by a version tag, the GitHub Release workflow runs macOS/Windows validation before creating a draft release with the ZIP and checksums. Manual runs on branches only validate and retain build artifacts; manual runs on `v*` tags also run the draft-release step. Maintainers decide whether to publish the draft after reviewing platform test results and limitations. Configuring the workflow or building locally does not automatically push to GitHub or list the plugin in the public directory.
 
-To verify a release package, run `python3.14 scripts/smoke_release.py --archive build/releases/codex-trace-0.2.1.zip --report build/release-smoke.json`. This command uses a real Codex CLI and a new virtual environment only in a temporary user directory to check installation, reinstallation, updates, failure recovery, startup, and uninstallation. It does not open real sessions. CI runs it separately on macOS and Windows. Fault-injection unit tests separately cover cache corruption and automatic rollback.
+To verify a release package, run `python3.14 scripts/smoke_release.py --archive build/releases/codex-trace-0.2.2.zip --report build/release-smoke.json`. This command uses a real Codex CLI and a new virtual environment only in a temporary user directory to check installation, reinstallation, updates, failure recovery, startup, and uninstallation. It does not open real sessions. CI runs it separately on macOS and Windows. Fault-injection unit tests separately cover cache corruption and automatic rollback.

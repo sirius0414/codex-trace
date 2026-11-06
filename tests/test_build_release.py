@@ -41,6 +41,7 @@ class ReleaseBuildTests(unittest.TestCase):
             "contracts/tools.json": '{}',
             "LICENSE": "Synthetic project license\n", "NOTICE": "Synthetic notice\n",
             "install.py": 'print("synthetic installer")\n', "install.sh": '#!/bin/sh\n',
+            "install_community.py": 'VERSION = "1.2.3"\n',
             "install.ps1": '# synthetic installer\n',
             **{name: '# 合成中文文档\n' if '.zh-CN.' in name else '# Synthetic English documentation\n'
                for name in release.PUBLIC_DOCUMENTS},

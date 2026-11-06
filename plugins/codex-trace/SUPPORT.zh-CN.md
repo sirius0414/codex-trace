@@ -2,7 +2,7 @@
 
 [English](SUPPORT.md) | [简体中文](SUPPORT.zh-CN.md)
 
-Codex Trace 由 Codex Trace contributors 独立维护。0.2.1 的主要安装渠道为 GitHub 仓库市场 `codex-trace-community`，完整说明见 [社区安装指南](INSTALL.zh-CN.md#社区市场安装)。
+Codex Trace 由 Codex Trace contributors 独立维护。0.2.2 的主要安装渠道为 GitHub 仓库市场 `codex-trace-community`，完整说明见 [社区安装指南](INSTALL.zh-CN.md#社区市场安装)。
 
 - 项目主页：[sirius0414/codex-trace](https://github.com/sirius0414/codex-trace)
 - 安装与恢复：[INSTALL.zh-CN.md](INSTALL.zh-CN.md)

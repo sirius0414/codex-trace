@@ -99,7 +99,7 @@ def _run(command: list[str], cwd: Path, environment: dict[str, str], timeout: in
 
 
 def verify_host_startup(installed: Path, root: Path, codex: Path, uv: Path,
-                        environment: dict, checks: list) -> dict:
+                        environment: dict, checks: list, *, prepare_runtime: bool = True) -> dict:
     """Gate release on real supervisor startup using only the caller's private cache.
 
     Appends ``host_*`` checks and raises on failure. The returned report describes
@@ -158,7 +158,7 @@ def verify_host_startup(installed: Path, root: Path, codex: Path, uv: Path,
         check("host_default_uv_directories_are_isolated", True)
 
         report = {"verification": "realCodexAppServerStartsInstalledMcp", "platform": sys.platform,
-                  "runtimePreparation": "prewarmedIsolatedHomeDefaultUvDirectories",
+                  "runtimePreparation": "prewarmedIsolatedHomeDefaultUvDirectories" if prepare_runtime else "completedByInstaller",
                   "coldStartVerified": False, "hostUiVerified": False,
                   "otherPlatformsVerified": False, "toolCallsMade": False, "threadCreated": False,
                   "taskDataRead": False, "syntheticTaskDataRead": False,
@@ -170,7 +170,12 @@ def verify_host_startup(installed: Path, root: Path, codex: Path, uv: Path,
                   "hostRequests": ["initialize", "initialized", "mcpServerStatus/list"]}
         stage = "host_prewarm_locked_dependencies"
         started = time.monotonic()
-        _run([str(uv), *args[:-1], "-c", "import compression.zstd, mcp"], workspace, env, timeout=600)
+        if prepare_runtime:
+            _run([str(uv), *args[:-1], "-c", "import compression.zstd, mcp"], workspace, env, timeout=600)
+        else:
+            # No preparation here: validate the installer's environment without network.
+            _run([str(uv), *args[:-1], "-c", "import compression.zstd, mcp"], workspace,
+                 {**env, "UV_OFFLINE": "1"}, timeout=30)
         report["dependencyPreparationSeconds"] = round(time.monotonic() - started, 3)
         check("host_locked_dependencies_prepared_in_default_directories", True)
         stage = "host_validate_registered_configuration"
