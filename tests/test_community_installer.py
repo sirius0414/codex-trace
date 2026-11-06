@@ -31,6 +31,9 @@ class CommunityInstallerTests(unittest.TestCase):
             (directory / "contracts/tools.json").write_text('{"tools":{"open_codex_trace":{}}}')
             (directory / "requirements.lock").write_text("mcp==1.30.0\n")
             (directory / "launch.py").write_text("# synthetic\n")
+            (directory / "mcp.json").write_text(json.dumps({"mcpServers": {"codex-trace": {"args": [
+                "run", "--no-project", "--no-config", "--python", "3.14.2", "--with-requirements",
+                "${PLUGIN_ROOT}/requirements.lock", "--", "python", "-I", "-B", "${PLUGIN_ROOT}/launch.py"]}}}))
             files = {p.relative_to(directory).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                      for p in directory.rglob("*") if p.is_file()}
             (directory / "package-manifest.json").write_text(json.dumps(
@@ -54,7 +57,7 @@ class CommunityInstallerTests(unittest.TestCase):
         if args[:2] == ["mcp", "get"]:
             return json.dumps({"enabled": True, "transport": {"command": "uv", "cwd": str(self.cache),
                 "args": ["run", "--no-project", "--no-config", "--python", "3.14.2", "--with-requirements",
-                         str(self.cache / "requirements.lock"), "--", "python", "-I", "-B", str(self.cache / "launch.py")]}})
+                         f"{self.cache}/requirements.lock", "--", "python", "-I", "-B", f"{self.cache}/launch.py"]}})
         self.fail(f"Unexpected command {args}")
 
     def install(self):

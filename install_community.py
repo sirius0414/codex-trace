@@ -217,7 +217,10 @@ def install(*, repository=REPOSITORY, ref=None, codex=None, uv=None, environment
         # Check the real resolved transport, including bare uv discovery in PATH.
         configured = json.loads(run([codex, "mcp", "get", "codex-trace", "--json"], cwd, env))
         transport = configured.get("transport", {})
-        expected = [*launch_args(installed), str(installed / "launch.py")]
+        # Preserve the manifest's separators: on Windows PLUGIN_ROOT expansion
+        # produces native-root + forward-slash arguments, as the host does.
+        manifest_launch = json.loads((installed / "mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
+        expected = [item.replace("${PLUGIN_ROOT}", str(installed)) for item in manifest_launch["args"]]
         if (not configured.get("enabled") or transport.get("command") != "uv"
                 or transport.get("args") != expected or Path(transport.get("cwd", "")).resolve() != installed):
             raise ValueError("Codex resolved a different plugin; disable other Codex Trace copies and rerun")
