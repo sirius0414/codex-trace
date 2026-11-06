@@ -46,11 +46,11 @@ def schema(properties=None, required=None):
 async def list_tools():
     annotations = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False)
     return [
-        Tool(name="open_codex_trace", title="执行轨迹", description="Open the local read-only execution viewer (M0 host validation).",
+        Tool(name="open_codex_trace", title="Codex Trace", description="Open the local read-only execution viewer (M0 host validation).",
              inputSchema=schema(), annotations=annotations,
              _meta={"ui": {"resourceUri": URI, "visibility": ["app"]}, "openai/visibility": "private",
                     "openai/ui": {"entrypoints": [{"type": "global"}]}}),
-        Tool(name="open_codex_trace_panel", title="执行轨迹", description="Open the local read-only execution viewer in a task panel (M0 host validation).",
+        Tool(name="open_codex_trace_panel", title="Codex Trace", description="Open the local read-only execution viewer in a task panel (M0 host validation).",
              inputSchema=schema(), annotations=annotations,
              _meta={"ui": {"resourceUri": PANEL_URI, "visibility": ["app"]}, "openai/visibility": "private",
                     "openai/ui": {"entrypoints": [{"type": "thread"}]}}),
@@ -87,7 +87,7 @@ async def list_tools():
 
 @server.list_resources()
 async def list_resources():
-    return [Resource(uri=uri, name="执行轨迹", mimeType="text/html;profile=mcp-app", _meta=UI_META)
+    return [Resource(uri=uri, name="Codex Trace", mimeType="text/html;profile=mcp-app", _meta=UI_META)
             for uri in (URI, PANEL_URI)]
 
 

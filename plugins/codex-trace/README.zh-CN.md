@@ -4,7 +4,7 @@
 
 在 Codex 中查看本地任务的执行轨迹，浏览模型与工具的输入输出、追踪子 Agent，并导出可校验的原始记录。
 
-Codex Trace 通过本地 Python MCP 服务和随包提供的 React 界面运行。安装后，在聊天的 **New Tab → 执行轨迹** 打开面板；无法确认当前任务时，会显示任务选择器。全局入口也会先让你选择任务。
+Codex Trace 通过本地 Python MCP 服务和随包提供的 React 界面运行。安装后，在聊天的 **New Tab → Codex Trace** 打开面板；无法确认当前任务时，会显示任务选择器。全局入口也会先让你选择任务。
 
 [社区安装](INSTALL.zh-CN.md#社区市场安装) · [可选发行附件](https://github.com/sirius0414/codex-trace/releases) · [安装指南](INSTALL.zh-CN.md) · [Windows 说明](WINDOWS.zh-CN.md) · [贡献指南](CONTRIBUTING.zh-CN.md)
 
@@ -17,7 +17,7 @@ codex plugin marketplace add sirius0414/codex-trace
 codex plugin add codex-trace@codex-trace-community
 ```
 
-完成[首次使用与依赖预热](INSTALL.zh-CN.md#首次使用与依赖预热)后，重启 Codex 或开启新会话，再通过 **New Tab → 执行轨迹** 打开。
+完成[首次使用与依赖预热](INSTALL.zh-CN.md#首次使用与依赖预热)后，重启 Codex 或开启新会话，再通过 **New Tab → Codex Trace** 打开。
 
 ## 界面预览
 
@@ -71,7 +71,7 @@ Windows 已有原生实现和 CI 验证流程；是否通过特定版本的原�
 
 插件目录已包含前端、后端、契约和授权文本。首次启动时，uv 准备固定的 Python 3.14.2 及 `requirements.lock` 依赖；首次准备、依赖变化或缓存缺失时需要网络。Python、环境及下载缓存由 uv 在插件目录外管理。
 
-首次使用或依赖变化时，先按 [安装与依赖预热](INSTALL.zh-CN.md#首次使用与依赖预热) 准备运行环境；冷下载可能超过宿主默认的启动等待时间。预热成功后重启 Codex 或开启新会话，再通过 **New Tab → 执行轨迹** 打开。保留未确认导出的原请求，确认结果后再关闭旧面板。仓库市场由用户主动注册，与 OpenAI 公共目录审核和上架是不同渠道。
+首次使用或依赖变化时，先按 [安装与依赖预热](INSTALL.zh-CN.md#首次使用与依赖预热) 准备运行环境；冷下载可能超过宿主默认的启动等待时间。预热成功后重启 Codex 或开启新会话，再通过 **New Tab → Codex Trace** 打开。保留未确认导出的原请求，确认结果后再关闭旧面板。仓库市场由用户主动注册，与 OpenAI 公共目录审核和上架是不同渠道。
 
 ### 社区市场更新与卸载
 

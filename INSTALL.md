@@ -24,7 +24,7 @@ codex plugin add codex-trace@codex-trace-community
 
 The marketplace is `codex-trace-community` and the plugin is `codex-trace`. Registration locates `plugins/codex-trace/` through the repository catalog; Codex manages the installed cache. uv may take time to prepare the environment on first use. It manages caches outside the plugin directory; restarting is not guaranteed to avoid network access.
 
-After installation, complete the runtime preparation below. Once successful, restart Codex or start a new session and open **New Tab → 执行轨迹 (Execution Trace)**. The global entry point first displays a task picker. Old panels may retain old resources; reconcile unconfirmed exports before closing them. These commands and repository manifests do not imply OpenAI public-directory approval: users explicitly register this community channel.
+After installation, complete the runtime preparation below. Once successful, restart Codex or start a new session and open **New Tab → Codex Trace**. The global entry point first displays a task picker. Old panels may retain old resources; reconcile unconfirmed exports before closing them. These commands and repository manifests do not imply OpenAI public-directory approval: users explicitly register this community channel.
 
 If `codex-trace@codex-trace` (ZIP installer) or `codex-trace@codex-trace-local` (development install) is already enabled, disable it first to avoid duplicate entry points. Reconcile retained data and pending exports through the original channel.
 
@@ -176,7 +176,7 @@ Codex Trace uses the plugin identifier `codex-trace`, community marketplace `cod
 
 1. Check any unconfirmed export results in the old version, close its panels, and disable the old plugin through Codex plugin management.
 2. Follow the first-installation steps above to install Codex Trace. For a source development installation, use the README's build, packaging, and installation workflow. Use a separate installation management directory for the new version; do not pass the old version's installation directory as `--root`.
-3. Reload plugin resources and open “执行轨迹” (“Execution Trace”). After confirming that the new version works, follow the old version's uninstall instructions to remove its plugin and marketplace registration.
+3. Reload plugin resources and open **Codex Trace**. After confirming that the new version works, follow the old version's uninstall instructions to remove its plugin and marketplace registration.
 
 The new version uses the `codex-trace` state directory and `Downloads/Codex Trace/` export directory. The old `codex-display` state directory, runtime environment, and `Downloads/Codex Display/` export files remain in place. Indexes, reading state, interface preferences, and export receipts are not migrated automatically. Do not move a Python environment still used by an old panel or copy unfinished export receipts from the old version into the new directory.
 

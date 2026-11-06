@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none">
-  <title>执行轨迹</title>
+  <title>Codex Trace</title>
   <rect width="64" height="64" rx="16" fill="#E7F5EF"/>
   <path d="M13 47h11a8 8 0 0 0 8-8V25a8 8 0 0 1 8-8h11" stroke="#087F6D" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
   <g fill="#087F6D">

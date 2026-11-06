@@ -101,7 +101,7 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(entrypoint.meta["ui"]["resourceUri"], URI)
             self.assertTrue(entrypoint.annotations.readOnlyHint)
             panel = tools["open_codex_trace_panel"]
-            self.assertEqual(panel.title, "执行轨迹")
+            self.assertEqual(panel.title, "Codex Trace")
             self.assertEqual(panel.meta["openai/ui"]["entrypoints"], [{"type": "thread"}])
             self.assertEqual(panel.meta["ui"]["resourceUri"], PANEL_URI)
             self.assertNotEqual(panel.meta["ui"]["resourceUri"], entrypoint.meta["ui"]["resourceUri"])

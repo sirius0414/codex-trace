@@ -75,7 +75,7 @@ def offline_html(assets: Path) -> str:
     # 内联内容可能带 HTML 结束标签；必须转义，避免浏览器提前结束资源节点。
     javascript = re.sub(r"</script", r"<\\/script", javascript, flags=re.I)
     css = re.sub(r"</style", r"<\\/style", css, flags=re.I)
-    return '<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>执行轨迹</title><style>' + css + '</style></head><body><div id="root"></div><script>' + javascript + '</script></body></html>\n'
+    return '<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Codex Trace</title><style>' + css + '</style></head><body><div id="root"></div><script>' + javascript + '</script></body></html>\n'
 
 
 def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
@@ -138,7 +138,7 @@ def build(output: Path, python: Path, codex: Path, assets: Path) -> dict:
         if frontend_build:
             metadata["frontendBuild"] = frontend_build
         (staged / "runtime.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-        (staged / "INSTALL.txt").write_text("Codex Trace 0.1.0 local package\n\nUI, contracts and backend code are included in this cacheable package.\nThe MCP cwd is relative to the installed package; runtime executables are absolute.\nPython >=3.14 with compression.zstd is required. No dependencies are installed at startup.\nKeep runtime.json paths installed; rebuild and reinstall after relocating them.\nOpen Execution Trace from a chat's New Tab menu. The global entry asks you to select a task.\nReload/restart Codex when convenient after an update to refresh plugin resources.\nUninstalling the plugin does not remove ZIPs in ~/Downloads/Codex Trace/.\n", encoding="utf-8")
+        (staged / "INSTALL.txt").write_text("Codex Trace 0.1.0 local package\n\nUI, contracts and backend code are included in this cacheable package.\nThe MCP cwd is relative to the installed package; runtime executables are absolute.\nPython >=3.14 with compression.zstd is required. No dependencies are installed at startup.\nKeep runtime.json paths installed; rebuild and reinstall after relocating them.\nOpen Codex Trace from a chat's New Tab menu. The global entry asks you to select a task.\nReload/restart Codex when convenient after an update to refresh plugin resources.\nUninstalling the plugin does not remove ZIPs in ~/Downloads/Codex Trace/.\n", encoding="utf-8")
         # 在同一父目录完成重命名，避免失败的组包结果被当作可安装目录使用。
         staged.rename(output)
     return {"output": str(output), "uiBytes": len(html.encode()), "python": str(python), "codex": str(codex)}

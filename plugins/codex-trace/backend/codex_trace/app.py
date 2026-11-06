@@ -176,7 +176,7 @@ async def list_tools():
             metadata["openai/ui"] = {"entrypoints": [{"type": surface}]}
         # 只读描述针对被观察任务；偏好保存和 ZIP 导出会写插件本地文件，所以这
         # 两个工具的 readOnlyHint=False。即便普通读取也可能更新内部派生缓存。
-        result.append(Tool(name=name, title="执行轨迹" if name in OPEN else None,
+        result.append(Tool(name=name, title="Codex Trace" if name in OPEN else None,
                            icons=icons if name in OPEN else None,
                            description="Local execution observation. Task data stays in app-only result metadata.",
                            inputSchema=tool_schema(name),
@@ -245,7 +245,7 @@ async def list_resources():
     URI 区分全局与聊天面板，实际内容由 read_resource 提供。MIME profile
     告知宿主按 MCP App 加载；这里声明的资源级 CSP 在读取响应中也会再次附带。
     """
-    return [Resource(uri=uri, name="执行轨迹", mimeType="text/html;profile=mcp-app", _meta=UI_META) for uri in (URI, PANEL_URI)]
+    return [Resource(uri=uri, name="Codex Trace", mimeType="text/html;profile=mcp-app", _meta=UI_META) for uri in (URI, PANEL_URI)]
 
 
 @server.read_resource()

@@ -6,21 +6,21 @@
   "homepage": "https://github.com/sirius0414/codex-trace",
   "interface": {
     "capabilities": [
-      "浏览本地 Codex 已保存的消息与工具输入输出",
-      "搜索、筛选和定位已加载的执行记录",
-      "沿已确认的关系查看子 Agent 轨迹",
-      "导出带来源清单与 SHA-256 校验的本地原始记录 ZIP"
+      "Browse saved local Codex messages and model/tool inputs and outputs",
+      "Search, filter, and locate loaded execution records",
+      "Follow confirmed links to child-agent execution traces",
+      "Export raw records as local ZIP files with source manifests and SHA-256 checksums"
     ],
     "category": "Developer Tools",
     "composerIcon": "./assets/icon.svg",
     "composerIconDark": "./assets/icon-dark.svg",
     "developerName": "Codex Trace contributors",
-    "displayName": "执行轨迹",
+    "displayName": "Codex Trace",
     "logo": "./assets/logo.svg",
     "logoDark": "./assets/logo-dark.svg",
-    "longDescription": "Codex Trace 在本机 Codex 桌面应用中展示已保存的任务执行轨迹。按轮次浏览消息、模型与工具输入输出，搜索已加载记录，追踪已确认的子 Agent，并将当前任务及已确认子任务的原始记录导出为包含来源清单和 SHA-256 的本地 ZIP。插件只读访问 Codex 任务来源；派生摘要、阅读偏好、导出回执和临时快照会保存在本机。需要受支持的本地 Codex CLI。社区 GitHub Marketplace 版本需要 Git 和 uv，由 uv 准备 Python 3.14.2 与锁定依赖，首次准备需要联网；安装器版本需要本机 Python 3.14+，可选离线平台包内置运行时。本项目未经 OpenAI 官方公共目录审核或认可。不支持云端任务或网页端执行；缺失记录与未知状态会明确标注，导出校验成功不代表来源完整。",
+    "longDescription": "View saved task execution traces in the local Codex desktop app. Browse messages and model/tool inputs and outputs by turn, search loaded records, follow confirmed child-agent links, and export raw records as local ZIP files with source manifests and SHA-256 checksums. Codex Trace reads source records without modifying them. Derived indexes, reading preferences, export receipts, and temporary snapshots are stored locally. A compatible local Codex CLI is required. The community GitHub marketplace package requires Git and uv; uv prepares Python 3.14.2 and locked dependencies, with network access when they are not cached. The optional ZIP installer requires Python 3.14+; optional offline platform packages bundle a runtime. This community project has not been reviewed or endorsed by the OpenAI public plugin directory. Cloud tasks and browser execution are unsupported. Missing records and unknown states are shown explicitly; verified exports do not establish source completeness.",
     "privacyPolicyURL": "https://github.com/sirius0414/codex-trace/blob/main/PRIVACY.md",
-    "shortDescription": "只读查看本地 Codex 已保存的执行轨迹。",
+    "shortDescription": "Read-only Codex trace viewer",
     "supportURL": "https://github.com/sirius0414/codex-trace/issues",
     "termsOfServiceURL": "https://github.com/sirius0414/codex-trace/blob/main/TERMS.md",
     "websiteURL": "https://github.com/sirius0414/codex-trace"

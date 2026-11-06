@@ -4,7 +4,7 @@
 
 View the execution traces of local Codex tasks, inspect model and tool inputs and outputs, follow child agents, and export verifiable raw records.
 
-Codex Trace runs through a local Python MCP service and a bundled React interface. After installation, open the panel from **New Tab → 执行轨迹 (Execution Trace)** in a chat. If the current task cannot be identified, a task picker appears. The global entry point also asks you to select a task first.
+Codex Trace runs through a local Python MCP service and a bundled React interface. After installation, open the panel from **New Tab → Codex Trace** in a chat. If the current task cannot be identified, a task picker appears. The global entry point also asks you to select a task first.
 
 [Community installation](INSTALL.md#community-marketplace-installation) · [Optional release assets](https://github.com/sirius0414/codex-trace/releases) · [Installation guide](INSTALL.md) · [Windows guide](WINDOWS.md) · [Contributing](CONTRIBUTING.md)
 
@@ -17,7 +17,7 @@ codex plugin marketplace add sirius0414/codex-trace
 codex plugin add codex-trace@codex-trace-community
 ```
 
-Complete [first-use runtime preparation](INSTALL.md#first-use-and-runtime-preparation), restart Codex or start a new session, then open **New Tab → 执行轨迹 (Execution Trace)**.
+Complete [first-use runtime preparation](INSTALL.md#first-use-and-runtime-preparation), restart Codex or start a new session, then open **New Tab → Codex Trace**.
 
 ## Preview
 
@@ -71,7 +71,7 @@ Run the two commands in [Quick start](#quick-start) to register the repository m
 
 The plugin directory already contains the frontend, backend, contracts, and license texts. uv prepares pinned Python 3.14.2 and the `requirements.lock` dependencies. Initial preparation, dependency changes, or missing caches require network access. uv manages Python, environments, and download caches outside the plugin directory.
 
-Before first use or after dependency changes, follow [installation and runtime preparation](INSTALL.md#first-use-and-runtime-preparation); cold downloads may exceed the host's default startup timeout. After preparation succeeds, restart Codex or start a new session, then open **New Tab → 执行轨迹 (Execution Trace)**. Retain original requests for unconfirmed exports and reconcile them before closing old panels. This user-added repository marketplace is a separate channel from OpenAI public-directory review and listing.
+Before first use or after dependency changes, follow [installation and runtime preparation](INSTALL.md#first-use-and-runtime-preparation); cold downloads may exceed the host's default startup timeout. After preparation succeeds, restart Codex or start a new session, then open **New Tab → Codex Trace**. Retain original requests for unconfirmed exports and reconcile them before closing old panels. This user-added repository marketplace is a separate channel from OpenAI public-directory review and listing.
 
 ### Community update and uninstall
 
