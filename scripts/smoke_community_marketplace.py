@@ -286,11 +286,25 @@ def smoke(repository: str, *, ref: str | None = None, codex: Path, uv: Path,
             if integrated_install:
                 stage = "integrated_community_installer"
                 # Execute the same standalone entry point users download, not a test-only warmup.
-                installed_result = json.loads(run([sys.executable, "-I", "-B", str(cloned / "install_community.py"),
+                installer_command = [sys.executable, "-I", "-B", str(cloned / "install_community.py"),
                     "--repository", registered, "--ref", registered_ref or commit,
-                    "--codex", str(codex), "--uv", str(uv)], cwd=root, env=env, timeout=1200).stdout)
+                    "--codex", str(codex), "--uv", str(uv)]
+                installed_result = json.loads(run(installer_command, cwd=root, env=env, timeout=1200).stdout)
                 report["integratedInstaller"] = installed_result
                 check("integrated_installer_prepared_and_verified_runtime", installed_result.get("ready") is True)
+                if local:
+                    # Exercise existing-market ref migration on both native platforms.
+                    # Same payload under another ref; this is not a cross-version claim.
+                    stage = "integrated_installer_switch_existing_ref"
+                    previous_ref = "codex-trace-previous-registration"
+                    run([str(git), "branch", previous_ref], cwd=cloned, env=env)
+                    cli("plugin", "marketplace", "remove", MARKETPLACE)
+                    cli("plugin", "marketplace", "add", registered, "--ref", previous_ref, "--json")
+                    cli("plugin", "add", SELECTOR, "--json")
+                    migrated = json.loads(run(installer_command, cwd=root, env=env, timeout=1200).stdout)
+                    report["integratedInstallerRefMigration"] = {"fromRef": previous_ref,
+                        "toRef": registered_ref, "ready": migrated.get("ready")}
+                    check("integrated_installer_migrated_existing_market_ref", migrated.get("ready") is True)
             stage = "real_git_marketplace_add"
             args = ["plugin", "marketplace", "add", registered, "--json"]
             if registered_ref:

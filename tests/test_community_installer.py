@@ -41,13 +41,20 @@ class CommunityInstallerTests(unittest.TestCase):
         self.env = {**os.environ, "HOME": str(self.home), "USERPROFILE": str(self.home),
                     "CODEX_HOME": str(self.codex_home), "UV_CACHE_DIR": str(self.root / "wrong-cache")}
         self.calls = []
+        self.marketplace = None
 
     def fake_run(self, command, cwd, env, timeout=300):
         args = [str(x) for x in command[1:]]
         self.calls.append(args)
         self.assertNotIn("UV_CACHE_DIR", env)
         self.assertNotEqual(cwd, ROOT)
+        if args[:3] == ["plugin", "marketplace", "list"]:
+            return json.dumps({"marketplaces": [self.marketplace] if self.marketplace else []})
+        if args[:3] == ["plugin", "marketplace", "remove"]:
+            self.marketplace = None
+            return ""
         if args[:3] == ["plugin", "marketplace", "add"]:
+            self.marketplace = {"name": installer.MARKET}
             return json.dumps({"marketplaceName": installer.MARKET, "installedRoot": str(self.source.parents[1])})
         if args[:2] == ["run", "--no-project"]:
             self.assertIn("import compression.zstd, mcp", args)
@@ -69,8 +76,8 @@ class CommunityInstallerTests(unittest.TestCase):
                 patch.object(installer, "verify_mcp", return_value={"passed": True}) as probe:
             result = self.install()
         self.assertTrue(result["ready"])
-        self.assertEqual([x[0] for x in self.calls], ["plugin", "run", "plugin", "mcp"])
-        self.assertEqual(self.calls[0][-3:], ["--ref", "v0.2.2", "--json"])
+        self.assertEqual([x[0] for x in self.calls], ["plugin", "plugin", "run", "plugin", "mcp"])
+        self.assertEqual(self.calls[1][-3:], ["--ref", "v0.2.2", "--json"])
         self.assertEqual(probe.call_args.args[2]["UV_OFFLINE"], "1")
         self.assertEqual(probe.call_args.args[-1], {"open_codex_trace", "open_codex_trace_panel"})
 
@@ -87,12 +94,37 @@ class CommunityInstallerTests(unittest.TestCase):
         probe.assert_not_called()
 
     def test_startup_failure_is_not_success_and_can_be_retried(self):
+        (self.codex_home / "config.toml").write_text('[marketplaces.codex-trace-community]\nsource_type="git"\n'
+            f'source="{installer.REPOSITORY}"\nref="v0.2.2"\n')
         with patch.object(installer, "executable", return_value=Path(sys.executable)), \
                 patch.object(installer, "run", side_effect=self.fake_run), \
                 patch.object(installer, "verify_mcp", side_effect=[TimeoutError("not ready"), {"passed": True}]):
             with self.assertRaises(TimeoutError):
                 self.install()
             self.assertTrue(self.install()["ready"])
+
+    def test_upgrade_switches_tag_and_restores_enabled_old_version_on_failure(self):
+        self.marketplace = {"name": installer.MARKET}
+        (self.codex_home / "config.toml").write_text('[marketplaces.codex-trace-community]\nsource_type="git"\n'
+            f'source="{installer.REPOSITORY}"\nref="v0.2.1"\n'
+            f'[plugins."{installer.SELECTOR}"]\nenabled=true\n')
+        with patch.object(installer, "executable", return_value=Path(sys.executable)), \
+                patch.object(installer, "run", side_effect=self.fake_run), \
+                patch.object(installer, "verify_mcp", side_effect=TimeoutError("not ready")):
+            with self.assertRaises(TimeoutError):
+                self.install()
+        registered = [args for args in self.calls if args[:3] == ["plugin", "marketplace", "add"]]
+        self.assertEqual(registered[0][-3:], ["--ref", "v0.2.2", "--json"])
+        self.assertEqual(registered[-1][-3:], ["--ref", "v0.2.1", "--json"])
+        self.assertEqual(self.calls[-1], ["plugin", "add", installer.SELECTOR, "--json"])
+
+    def test_foreign_marketplace_is_not_removed(self):
+        self.marketplace = {"name": installer.MARKET}
+        (self.codex_home / "config.toml").write_text('[marketplaces.codex-trace-community]\nsource_type="local"\nsource="elsewhere"\n')
+        with patch.object(installer, "executable", return_value=Path(sys.executable)), \
+                patch.object(installer, "run", side_effect=self.fake_run), self.assertRaisesRegex(ValueError, "not changed"):
+            self.install()
+        self.assertEqual(self.calls, [["plugin", "marketplace", "list", "--json"]])
 
     def test_modified_package_and_foreign_directory_are_rejected(self):
         (self.source / "launch.py").write_text("modified")

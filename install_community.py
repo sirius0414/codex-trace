@@ -7,6 +7,7 @@ uv without a checkout. The ZIP installer also uses its read-only MCP probe.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -20,6 +21,7 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 from urllib.parse import urlsplit
 
 VERSION = "0.2.2"
@@ -183,6 +185,53 @@ def verify_package(package, codex_home, *, marketplace=False):
     return package, manifest
 
 
+@contextmanager
+def registered_market(codex, repository, ref, cwd, env, codex_home):
+    """Switch only our own Git source; restore its registration on failed updates."""
+    entries = json.loads(run([codex, "plugin", "marketplace", "list", "--json"], cwd, env))["marketplaces"]
+    existing = next((entry for entry in entries if entry.get("name") == MARKET), None)
+    previous = None
+    was_enabled = False
+    if existing:
+        config_path = codex_home / "config.toml"
+        config = tomllib.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+        previous = config.get("marketplaces", {}).get(MARKET)
+        normalize = lambda value: str(value).rstrip("/").removesuffix(".git")
+        if (not isinstance(previous, dict) or previous.get("source_type") != "git"
+                or normalize(previous.get("source")) != normalize(repository)
+                or set(previous) - {"source_type", "source", "ref", "sparse_paths"}):
+            raise ValueError("The existing marketplace is managed elsewhere or uses another source; it was not changed")
+        was_enabled = config.get("plugins", {}).get(SELECTOR, {}).get("enabled") is True
+        if previous.get("ref") == ref and not previous.get("sparse_paths"):
+            previous = None
+    switched = previous is not None
+    if switched:
+        print("Switching the existing marketplace to this release...", file=sys.stderr, flush=True)
+        run([codex, "plugin", "marketplace", "remove", MARKET], cwd, env)
+    try:
+        added = json.loads(run([codex, "plugin", "marketplace", "add", repository,
+                                "--ref", ref, "--json"], cwd, env))
+        yield added
+    except (Exception, KeyboardInterrupt):
+        if switched:
+            try:
+                entries = json.loads(run([codex, "plugin", "marketplace", "list", "--json"], cwd, env))["marketplaces"]
+                if any(entry.get("name") == MARKET for entry in entries):
+                    run([codex, "plugin", "marketplace", "remove", MARKET], cwd, env)
+                command = [codex, "plugin", "marketplace", "add", previous["source"]]
+                if previous.get("ref"):
+                    command += ["--ref", previous["ref"]]
+                for path in previous.get("sparse_paths", []):
+                    command += ["--sparse", path]
+                run([*command, "--json"], cwd, env)
+                if was_enabled:
+                    run([codex, "plugin", "add", SELECTOR, "--json"], cwd, env)
+                print("The previous marketplace registration was restored.", file=sys.stderr)
+            except (Exception, KeyboardInterrupt):
+                raise RuntimeError("Installation failed and the previous marketplace could not be restored; check network access and rerun the installer") from None
+        raise
+
+
 def install(*, repository=REPOSITORY, ref=None, codex=None, uv=None, environment=None):
     url = urlsplit(repository)
     if (url.scheme != "https" or not url.hostname or url.username or url.password
@@ -198,40 +247,40 @@ def install(*, repository=REPOSITORY, ref=None, codex=None, uv=None, environment
     with tempfile.TemporaryDirectory(prefix="codex-trace-install-") as temp:
         cwd = Path(temp)
         print("Registering Codex Trace " + VERSION + "...", file=sys.stderr, flush=True)
-        added = json.loads(run([codex, "plugin", "marketplace", "add", repository, "--ref", ref, "--json"], cwd, env))
-        if added.get("marketplaceName") != MARKET:
-            raise ValueError("Unexpected marketplace identity")
-        source, manifest = verify_package(Path(added["installedRoot"]) / "plugins/codex-trace", codex_home,
-                                          marketplace=True)
+        with registered_market(codex, repository, ref, cwd, env, codex_home) as added:
+            if added.get("marketplaceName") != MARKET:
+                raise ValueError("Unexpected marketplace identity")
+            source, manifest = verify_package(Path(added["installedRoot"]) / "plugins/codex-trace", codex_home,
+                                              marketplace=True)
 
-        def launch_args(package):
-            return ["run", "--no-project", "--no-config", "--python", PYTHON_VERSION,
-                    "--with-requirements", str(package / "requirements.lock"), "--", "python", "-I", "-B"]
+            def launch_args(package):
+                return ["run", "--no-project", "--no-config", "--python", PYTHON_VERSION,
+                        "--with-requirements", str(package / "requirements.lock"), "--", "python", "-I", "-B"]
 
-        print("Preparing Python and locked dependencies (first install may take a few minutes)...", file=sys.stderr, flush=True)
-        run([uv, *launch_args(source), "-c", "import compression.zstd, mcp"], cwd, env, timeout=900)
-        result = json.loads(run([codex, "plugin", "add", SELECTOR, "--json"], cwd, env))
-        installed, installed_manifest = verify_package(result["installedPath"], codex_home)
-        if installed_manifest != manifest:
-            raise ValueError("Installed plugin differs from the prepared marketplace snapshot")
-        # Check the real resolved transport, including bare uv discovery in PATH.
-        configured = json.loads(run([codex, "mcp", "get", "codex-trace", "--json"], cwd, env))
-        transport = configured.get("transport", {})
-        # Preserve the manifest's separators: on Windows PLUGIN_ROOT expansion
-        # produces native-root + forward-slash arguments, as the host does.
-        manifest_launch = json.loads((installed / "mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
-        expected = [item.replace("${PLUGIN_ROOT}", str(installed)) for item in manifest_launch["args"]]
-        if (not configured.get("enabled") or transport.get("command") != "uv"
-                or transport.get("args") != expected or Path(transport.get("cwd", "")).resolve() != installed):
-            raise ValueError("Codex resolved a different plugin; disable other Codex Trace copies and rerun")
-        print("Checking installed MCP startup and UI resources without downloading...", file=sys.stderr, flush=True)
-        contracts = json.loads((installed / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
-        names = set(contracts) | {"open_codex_trace_panel"}
-        ready = verify_mcp([uv, *expected], cwd, {**env, "UV_OFFLINE": "1"}, VERSION, names)
-        verify_package(installed, codex_home)
-        return {"installed": True, "ready": True, "version": VERSION, "installedPath": str(installed),
-                "marketplace": MARKET, "ref": ref, "dependencyPreparation": "completedDuringInstallation",
-                "startupCheck": ready, "nextStep": "Open New Tab > Codex Trace. If Codex was already running, start a new chat or restart it to load the installed plugin."}
+            print("Preparing Python and locked dependencies (first install may take a few minutes)...", file=sys.stderr, flush=True)
+            run([uv, *launch_args(source), "-c", "import compression.zstd, mcp"], cwd, env, timeout=900)
+            result = json.loads(run([codex, "plugin", "add", SELECTOR, "--json"], cwd, env))
+            installed, installed_manifest = verify_package(result["installedPath"], codex_home)
+            if installed_manifest != manifest:
+                raise ValueError("Installed plugin differs from the prepared marketplace snapshot")
+            # Check the real resolved transport, including bare uv discovery in PATH.
+            configured = json.loads(run([codex, "mcp", "get", "codex-trace", "--json"], cwd, env))
+            transport = configured.get("transport", {})
+            # Preserve the manifest's separators: on Windows PLUGIN_ROOT expansion
+            # produces native-root + forward-slash arguments, as the host does.
+            manifest_launch = json.loads((installed / "mcp.json").read_text(encoding="utf-8"))["mcpServers"]["codex-trace"]
+            expected = [item.replace("${PLUGIN_ROOT}", str(installed)) for item in manifest_launch["args"]]
+            if (not configured.get("enabled") or transport.get("command") != "uv"
+                    or transport.get("args") != expected or Path(transport.get("cwd", "")).resolve() != installed):
+                raise ValueError("Codex resolved a different plugin; disable other Codex Trace copies and rerun")
+            print("Checking installed MCP startup and UI resources without downloading...", file=sys.stderr, flush=True)
+            contracts = json.loads((installed / "contracts/tools.json").read_text(encoding="utf-8"))["tools"]
+            names = set(contracts) | {"open_codex_trace_panel"}
+            ready = verify_mcp([uv, *expected], cwd, {**env, "UV_OFFLINE": "1"}, VERSION, names)
+            verify_package(installed, codex_home)
+            return {"installed": True, "ready": True, "version": VERSION, "installedPath": str(installed),
+                    "marketplace": MARKET, "ref": ref, "dependencyPreparation": "completedDuringInstallation",
+                    "startupCheck": ready, "nextStep": "Open New Tab > Codex Trace. If Codex was already running, start a new chat or restart it to load the installed plugin."}
 
 
 def main():
