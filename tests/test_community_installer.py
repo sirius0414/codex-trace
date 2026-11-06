@@ -23,7 +23,7 @@ class CommunityInstallerTests(unittest.TestCase):
         self.root = Path(temporary.name).resolve()
         self.home = self.root / "home"
         self.codex_home = self.home / ".codex"
-        self.source = self.codex_home / "plugins/marketplaces/source/plugins/codex-trace"
+        self.source = self.codex_home / ".tmp/marketplaces/source/plugins/codex-trace"
         self.cache = self.codex_home / "plugins/cache/codex-trace-community/codex-trace/0.2.2"
         for directory in (self.source, self.cache):
             directory.mkdir(parents=True)
@@ -94,7 +94,7 @@ class CommunityInstallerTests(unittest.TestCase):
     def test_modified_package_and_foreign_directory_are_rejected(self):
         (self.source / "launch.py").write_text("modified")
         with self.assertRaisesRegex(ValueError, "inventory"):
-            installer.verify_package(self.source, self.codex_home)
+            installer.verify_package(self.source, self.codex_home, marketplace=True)
         with self.assertRaisesRegex(ValueError, "outside"):
             installer.verify_package(self.root, self.codex_home)
 

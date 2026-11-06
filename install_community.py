@@ -152,9 +152,11 @@ def verify_mcp(command, cwd, env, version, tool_names, timeout=25):
         process.stdout.close()
 
 
-def verify_package(package, codex_home):
+def verify_package(package, codex_home, *, marketplace=False):
     package = Path(package).absolute()
-    boundary = codex_home / "plugins"
+    boundaries = ([codex_home / ".tmp/marketplaces", codex_home / "plugins/marketplaces"]
+                  if marketplace else [codex_home / "plugins/cache"])
+    boundary = next((root for root in boundaries if package.is_relative_to(root)), boundaries[0])
     if (not package.is_relative_to(boundary) or package == boundary
             or not package.resolve().is_relative_to(boundary.resolve())):
         raise ValueError("Codex returned a package path outside its plugin directory")
@@ -199,7 +201,8 @@ def install(*, repository=REPOSITORY, ref=None, codex=None, uv=None, environment
         added = json.loads(run([codex, "plugin", "marketplace", "add", repository, "--ref", ref, "--json"], cwd, env))
         if added.get("marketplaceName") != MARKET:
             raise ValueError("Unexpected marketplace identity")
-        source, manifest = verify_package(Path(added["installedRoot"]) / "plugins/codex-trace", codex_home)
+        source, manifest = verify_package(Path(added["installedRoot"]) / "plugins/codex-trace", codex_home,
+                                          marketplace=True)
 
         def launch_args(package):
             return ["run", "--no-project", "--no-config", "--python", PYTHON_VERSION,
