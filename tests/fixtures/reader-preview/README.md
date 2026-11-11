@@ -52,3 +52,12 @@ console.log(await runCollapseAcceptance(page, '/ABSOLUTE_REPO/build/preview-coll
 ```
 
 The narrow-screen flow calibrates the browser's existing zoom and checks English and Chinese, the classic / soft / terminal styles, and light and dark themes at 390 CSS pixels. Screenshots and check results are saved to the specified build directory.
+
+Export notice regression (GUI-03), using synthetic feedback without saving files:
+
+```js
+const { runExportNoticeAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/export-notice.mjs');
+console.log(await runExportNoticeAcceptance(page, '/ABSOLUTE_REPO/build/export-notice-acceptance'));
+```
+
+This checks 537px, 390px and 980px layouts, usage-button hit tests and clicks, long receipt scrolling, keyboard dismissal and focus return, refresh persistence, and the next export result.

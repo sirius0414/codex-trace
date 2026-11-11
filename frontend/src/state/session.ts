@@ -20,10 +20,13 @@ export function searchKeys(view: ViewState, snapshot: ThreadSnapshot | null) {
     snapshot?.coverage.loadedSetId, snapshot?.coverage.scopeRevision]) };
 }
 /** 新查询先显示空结果，避免闪现旧查询结果；同条件更新保留上次已确认集合。 */
-export function searchVisibility(text: string, keys: ReturnType<typeof searchKeys>, cached: SearchMatches | null) {
-  if (!text) return { matchedIds: null, searching: false };
-  if (!cached || cached.contextKey !== keys.contextKey) return { matchedIds: noSearchMatches, searching: true };
-  return { matchedIds: cached.ids, searching: cached.requestKey !== keys.requestKey };
+export function searchVisibility(text: string, keys: ReturnType<typeof searchKeys>, cached: SearchMatches | null, trackingPaused = false) {
+  if (!text) return { matchedIds: null, searching: false, searchPaused: false };
+  const sameContext = cached?.contextKey === keys.contextKey;
+  const pending = !sameContext || cached.requestKey !== keys.requestKey;
+  // 暂停冻结当前快照，不能把未派发的正文查询显示为正在检索，也不能用新版本正文冒充冻结内容。
+  return { matchedIds: sameContext ? cached.ids : noSearchMatches,
+    searching: pending && !trackingPaused, searchPaused: pending && trackingPaused };
 }
 
 /** 观察会话与任务选择共用一道响应门禁，详情和偏好读取也必须经过它。 */

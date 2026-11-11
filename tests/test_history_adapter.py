@@ -10,9 +10,11 @@ import subprocess
 import tempfile
 import threading
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from backend.codex_trace.adapters import history as history_module
 from backend.codex_trace.adapters.history import HistoryAdapter, HistoryError
 
 
@@ -147,6 +149,60 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(result["data"][0]["sourceType"], "unknown")
         self.assertEqual(result["data"][0]["runtimeStatus"], "unknown")
         self.assertNotIn("secret", json.dumps(result))
+
+    def test_read_and_list_convert_supported_windows_history_aliases(self):
+        paths = [r"C:\Users\中文 用户\.codex\sessions\2026\11\10\rollout.jsonl",
+                 r"e:\Codex Home\archived_sessions\rollout.jsonl",
+                 "C:\\sessions\\" + "long-directory\\" * 24 + "rollout.jsonl"]
+        for path in paths:
+            with self.subTest(path=path):
+                thread = {"id": THREAD_A, "path": "\\\\?\\" + path}
+
+                def handler(message):
+                    if "id" not in message:
+                        return None
+                    result = {"data": [thread], "nextCursor": None} if message["method"] == "thread/list" else {"thread": thread}
+                    return {"id": message["id"], "result": result}
+
+                client = self.adapter(handler)
+                # Replace only this module's OS reference, never pathlib's host platform.
+                with patch.object(history_module, "os", SimpleNamespace(name="nt")):
+                    self.assertEqual(client.read(THREAD_A)["path"], path)
+                    self.assertEqual(client.list_threads()["data"][0]["path"], path)
+
+    def test_windows_history_aliases_retain_unsafe_spelling_without_fallback(self):
+        prefix = "\\\\?\\C:\\sessions\\"
+        values = [
+            r"\\server\share\rollout.jsonl", r"\\?\UNC\server\share\rollout.jsonl",
+            r"\\.\C:\sessions\rollout.jsonl", r"\??\C:\sessions\rollout.jsonl",
+            r"\\?\Volume{11111111-1111-4111-8111-111111111111}\rollout.jsonl",
+            r"\\?\GLOBALROOT\Device\HarddiskVolume1\rollout.jsonl",
+            r"\\?\C:rollout.jsonl", r"\\?\Ｃ:\sessions\rollout.jsonl", "\\\\?\\C:\\",
+            r"\\?\C:/sessions/rollout.jsonl", r"\\?\C:\sessions/rollout.jsonl",
+            prefix + "rollout.jsonl\\", prefix + "\\rollout.jsonl",
+        ]
+        values += [prefix + part + "\\rollout.jsonl" for part in (
+            ".", "..", "dir.", "dir ", "NUL", "con.txt", "CON .txt", "COM1.zip", "LPT¹.txt",
+            "name:stream", "name::$DATA", "a:stream", "a:", "x:dir",
+            "a\x00b", "a\x1fb", "a\x7fb", "a<b", "a>b", 'a"b',
+            "a|b", "a?b", "a*b",
+        )]
+        with patch.object(history_module, "os", SimpleNamespace(name="nt")):
+            for value in values:
+                with self.subTest(value=value):
+                    metadata = history_module._metadata({"id": THREAD_A, "path": value})
+                    self.assertEqual(metadata["path"], value)
+                    self.assertTrue(metadata["path"], "rejected paths must not trigger missing-path lookup")
+
+    def test_history_path_conversion_does_not_rewrite_normal_paths_or_posix_names(self):
+        values = [None, "", "/synthetic/中文 会话/rollout.jsonl", r"C:\sessions\rollout.jsonl"]
+        for platform in ("nt", "posix"):
+            with self.subTest(platform=platform), patch.object(history_module, "os", SimpleNamespace(name=platform)):
+                for value in values:
+                    self.assertEqual(history_module._metadata({"id": THREAD_A, "path": value})["path"], value)
+        alias = r"\\?\C:\sessions\rollout.jsonl"
+        with patch.object(history_module, "os", SimpleNamespace(name="posix")):
+            self.assertEqual(history_module._metadata({"id": THREAD_A, "path": alias})["path"], alias)
 
     def test_mismatched_thread_never_returns_another_tasks_metadata(self):
         client = self.adapter(lambda m: {"id": m["id"], "result": {"thread": {

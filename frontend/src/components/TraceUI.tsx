@@ -5,6 +5,7 @@ import { buildInfo, versionLabel } from '../build-info';
 import { usePreferences } from '../preferences';
 import { uiStyles } from '../ui-preferences';
 import EventList from './EventList';
+import ExportNotice from './ExportNotice';
 import Inspector, { UsageFacts } from './Inspector';
 import Overview from './Overview';
 import ResizableOverview from './ResizableOverview';
@@ -157,6 +158,8 @@ export default function TraceUI(props: TraceUIProps) {
       <EventList key={`${snapshot?.binding.threadId ?? 'empty'}:${activeAgent}`} {...pageProps} visible={visible} highlightedEvents={highlightedEvents} onCount={setRowCount} />
       {view.selectedEventId && <Inspector {...pageProps} overlay={narrow} preferredWidth={inspectorWidth} onResize={setInspectorWidth} />}
     </div>
+    {/* 普通刷新保留关闭状态；新任务、导出阶段或结果重新显示提示。 */}
+    {props.exportMessage && <ExportNotice key={JSON.stringify([snapshot?.binding.sourceInstanceId, snapshot?.binding.threadId, props.exporting, props.exportMessage])} message={props.exportMessage} onDismiss={() => root.current?.querySelector<HTMLButtonElement>('.cx-download:not(:disabled),.cx-usage-trigger')?.focus()} />}
     <aside className="cx-usage-bar" aria-label={t('主任务 token 用量，不受 Agent 筛选影响', 'Main task token usage, independent of Agent filters')}>
       <span className="cx-usage-label"><Icon name="usage" />{t('主任务', 'Main task')} <small>tokens</small></span>
       <dl className="cx-usage-metrics"><div><dt>{t('输入', 'Input')}</dt><dd title={usage?.input.availability !== 'recorded' ? t('未记录', 'Not recorded') : undefined} aria-label={usage?.input.availability !== 'recorded' ? t('未记录', 'Not recorded') : undefined}>{metric(usage?.input, t('未记录', '—'), language)}</dd></div><div><dt>{t('输出', 'Output')}</dt><dd title={usage?.output.availability !== 'recorded' ? t('未记录', 'Not recorded') : undefined} aria-label={usage?.output.availability !== 'recorded' ? t('未记录', 'Not recorded') : undefined}>{metric(usage?.output, t('未记录', '—'), language)}</dd></div><div><dt>{t('缓存', 'Cached')}</dt><dd title={usage?.cachedInput.availability !== 'recorded' ? t('未记录', 'Not recorded') : undefined} aria-label={usage?.cachedInput.availability !== 'recorded' ? t('未记录', 'Not recorded') : undefined}>{metric(usage?.cachedInput, t('未记录', '—'), language)}</dd></div></dl>
@@ -164,7 +167,7 @@ export default function TraceUI(props: TraceUIProps) {
       <button className="cx-icon cx-usage-trigger" aria-expanded={popover === 'usage'} aria-label={t('查看用量范围与说明', 'View usage scope and notes')} title={t('查看用量范围与说明', 'View usage scope and notes')} onClick={() => setPopover(value => value === 'usage' ? null : 'usage')}><Icon name="info" /></button>
     </aside>
     <footer className="cx-footer"><span className="cx-count" title={t(`当前显示 ${rowCount} 行；已加载 ${snapshot?.coverage.loadedEventCount ?? 0} 条已识别记录，包含折叠子任务内容`, `${rowCount} rows shown; ${snapshot?.coverage.loadedEventCount ?? 0} recognized records loaded, including collapsed subtasks`)}>{t(`${rowCount} 行 / ${snapshot?.coverage.loadedEventCount ?? 0} 条已读`, `${rowCount} rows / ${snapshot?.coverage.loadedEventCount ?? 0} read`)}</span>
-      <button className={`cx-read-status ${props.error || snapshot?.freshness.state === 'stale' || snapshot?.groups.some(group => group.readIssue) ? 'problem' : ''}`} aria-label={t('查看记录读取状态', 'View record reading status')} onClick={() => setPopover(value => value === 'reading' ? null : 'reading')}><Icon name={props.error ? 'alert' : 'database'} /><span>{props.searching && !props.error ? t('正在检索已加载正文…', 'Searching loaded content…') : readText}</span></button>
+      <button className={`cx-read-status ${props.error || snapshot?.freshness.state === 'stale' || snapshot?.groups.some(group => group.readIssue) ? 'problem' : ''}`} aria-label={t('查看记录读取状态', 'View record reading status')} onClick={() => setPopover(value => value === 'reading' ? null : 'reading')}><Icon name={props.error ? 'alert' : 'database'} /><span>{props.searchPaused ? t('搜索已暂停 · 继续跟踪后自动检索', 'Search paused · Resume tracking to search') : props.searching && !props.error ? t('正在检索已加载正文…', 'Searching loaded content…') : readText}</span></button>
       {props.loading && <span className="cx-loading">{t('读取中…', 'Reading…')}</span>}
       {snapshot?.coverage.searchTextCoverage === 'partialLoadedContent' && <span className="cx-partial-search" title={snapshot.coverage.explanation}>{t('搜索范围不完整', 'Search scope is partial')}</span>}
       <span className="cx-version" title={versionDescription} aria-label={versionDescription}>{versionLabel}</span>
@@ -187,6 +190,5 @@ export default function TraceUI(props: TraceUIProps) {
       <fieldset className="cx-style-options"><legend>{t('UI 模板', 'UI template')}</legend>{uiStyles.map(style => <label key={style} className={`cx-style-option ${uiStyle === style ? 'selected' : ''}`}><input type="radio" name="cx-ui-style" value={style} checked={uiStyle === style} onChange={() => setUiStyle(style)} /><span className={`cx-style-preview ${style}`} aria-hidden="true"><i /><i /><i /></span><span><strong>{styleLabels[style]}</strong><small>{styleNotes[style]}</small></span></label>)}</fieldset>
       <p className="cx-preference-note">{t('更改立即生效，刷新后保留。', 'Changes apply immediately and are remembered on reload.')}</p>
     </section>}
-    {props.exportMessage && <div className="cx-export-message" role="status" tabIndex={0} aria-label={t('导出结果', 'Export result')}>{props.exportMessage}</div>}
   </main>;
 }

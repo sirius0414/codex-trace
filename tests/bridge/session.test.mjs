@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { SessionGate, PreferenceGate, defaultView, sameBinding, mergeSnapshot, mergeDetail, partsForTab, restoredView, selectedView, eventLocation, readAnchorPage, readSelectionPage, searchKeys, searchVisibility } from '../../frontend/src/state/session.ts';
 import { visibleEvents, makeRows } from '../../frontend/src/components/model.ts';
 import { DEFAULT_TIMELINE_SPACING } from '../../frontend/src/components/active-timeline.ts';
+import { TrackingGate } from '../../frontend/src/state/tracking.ts';
 
 const fixture=JSON.parse(readFileSync(new URL('../fixtures/contracts/snapshot-running.json',import.meta.url)));
 const open={viewSessionId:'v',sourceInstanceId:'s',identity:{state:'verified',threadId:'a',selectionEpoch:1}};
@@ -86,7 +87,7 @@ test('timeline spacing is a persistent display preference that preserves selecti
     assert.deepEqual(restored.turnRange,original.turnRange);
     assert.equal(restored.selectedEventId,'chosen');
     assert.deepEqual(searchKeys(restored,fixture),keys);
-    assert.deepEqual(searchVisibility(restored.filters.text,searchKeys(restored,fixture),cached),{matchedIds:ids,searching:false});
+    assert.deepEqual(searchVisibility(restored.filters.text,searchKeys(restored,fixture),cached),{matchedIds:ids,searching:false,searchPaused:false});
     const prefs=new PreferenceGate();prefs.restored(4);prefs.edit(restored);
     assert.equal(prefs.take().state.timelineSpacing,timelineSpacing);
   }
@@ -219,6 +220,55 @@ test('new filters, task identities and generation wait with an empty set, while 
   for(const changed of changes){const result=searchVisibility('text',changed,cached);assert.ok(result.matchedIds instanceof Set);assert.equal(result.matchedIds.size,0);assert.equal(result.searching,true);}
   assert.equal(searchVisibility('text',keys,null).matchedIds.size,0);
   const noText=searchVisibility('',searchKeys(defaultView(),data),cached);
-  assert.deepEqual(noText,{matchedIds:null,searching:false});
+  assert.deepEqual(noText,{matchedIds:null,searching:false,searchPaused:false});
   assert.equal(visibleEvents(data,defaultView(),noText.matchedIds).length,data.events.length);
+});
+
+test('paused search distinguishes pending terms from confirmed results and never reports an undispatched query as searching',()=>{
+  const data=structuredClone(fixture),view={...defaultView(),filters:{...defaultView().filters,text:'confirmed'}};
+  const keys=searchKeys(view,data),ids=new Set([data.events[0].eventId]),cached={...keys,ids};
+  assert.deepEqual(searchVisibility(view.filters.text,keys,cached,true),{matchedIds:ids,searching:false,searchPaused:false});
+  const changed={...view,filters:{...view.filters,text:'new search'}};
+  for(const previous of [cached,null]) {
+    const paused=searchVisibility(changed.filters.text,searchKeys(changed,data),previous,true);
+    assert.equal(paused.matchedIds.size,0);
+    assert.equal(paused.searching,false);assert.equal(paused.searchPaused,true);
+    assert.deepEqual(visibleEvents(data,changed,paused.matchedIds),[]);
+  }
+  const advanced={...data,revision:data.revision+1};
+  assert.deepEqual(searchVisibility(view.filters.text,searchKeys(view,advanced),cached,true),
+    {matchedIds:ids,searching:false,searchPaused:true});
+  assert.deepEqual(searchVisibility('',searchKeys(defaultView(),data),cached,true),
+    {matchedIds:null,searching:false,searchPaused:false});
+});
+
+test('resuming tracking moves the pending term into searching and clears the pause notice after completion',()=>{
+  const data=structuredClone(fixture),view={...defaultView(),filters:{...defaultView().filters,text:'new search'}};
+  const keys=searchKeys(view,data);
+  const paused=searchVisibility(view.filters.text,keys,null,true);
+  assert.equal(paused.searchPaused,true);assert.equal(paused.searching,false);
+  const resumed=searchVisibility(view.filters.text,keys,null,false);
+  assert.equal(resumed.searchPaused,false);assert.equal(resumed.searching,true);
+  const ids=new Set([data.events[0].eventId]);
+  assert.deepEqual(searchVisibility(view.filters.text,keys,{...keys,ids},false),
+    {matchedIds:ids,searching:false,searchPaused:false});
+  assert.deepEqual(data,fixture);
+});
+
+test('late search responses stay cancelled through pause and rapid resume, preserving the pending query',async()=>{
+  const tracking=new TrackingGate(),selection=new AbortController();
+  const view={...defaultView(),filters:{...defaultView().filters,text:'before pause'}};
+  const keys=searchKeys(view,fixture);
+  let resolve,cached=null;
+  const response=new Promise(done=>{resolve=done;});
+  const signal=AbortSignal.any([selection.signal,tracking.signal]);
+  const pending=response.then(ids=>{if(!signal.aborted)cached={...keys,ids};});
+  tracking.setPaused(true);
+  const changed={...view,filters:{...view.filters,text:'typed while paused'}},latest=searchKeys(changed,fixture);
+  assert.equal(searchVisibility(changed.filters.text,latest,cached,tracking.paused).searchPaused,true);
+  tracking.setPaused(false);
+  resolve(new Set(['old-match']));await pending;
+  assert.equal(cached,null);
+  const resumed=searchVisibility(changed.filters.text,latest,cached,tracking.paused);
+  assert.equal(resumed.matchedIds.size,0);assert.equal(resumed.searching,true);assert.equal(resumed.searchPaused,false);
 });

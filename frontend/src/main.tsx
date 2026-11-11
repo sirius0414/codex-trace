@@ -493,14 +493,16 @@ function TrajectoryApp() {
   }, [snapshot]);
 
   const search = searchKeys(view, snapshot);
-  const searchDisplay = searchVisibility(view.filters.text, search, searchResult);
+  const searchDisplay = searchVisibility(view.filters.text, search, searchResult, trackingPaused);
   useEffect(() => {
     const state = currentSnapshot.current, token = gate.current.capture();
-    if (!state || !token.binding || tracking.current.paused) return;
+    if (!state || !token.binding) return;
     const serial = ++querySerial.current;
     // 结构化筛选在本地立即生效；正文搜索由服务端查已加载正文，且结果绑定加载范围。
     // 无正文查询时不用旧 ID 集合，避免历史分页新增行被短暂隐藏并扰动阅读锚点。
     if (!currentView.current.filters.text) { setSearchResult(null); return; }
+    // 搜索依赖服务端当前正文，暂停期间保留冻结视图并明确提示；恢复跟踪后自动查询待查词。
+    if (tracking.current.paused) return;
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, selectionAbort.current.signal, tracking.current.signal]);
     const timer = setTimeout(() => {
@@ -526,7 +528,7 @@ function TrajectoryApp() {
   }, [view.selectedEventId, view.detailTab, snapshot?.revision, snapshot?.generation, snapshot?.binding.viewSessionId, snapshot?.binding.selectionEpoch]);
 
   return <TraceUI threadScope={threadScope} onThreadScope={changeThreadScope} snapshot={snapshot} view={view} trackingPaused={trackingPaused} detail={detail} threads={threads} threadsMore={threadsMore}
-    matchedIds={searchDisplay.matchedIds} searching={searchDisplay.searching} loading={loading} detailLoading={detailLoading} error={displayMessage(error, language)} exportMessage={displayMessage(exportMessage, language)} exporting={exporting}
+    matchedIds={searchDisplay.matchedIds} searching={searchDisplay.searching} searchPaused={searchDisplay.searchPaused} loading={loading} detailLoading={detailLoading} error={displayMessage(error, language)} exportMessage={displayMessage(exportMessage, language)} exporting={exporting}
     onTask={id => { void selectTask(id); }} onTaskSearch={searchTasks} onMoreThreads={() => { void listThreads(true); }}
     onView={patchView} onTrackingPause={pauseTracking} onSelect={selectEvent} onLoadEarlier={groupId => {
       const current = currentSnapshot.current;

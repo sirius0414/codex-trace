@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import ntpath
 import os
 import re
 import subprocess
@@ -48,6 +49,26 @@ def _thread_id(value: Any) -> str:
 
 def _bounded_text(value: Any, limit: int) -> str | None:
     return value if isinstance(value, str) and len(value) <= limit else None
+
+
+def _history_path(value: str | None) -> str | None:
+    """仅在可信 history 出口转换 Windows 本地盘符的 verbatim 别名。
+
+    在 Path 能消除点/空组件之前检查原始拼写，避免去前缀改变文件含义。
+    非法或其他命名空间原样保留，交给 raw 拒绝；不能清空后触发目录搜索。
+    转换不授予读取权限：raw 的根限制、身份验证和逐层安全打开仍须全部通过。
+    """
+    if os.name != "nt" or value is None or not value.startswith("\\\\?\\"):
+        return value
+    local = value[4:]
+    if not re.match(r"^[A-Za-z]:\\", local) or "/" in local:
+        return value
+    components = local[3:].split("\\")
+    # isreserved 会把 a:stream 的 a: 当作盘符；组件内的冒号须显式拒绝。
+    if any(not part or part in (".", "..") or ":" in part or ntpath.isreserved(part) or "\x7f" in part
+           for part in components):
+        return value
+    return local
 
 
 def _cursor(value: Any, *, response: bool = False) -> str | None:
@@ -118,7 +139,7 @@ def _metadata(thread: Any) -> dict[str, Any]:
     result: dict[str, Any] = {
         "id": identifier,
         "name": _bounded_text(thread.get("name"), 1024),
-        "path": _bounded_text(thread.get("path"), 8192),
+        "path": _history_path(_bounded_text(thread.get("path"), 8192)),
         "sourceType": source_type if isinstance(source_type, str) and source_type in _SOURCE_TYPES else "unknown",
         # 冷读取器运行时状态单独标注，不能进入生命周期事实。
         "runtimeStatus": status if isinstance(status, str) and status in _RUNTIME_STATUSES else "unknown",

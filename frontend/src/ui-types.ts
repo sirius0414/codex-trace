@@ -13,6 +13,7 @@ export type TraceUIProps = {
   threadScope: 'user' | 'all';
   matchedIds: Set<string> | null;
   searching?: boolean;
+  searchPaused?: boolean;
   loading: boolean;
   detailLoading: boolean;
   error: string;

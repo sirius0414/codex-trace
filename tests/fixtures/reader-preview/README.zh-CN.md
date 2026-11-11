@@ -52,3 +52,12 @@ console.log(await runCollapseAcceptance(page, '/ABSOLUTE_REPO/build/preview-coll
 ```
 
 窄屏流程会校准浏览器现有缩放，按 390 个 CSS 像素检查中英文、classic / soft / terminal 三种风格以及明暗主题。截图和检查结果保存到指定 build 目录。
+
+导出提示回归（GUI-03）仅使用合成反馈，不保存导出文件：
+
+```js
+const { runExportNoticeAcceptance } = await import('file:///ABSOLUTE_REPO/tests/fixtures/reader-preview/export-notice.mjs');
+console.log(await runExportNoticeAcceptance(page, '/ABSOLUTE_REPO/build/export-notice-acceptance'));
+```
+
+覆盖 537px、390px、980px 布局、用量按钮命中及点击、长回执滚动、键盘关闭与焦点恢复、普通刷新后保持关闭，以及下次导出重新显示结果。
